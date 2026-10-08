@@ -1,0 +1,2011 @@
+{
+ "version": 1,
+ "updated": "2026-10-08",
+ "schemaVersion": 1,
+ "datasetStatus": "partial-category-coverage",
+ "observedAt": "2026-10-08",
+ "source": "Coupang Wing 입출고/배송 비용 페이지: 일반 상품, 뷰티 > 스킨케어 비용표 및 Wing 계산기 검증",
+ "productType": "general",
+ "vatIncluded": false,
+ "promotionNote": "Wing 화면상 일반 상품 입출고비·배송비 프로모션 및 저가 상품 전용 할인은 2027-01-31까지 안내됨. 변경 가능.",
+ "sizeRules": [
+  {
+   "sizeClass": "극소형",
+   "maxDimensionSumCm": 80,
+   "maxWeightKg": 2
+  },
+  {
+   "sizeClass": "소형",
+   "maxDimensionSumCm": 100,
+   "maxWeightKg": 5
+  },
+  {
+   "sizeClass": "중형",
+   "maxDimensionSumCm": 120,
+   "maxWeightKg": 10
+  },
+  {
+   "sizeClass": "대형1",
+   "maxDimensionSumCm": 140,
+   "maxWeightKg": 15
+  },
+  {
+   "sizeClass": "대형2",
+   "maxDimensionSumCm": 160,
+   "maxWeightKg": 20
+  },
+  {
+   "sizeClass": "특대형",
+   "maxDimensionSumCm": 250,
+   "maxWeightKg": 30
+  }
+ ],
+ "sizeRuleLogic": "세변의 합과 무게를 모두 충족해야 해당 유형. 둘 중 어느 하나라도 기준 초과 시 상위 유형. 특대형 초과는 입고 불가 안내.",
+ "coverage": [
+  {
+   "feeTableGroup": "뷰티 > 스킨케어",
+   "calculatorCategoryPath": "뷰티 > 스킨 > 스킨/토너 > 스킨/토너/화장수",
+   "priceBands": 18,
+   "sizeClasses": 6,
+   "feeRows": 108
+  }
+ ],
+ "fees": [
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1025,
+    "shippingWon": 1675,
+    "totalWon": 2700
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 980,
+    "shippingWon": 1125,
+    "totalWon": 2105
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2100,
+    "totalWon": 3375
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1050,
+    "shippingWon": 1250,
+    "totalWon": 2300
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2475,
+    "totalWon": 3925
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1400,
+    "shippingWon": 1500,
+    "totalWon": 2900
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 1700,
+    "totalWon": 3200
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1600,
+    "shippingWon": 2900,
+    "totalWon": 4500
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 0,
+   "maxPriceWonExclusive": 5000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1700,
+    "shippingWon": 3500,
+    "totalWon": 5200
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1100,
+    "shippingWon": 1675,
+    "totalWon": 2775
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 980,
+    "shippingWon": 1125,
+    "totalWon": 2105
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1050,
+    "shippingWon": 1250,
+    "totalWon": 2300
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1400,
+    "shippingWon": 1500,
+    "totalWon": 2900
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 1700,
+    "totalWon": 3200
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1600,
+    "shippingWon": 2900,
+    "totalWon": 4500
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 5000,
+   "maxPriceWonExclusive": 7000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1700,
+    "shippingWon": 3500,
+    "totalWon": 5200
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1100,
+    "shippingWon": 1675,
+    "totalWon": 2775
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 980,
+    "shippingWon": 1125,
+    "totalWon": 2105
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1050,
+    "shippingWon": 1250,
+    "totalWon": 2300
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1400,
+    "shippingWon": 1500,
+    "totalWon": 2900
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 1700,
+    "totalWon": 3200
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1600,
+    "shippingWon": 2900,
+    "totalWon": 4500
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 7000,
+   "maxPriceWonExclusive": 8000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1700,
+    "shippingWon": 3500,
+    "totalWon": 5200
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1100,
+    "shippingWon": 1675,
+    "totalWon": 2775
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 980,
+    "shippingWon": 1125,
+    "totalWon": 2105
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1050,
+    "shippingWon": 1250,
+    "totalWon": 2300
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1400,
+    "shippingWon": 1500,
+    "totalWon": 2900
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 1700,
+    "totalWon": 3200
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1600,
+    "shippingWon": 2900,
+    "totalWon": 4500
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 8000,
+   "maxPriceWonExclusive": 9000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1700,
+    "shippingWon": 3500,
+    "totalWon": 5200
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1100,
+    "shippingWon": 1675,
+    "totalWon": 2775
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 980,
+    "shippingWon": 1125,
+    "totalWon": 2105
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1050,
+    "shippingWon": 1250,
+    "totalWon": 2300
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1400,
+    "shippingWon": 1500,
+    "totalWon": 2900
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 1700,
+    "totalWon": 3200
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1600,
+    "shippingWon": 2900,
+    "totalWon": 4500
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 9000,
+   "maxPriceWonExclusive": 10000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1700,
+    "shippingWon": 3500,
+    "totalWon": 5200
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1125,
+    "shippingWon": 1675,
+    "totalWon": 2800
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1010,
+    "shippingWon": 1235,
+    "totalWon": 2245
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1095,
+    "shippingWon": 1440,
+    "totalWon": 2535
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1410,
+    "shippingWon": 1720,
+    "totalWon": 3130
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1565,
+    "shippingWon": 1985,
+    "totalWon": 3550
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1645,
+    "shippingWon": 3275,
+    "totalWon": 4920
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 10000,
+   "maxPriceWonExclusive": 11000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1725,
+    "shippingWon": 3955,
+    "totalWon": 5680
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1125,
+    "shippingWon": 1675,
+    "totalWon": 2800
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1040,
+    "shippingWon": 1345,
+    "totalWon": 2385
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1140,
+    "shippingWon": 1630,
+    "totalWon": 2770
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1420,
+    "shippingWon": 1940,
+    "totalWon": 3360
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1630,
+    "shippingWon": 2270,
+    "totalWon": 3900
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1690,
+    "shippingWon": 3650,
+    "totalWon": 5340
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 11000,
+   "maxPriceWonExclusive": 12000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 4410,
+    "totalWon": 6160
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1125,
+    "shippingWon": 1675,
+    "totalWon": 2800
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1070,
+    "shippingWon": 1455,
+    "totalWon": 2525
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1185,
+    "shippingWon": 1820,
+    "totalWon": 3005
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1430,
+    "shippingWon": 2160,
+    "totalWon": 3590
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1695,
+    "shippingWon": 2555,
+    "totalWon": 4250
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1735,
+    "shippingWon": 4025,
+    "totalWon": 5760
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 12000,
+   "maxPriceWonExclusive": 13000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 4865,
+    "totalWon": 6640
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1125,
+    "shippingWon": 1675,
+    "totalWon": 2800
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1100,
+    "shippingWon": 1565,
+    "totalWon": 2665
+   }
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1230,
+    "shippingWon": 2010,
+    "totalWon": 3240
+   }
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1440,
+    "shippingWon": 2380,
+    "totalWon": 3820
+   }
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1760,
+    "shippingWon": 2840,
+    "totalWon": 4600
+   }
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1780,
+    "shippingWon": 4400,
+    "totalWon": 6180
+   }
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 13000,
+   "maxPriceWonExclusive": 14000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": {
+    "inboundOutboundWon": 1800,
+    "shippingWon": 5320,
+    "totalWon": 7120
+   }
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1125,
+    "shippingWon": 1675,
+    "totalWon": 2800
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2200,
+    "totalWon": 3475
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1450,
+    "shippingWon": 2600,
+    "totalWon": 4050
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 14000,
+   "maxPriceWonExclusive": 15000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1150,
+    "shippingWon": 1675,
+    "totalWon": 2825
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2250,
+    "totalWon": 3525
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1500,
+    "shippingWon": 2625,
+    "totalWon": 4125
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 15000,
+   "maxPriceWonExclusive": 20000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": {
+    "inboundOutboundWon": 1200,
+    "shippingWon": 2050,
+    "totalWon": 3250
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": {
+    "inboundOutboundWon": 1275,
+    "shippingWon": 2250,
+    "totalWon": 3525
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1625,
+    "shippingWon": 2725,
+    "totalWon": 4350
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3125,
+    "totalWon": 4950
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4775,
+    "totalWon": 6600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 20000,
+   "maxPriceWonExclusive": 30000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5775,
+    "totalWon": 7600
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3475,
+    "totalWon": 5300
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4975,
+    "totalWon": 6800
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 30000,
+   "maxPriceWonExclusive": 40000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5975,
+    "totalWon": 7800
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 3475,
+    "totalWon": 5300
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 4975,
+    "totalWon": 6800
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 40000,
+   "maxPriceWonExclusive": 50000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 1825,
+    "shippingWon": 5975,
+    "totalWon": 7800
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 3475,
+    "totalWon": 5675
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 4975,
+    "totalWon": 7175
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 50000,
+   "maxPriceWonExclusive": 60000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 5975,
+    "totalWon": 8175
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 3475,
+    "totalWon": 5675
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 5000,
+    "totalWon": 7200
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 60000,
+   "maxPriceWonExclusive": 80000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 6000,
+    "totalWon": 8200
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 3475,
+    "totalWon": 5675
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 5000,
+    "totalWon": 7200
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 80000,
+   "maxPriceWonExclusive": 100000,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 6000,
+    "totalWon": 8200
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "극소형",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 1650,
+    "shippingWon": 2200,
+    "totalWon": 3850
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "소형",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 1750,
+    "shippingWon": 2400,
+    "totalWon": 4150
+   },
+   "promotion": null,
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "중형",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 2000,
+    "shippingWon": 3000,
+    "totalWon": 5000
+   },
+   "promotion": {
+    "inboundOutboundWon": 1775,
+    "shippingWon": 2725,
+    "totalWon": 4500
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형1",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 4000,
+    "totalWon": 6400
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 3475,
+    "totalWon": 5675
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "대형2",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 5500,
+    "totalWon": 7900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 5000,
+    "totalWon": 7200
+   },
+   "lowPriceDedicated": null
+  },
+  {
+   "sizeClass": "특대형",
+   "minPriceWon": 100000,
+   "maxPriceWonExclusive": null,
+   "standard": {
+    "inboundOutboundWon": 2400,
+    "shippingWon": 9500,
+    "totalWon": 11900
+   },
+   "promotion": {
+    "inboundOutboundWon": 2200,
+    "shippingWon": 6000,
+    "totalWon": 8200
+   },
+   "lowPriceDedicated": null
+  }
+ ],
+ "validationExamples": [
+  {
+   "calculatorCategoryPath": "뷰티 > 스킨 > 스킨/토너 > 스킨/토너/화장수",
+   "dimensionsMm": [
+    280,
+    200,
+    120
+   ],
+   "weightG": 900,
+   "salePriceWon": 13000,
+   "expectedSizeClass": "극소형",
+   "appliedRate": "lowPriceDedicated",
+   "inboundOutboundWon": 1100,
+   "shippingWon": 1565,
+   "totalWon": 2665
+  },
+  {
+   "calculatorCategoryPath": "뷰티 > 스킨 > 스킨/토너 > 스킨/토너/화장수",
+   "dimensionsMm": [
+    280,
+    200,
+    120
+   ],
+   "weightG": 900,
+   "salePriceWon": 15000,
+   "expectedSizeClass": "극소형",
+   "appliedRate": "promotion",
+   "inboundOutboundWon": 1150,
+   "shippingWon": 1675,
+   "totalWon": 2825
+  }
+ ],
+ "notes": [
+  "현재 데이터는 뷰티 > 스킨케어 1개 그룹만 포함하며, 전체 쿠팡 카테고리 데이터가 아닙니다.",
+  "한 가격 구간당 6개 사이즈 유형의 표 값을 분리해 정규화했습니다.",
+  "standard, promotion, lowPriceDedicated는 Wing 표의 기본/할인/저가상품 전용할인 금액입니다. Wing 계산기 실측값 두 건으로 저가 할인과 일반 프로모션 적용을 검증했습니다.",
+  "총액에서 입출고비를 빼 배송비를 분리했습니다."
+ ],
+ "promotionValidTo": "2027-01-31",
+ "rateRule": "저가 전용 할인(lowPriceDedicated) 금액이 있는 구간이면 그것 → 없으면 프로모션(promotionValidTo까지) → 기본(standard)",
+ "categories": [
+  "뷰티 > 스킨케어",
+  "패션의류잡화",
+  "뷰티(기타)",
+  "출산/유아동",
+  "식품",
+  "주방용품",
+  "생활용품",
+  "가구/홈데코",
+  "가전/디지털",
+  "스포츠/레져",
+  "자동차용품",
+  "도서",
+  "문구/오피스",
+  "완구/취미",
+  "반려/애완용품"
+ ],
+ "coveredCategories": [
+  "뷰티 > 스킨케어"
+ ]
+}

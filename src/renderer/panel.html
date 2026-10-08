@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>씨드핵 SEEDHACK</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="listup.css">
+<link rel="stylesheet" href="aiscan.css">
+</head>
+<body>
+<aside class="side" id="side" aria-label="메뉴">
+  <div class="brand" title="씨드핵 — 매일 한 톨, 시스템처럼."><span class="sig"><i></i><i></i><i></i></span><div class="brand-t"><b class="mono">SEED<span class="hk">HACK</span><span class="cursor">_</span></b><span class="sub">씨드핵 <span class="ver" id="appVer"></span></span></div></div>
+  <nav class="nav" id="nav" aria-label="화면">
+    <div class="nav-sec">분석</div>
+    <button id="tKw" class="nav-item" type="button" data-view="kw" title="키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"><span class="ic">🔎</span><span class="lbl">키워드 분석</span></button>
+    <button id="tCat" class="nav-item" type="button" data-view="cat" title="Wing 쿠팡 트렌드 → 인기상품 검색에서 카테고리를 고르면 판정"><span class="ic">🚦</span><span class="lbl">카테고리 판정</span></button>
+    <div class="nav-sec">모으기</div>
+    <button id="tWing" class="nav-item on" type="button" data-view="wing" title="Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"><span class="ic">🔑</span><span class="lbl">Wing 로그인</span></button>
+    <button id="tClean" class="nav-item" type="button" data-view="clean" title="쿠키·로그인 없는 쿠팡 화면 — 개인화 없는 검색 순위"><span class="ic">🛒</span><span class="lbl">쿠팡 검색</span></button>
+    <div class="nav-sec">고르기</div>
+    <button id="tCol" class="nav-item" type="button" data-view="collect" title="쿠팡 화면에서 지표를 본 상품이 자동으로 쌓입니다"><span class="ic">📦</span><span class="lbl">수집함</span><b id="ccount" class="cnt gray">0</b></button>
+    <button id="tList" class="nav-item" type="button" data-view="list" title="고른 상품의 1688 원가·마진 계산"><span class="ic">📋</span><span class="lbl">리스트업</span><b id="lcount" class="cnt">0</b></button>
+    <div class="nav-sec">중국 소싱</div>
+    <button id="tCn" class="nav-item" type="button" data-view="cn" title="1688 — 리스트업 행의 🔍1688로 이미지 검색, 상품 페이지에서 '리스트업에 넣기'"><span class="ic">🇨🇳</span><span class="lbl">1688</span></button>
+    <button id="tChat" class="nav-item" type="button" data-view="chat" title="1688 판매자 문의 — 채팅 화면과 진행 상황(답이 오면 다음 질문을 자동으로 이어 보냄)"><span class="ic">💬</span><span class="lbl">판매자 문의</span><b id="chcount" class="cnt gray" hidden>0</b></button>
+    <div class="nav-sec">판매 관리</div>
+    <button id="tMargin" class="nav-item" type="button" data-view="dash" data-dash="margin" title="로켓그로스 마진 대시보드"><span class="ic">📊</span><span class="lbl">마진 대시보드</span></button>
+    <button id="tAds" class="nav-item" type="button" data-view="dash" data-dash="ads" title="쿠팡 광고 보고서 분석"><span class="ic">🎯</span><span class="lbl">광고 보고서</span></button>
+    <button id="tCoupons" class="nav-item" type="button" data-view="dash" data-dash="coupons" title="쿠폰 관리"><span class="ic">🎟️</span><span class="lbl">쿠폰 관리</span></button>
+    <button id="tStock" class="nav-item" type="button" data-view="dash" data-dash="stock" title="쿠팡 재고 조회"><span class="ic">🏬</span><span class="lbl">재고 조회</span></button>
+  </nav>
+  <div class="side-foot">
+    <div class="st" id="sWing" title="Wing 로그인 상태"><span class="dot"></span><span class="lbl" id="sWingT">Wing 확인 중</span></div>
+    <div class="budget lbl" id="sBudget" title="오늘 Wing 검색 횟수(하루 예산)"></div>
+    <button id="acct" class="acct" type="button" hidden title="계정 · 누르면 로그아웃 메뉴"></button>
+    <button id="sideFold" class="fold" type="button" title="사이드바 접기">«</button>
+  </div>
+</aside>
+
+<div class="main">
+<header class="bar">
+  <div class="vhead"><h1 id="vTitle">🔑 Wing 로그인</h1><span class="vdesc" id="vDesc"></span></div>
+  <div class="sitectl" id="siteCtl">
+    <div class="navbtns">
+      <button id="bBack" type="button" title="뒤로">←</button>
+      <button id="bReload" type="button" title="새로고침">⟳</button>
+      <button id="bHome" type="button" title="처음 화면">⌂</button>
+    </div>
+    <form class="urlform" id="urlForm"><input class="url mono" id="url" type="text" value="wing.coupang.com" spellcheck="false" autocomplete="off" aria-label="주소" title="주소를 고치고 Enter · 주소가 아닌 글자는 쿠팡 검색어로 엽니다"></form>
+    <button id="bNewClean" class="ghost" type="button" hidden title="쿠키 없는 새 세션으로 다시 열기">🕶 새 클린 세션</button>
+  </div>
+  <button id="bUpdate" class="pri small upd" type="button" hidden>⬆ 다시 시작해 업데이트</button>
+  <button id="bPresent" class="switch" type="button" aria-pressed="false" title="화면 공유·라이브용: 글자와 화면을 크게 + 분석할 때 전체 화면 AI 연출"><i></i>🎤 발표 모드</button>
+</header>
+
+<main class="stage">
+  <section class="site" aria-label="사이트 화면">
+    <div class="ctabs" id="ctabs" hidden role="tablist" aria-label="쿠팡 탭"></div>
+    <div class="site-hint" id="siteHint"><p><b id="hintT">화면을 불러오는 중입니다…</b></p><p id="hintS">왼쪽 메뉴: 🔑 Wing 로그인 → 🔎 키워드 분석 → 📦 수집함에서 고르기 → 📋 리스트업에 위안 입력</p></div>
+
+    <div class="listup collect" id="collect" hidden>
+      <div class="lu-bar">
+        <b>📦 수집함</b>
+        <span class="muted" id="coInfo"></span>
+        <span class="mode" id="coMode"></span>
+        <span class="spacer"></span>
+        <button id="coAdd" class="pri" type="button" disabled>☆ 선택 상품 리스트업 담기</button>
+        <button id="coXlsx" class="sec" type="button" title="지금 필터로 보이는 상품을 엑셀로">⬇ 보이는 목록 엑셀</button>
+        <button id="coDel" class="sec" type="button" disabled>선택 삭제</button>
+      </div>
+      <div class="co-filter" id="coFilter">
+        <label>검색어 <select id="fQuery"><option value="">전체</option></select></label>
+        <label>판매량 ≥ <input id="fSales" type="number" min="0" step="10" class="num" placeholder="0"></label>
+        <label>전환율 ≥ <input id="fCvr" type="number" min="0" step="0.5" class="num" placeholder="0"> %</label>
+        <label>가격 <input id="fPmin" type="number" min="0" step="1000" class="num" placeholder="최소"> ~ <input id="fPmax" type="number" min="0" step="1000" class="num" placeholder="최대"></label>
+        <label>리뷰 ≤ <input id="fRev" type="number" min="0" step="50" class="num" placeholder="제한 없음"></label>
+        <label>광고 <select id="fAd"><option value="">전체</option><option value="go">🟢 여유만</option><option value="gw">🟢🟡 여유·빠듯</option></select></label>
+        <label class="chk" title="순위는 낮은데 그 순위 기대치보다 1.5배 이상 팔리는 상품"><input id="fHidden" type="checkbox"> 🔥 숨은 강자만</label>
+        <label>배송 <select id="fShip"><option value="">전체</option><option value="rocket">로켓 전체</option><option value="로켓배송">로켓배송</option><option value="판매자로켓">판매자로켓</option><option value="일반배송">일반배송</option><option value="해외배송">해외배송</option></select></label>
+        <label title="순위에 비해 조회수가 기대치의 30%도 안 되는 상품 — 쿠팡이 중간에 끼워 노출한 자리로 추정">👀 끼워넣기 노출 <select id="fRookie"><option value="">함께 보기</option><option value="hide">제외</option><option value="only">끼워넣기만</option><option value="recent">끼워넣기 · 최근만</option></select></label>
+        <label class="chk"><input id="fMetric" type="checkbox" checked> 지표 있는 상품만</label>
+        <label class="chk"><input id="fNoAd" type="checkbox"> 광고 칸 제외</label>
+        <label class="chk"><input id="fNoPb" type="checkbox" checked> 쿠팡 PB 제외</label>
+        <button id="fReset" class="sec" type="button">필터 초기화</button>
+      </div>
+      <div class="lu-wrap"><table class="lu co" id="coTable"><thead id="coHead"></thead><tbody id="coBody"></tbody></table></div>
+      <p class="lu-empty" id="coEmpty">아직 모은 상품이 없습니다. <b>쿠팡 클린 세션</b>에서 검색한 뒤 <b>📊 쿠팡 지표 표시</b>를 누르면 여기에 자동으로 쌓입니다.</p>
+    </div>
+
+    <div class="listup" id="listup" hidden>
+      <div class="lu-bar">
+        <b>📋 소싱 리스트업</b>
+        <span class="muted" id="luInfo"></span>
+        <span class="spacer"></span>
+        <label>원가 계수 <input id="cFx" type="number" step="10" class="num"> 원/¥</label>
+        <label>수수료 <select id="cFee"><option value="0.1188">부가세 포함 11.88%</option><option value="0.108">부가세 별도 10.8%</option></select></label>
+        <label>광고비 <input id="cAd" type="number" step="1" class="num"> %</label>
+        <button id="luView" class="sec" type="button" title="간단 보기: 핵심 칸만 / 전체: 대표님 양식 27열">전체 27열 보기</button>
+        <button id="luAdd" class="sec" type="button">+ 빈 행</button>
+        <button id="luXlsx" class="pri" type="button">⬇ 엑셀로 저장</button>
+      </div>
+      <p class="lu-help">노란 칸(<b>위안</b>, 판매가, 내 예상 월판매)을 넣으면 바로 계산됩니다. <b>최대 위안</b> = 이 가격 이하로 사 오면 목표 마진이 남는 1688 가격. 월 손익은 넣은 판매량 기준 <b>가정</b>입니다. 엑셀은 대표님 양식 27열 그대로(계산 칸은 수식). 엑셀에서 한 열을 복사해 붙여넣으면 아래로 채워집니다.</p>
+      <div class="lu-wrap"><table class="lu" id="luTable"><thead id="luHead"></thead><tbody id="luBody"></tbody></table></div>
+      <p class="lu-empty" id="luEmpty">아직 담은 상품이 없습니다. <b>③ 📦 수집함</b>에서 상품을 체크하고 <b>☆ 리스트업 담기</b>를 누르거나, <b>🔎 키워드 분석</b> 카드의 <b>☆ 리스트업 담기</b>를 누르세요.</p>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-label="신호등 패널">
+    <div class="gate" id="gate" hidden>
+      <div class="gate-card">
+        <div class="gate-brand"><span class="sig"><i></i><i></i><i></i></span><b class="mono">SEED<span class="hk">HACK</span><span class="cursor">_</span></b><span class="ver" id="gateVer"></span></div>
+        <ol class="gate-steps"><li id="gs1">계정 로그인</li><li id="gs2">Wing 로그인</li><li id="gs3">수강생 확인</li></ol>
+        <form id="gateLogin" class="gate-form">
+          <p class="gate-lead">로켓그로스 대시보드 계정으로 로그인하세요.</p>
+          <label>이메일<input id="gEmail" type="email" autocomplete="username" required></label>
+          <label>비밀번호<input id="gPw" type="password" autocomplete="current-password" required></label>
+          <p class="gate-err" id="gErr" role="alert"></p>
+          <button class="pri" type="submit" id="gSubmit">로그인</button>
+          <p class="gate-links"><a href="#" id="gSignup">회원가입</a> · <a href="#" id="gReset">비밀번호를 잊었어요</a></p>
+        </form>
+        <div id="gateVendor" class="gate-form" hidden>
+          <p class="gate-lead" id="gvLead"></p>
+          <p class="gate-sub" id="gvSub"></p>
+          <button class="pri" type="button" id="gvApply" hidden>라이선스 신청하기</button>
+          <button class="sec" type="button" id="gvRecheck">다시 확인</button>
+          <p class="gate-links"><span id="gvUser"></span> · <a href="#" id="gvOut">다른 계정으로 로그인</a></p>
+        </div>
+      </div>
+    </div>
+    <div class="runbar" id="runbar" hidden><div class="rb-in"><span class="spin" id="rbSpin">⠋</span><span class="rb-steps" id="rbSteps"></span><span class="rb-ms mono" id="rbMs">0.00s</span></div><div class="rb-prog"><b id="rbProg"></b></div></div>
+    <div class="modes seg" role="group" aria-label="패널 모드">
+      <button id="pmKw" type="button" aria-pressed="true">🔎 키워드 검색</button>
+      <button id="pmCat" type="button" aria-pressed="false">🚦 카테고리 (고급)</button>
+    </div>
+
+    <!-- 키워드 검색 모드 -->
+    <div class="kwbox" id="kwBox">
+      <form class="kwform" id="kwForm">
+        <input id="kwInput" type="search" placeholder="상품 키워드 (예: 빨래바구니)" autocomplete="off" aria-label="키워드">
+        <select id="kwPages" aria-label="검색 페이지 수" title="페이지마다 Wing 검색 1회(하루 예산 사용)">
+          <option value="1">1페이지</option><option value="2">2페이지</option><option value="3">3페이지</option>
+        </select>
+        <button class="pri" type="submit">검색</button>
+      </form>
+      <div class="kwstat" id="kwStat"><span class="dim">키워드를 검색하면 네이버 월검색량·서브키워드 후보와 쿠팡 상품 실지표가 나옵니다.</span></div>
+      <div class="subs" id="kwSubs"></div>
+    </div>
+
+    <!-- 카테고리 인기상품 모드 -->
+    <div class="catbox" id="catBox" hidden>
+      <div class="ctrl">
+        <div class="seg" role="group" aria-label="판정 기준">
+          <button id="mNiche" type="button" aria-pressed="true">틈새</button>
+          <button id="mBig" type="button" aria-pressed="false">큰 시장</button>
+        </div>
+        <button id="bJudge" class="pri small" type="button" title="지금 Wing에서 보고 있는 카테고리를 판정">🚦 판정</button>
+      </div>
+      <div class="verdict">
+        <div class="tl" id="tl"><i></i><i></i><i></i></div>
+        <div class="vt">
+          <div class="cat" id="cat">Wing 쿠팡 트렌드 → 인기상품 검색에서 카테고리를 고르면 판정합니다</div>
+          <div class="call wait" id="call">대기 중</div>
+          <div class="chips" id="chips"></div>
+          <div class="yuan" id="yuan"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctrl2">
+      <div class="seg" role="group" aria-label="광고 계획" title="광고를 하려면 마진 30% 이상, 안 하면 20% 이상이 기준입니다. 리스트업 광고비에도 같이 적용됩니다.">
+        <button id="adOn" type="button" aria-pressed="true">광고 함</button>
+        <button id="adOff" type="button" aria-pressed="false">광고 안 함</button>
+      </div>
+      <label class="cpc" title="광고 클릭 1번에 드는 비용. 기본 145원 = 대표님 광고 11개 캠페인 평균(VAT 포함). 쿠팡 광고센터의 내 평균 CPC를 넣으면 더 정확합니다.">클릭 <input id="cpcIn" type="number" min="50" step="10" value="145">원</label>
+      <label class="cpc" title="광고로 들어온 손님의 구매율 ÷ 상세페이지 구매율. 기본 40% = 광고 전환율 약 2.5% ÷ 상세페이지 전환율 6~7% (대표님 광고 실적 기준)">광고전환 <input id="convIn" type="number" min="5" max="100" step="5" value="40">%</label>
+      <select id="sortSel" aria-label="정렬">
+        <option value="order">기본 순서</option><option value="sales">판매량순</option><option value="rev">판매액순</option><option value="cvr">전환율순</option><option value="price">가격 낮은순</option>
+      </select>
+    </div>
+
+    <div class="console mono" id="con" aria-live="off"></div>
+    <div class="bar2"><div id="prog"></div></div>
+
+    <div class="insight" id="insight"></div>
+    <div class="acts">
+      <button id="bExact" class="pri" type="button" disabled hidden>🎯 상위 10개 Wing 판매량 받기 (PB 제외)</button>
+      <button id="bStop" class="sec" type="button" hidden>중지</button>
+      <button id="bXlsx" class="sec" type="button" disabled>⬇ 엑셀 저장</button>
+      <span class="counts mono" id="counts"></span>
+    </div>
+
+    <div class="grid" id="grid"><div class="empty">키워드를 검색하면<br>쿠팡 상품이 실지표와 함께 카드로 나타납니다.</div></div>
+  </aside>
+</main>
+</div>
+<script src="aiscan.js"></script>
+<script src="panel.js"></script>
+<script src="rg.js"></script>
+<script src="listup.js"></script>
+<script src="collect.js"></script>
+<script src="gate.js"></script>
+</body>
+</html>
