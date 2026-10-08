@@ -102,8 +102,8 @@ body.site-on .vdesc { display: none; }
 
 /* 패널: 키워드 분석이면 본문 전체, 카테고리 판정·잠금이면 Wing 오른쪽 400px 칸, 그 밖엔 숨김 */
 .panel { position: absolute; top: 0; bottom: 0; right: 0; width: 400px; display: none; flex-direction: column; min-height: 0; background: var(--bg); border-left: 1px solid var(--line); }
-body[data-view="kw"] .panel { display: flex; left: 0; width: auto; border-left: 0; }
-body[data-view="cat"] .panel, body.locked .panel { display: flex; }
+body[data-view="kw"] .panel, body[data-view="cat"] .panel { display: flex; left: 0; width: auto; border-left: 0; } /* 카테고리 판정도 본문 전체(Wing 화면은 뒤에서만 동작) */
+body.locked .panel { display: flex; }
 .modes { display: none !important; }
 
 .pri { border: 1px solid var(--go); border-radius: 7px; padding: 7px 12px; background: var(--go); color: #fff; font-weight: 700; font-size: 12.5px; }
@@ -136,7 +136,7 @@ body[data-view="cat"] .panel, body.locked .panel { display: flex; }
 .console p { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .console .t { color: #4b5868; } .console .sys { color: #5ccfe6; } .console .go { color: #3ddc84; } .console .warn { color: #ffcc4d; } .console .stop { color: #ff6b6b; } .console .dim { color: #6b7a8c; }
 .console b { color: #fff; }
-body[data-view="kw"] .console { height: 84px; }
+body[data-view="kw"] .console, body[data-view="cat"] .console { height: 84px; }
 .bar2 { height: 3px; background: var(--line); } .bar2 div { height: 100%; width: 0; background: var(--go); transition: width .2s; }
 .acts { display: flex; gap: 6px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
 .counts { margin-left: auto; color: var(--dim); font-size: 12px; }
@@ -144,8 +144,8 @@ body[data-view="kw"] .console { height: 84px; }
 
 /* 카드 */
 .grid { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 14px 24px; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: max-content; gap: 10px; align-content: start; }
-body[data-view="kw"] .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 14px 18px 30px; }
-body[data-view="kw"] .card .im { aspect-ratio: 4/3; }
+body[data-view="kw"] .grid, body[data-view="cat"] .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 14px 18px 30px; }
+body[data-view="kw"] .card .im, body[data-view="cat"] .card .im { aspect-ratio: 4/3; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; opacity: 0; transform: translateY(6px) scale(.98); transition: opacity .25s, transform .25s, border-color .3s, box-shadow .2s; }
 .card.on { opacity: 1; transform: none; }
 .card:hover { box-shadow: 0 6px 18px rgb(16 24 40 / .1); }
@@ -206,6 +206,24 @@ body[data-view="cat"] .kwbox, body.locked .kwbox { display: none !important; }
 .subs button.brand { border-style: dashed; color: var(--dim2); }
 .subs button:hover { border-color: var(--go); color: var(--go); }
 .catbox .ctrl { border-bottom: 0; }
+/* 대시보드에서 카테고리 고르기 */
+.catpick { position: relative; padding: 10px 14px 0; background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
+.cascade { display: flex; gap: 6px; align-items: center; }
+.cascade select { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 7px 28px 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: #0a0c10 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239fb3c8' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center; color: #fff; -webkit-appearance: none; appearance: none; outline: none; }
+.cascade select, .cascade select option { color: #fff; } /* 고른 글자가 검게 보이던 문제: 시스템 셀렉트 모양을 끄고 글자색 고정 */
+.cascade select option { background: #0a0c10; }
+.cascade select:disabled { color: var(--dim2); opacity: .6; }
+.cascade select:focus { border-color: var(--neon); }
+.catpick input { font-size: 12px !important; padding: 6px 10px !important; }
+.catpick input { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: #0a0c10; color: var(--white); outline: none; }
+.catpick input:focus { border-color: var(--neon); }
+.catlist { position: absolute; left: 14px; right: 14px; top: 100%; z-index: 50; max-height: 320px; overflow: auto; background: #0b0f14; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.catlist .row { padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #141a22; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+.catlist .row:hover, .catlist .row.on { background: #121a24; }
+.catlist .row b { color: var(--white); } .catlist .row .p { color: var(--dim2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.catlist .row .d { margin-left: auto; font-size: 10.5px; color: var(--neon); white-space: nowrap; }
+.catlist .hint { padding: 10px; font-size: 12px; color: var(--dim); }
+.catlist .hint button { margin-top: 6px; font: inherit; font-size: 12px; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--neon); background: transparent; color: var(--neon); cursor: pointer; }
 body[data-view="kw"] .catbox { display: none !important; }
 .ctrl2 { display: flex; gap: 6px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; row-gap: 6px; }
 body[data-view="kw"] .ctrl2, body[data-view="kw"] .insight, body[data-view="kw"] .acts, body[data-view="kw"] .console { padding-left: 18px; padding-right: 18px; }
@@ -276,3 +294,14 @@ body.present .card .mt { font-size: 12.5px; }
 .brand-t .sub { display: block; font-size: 10.5px; color: var(--dim2); line-height: 1.2; }
 .cursor { color: var(--neon); animation: sh-blink 1s steps(1) infinite; margin-left: 1px; }
 @keyframes sh-blink { 50% { opacity: 0; } }
+
+/* 시그널 배지: GO / HOLD / DROP (광고로 1개 팔 때 남는가) */
+.sg { display: inline-block; font: 800 10.5px var(--mono); font-style: normal; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; color: #fff; vertical-align: 1px; }
+.sg.go { background: var(--go); } .sg.warn { background: var(--warn); } .sg.stop { background: var(--stop); }
+.counts .sg, .insight .sg { font-size: 11px; padding: 2px 7px; }
+.card .ad b { display: flex; align-items: center; gap: 6px; }
+
+/* 카테고리 판정: 화면 전체를 아래로 쭉 내려볼 수 있게 — 격자가 따로 스크롤되지 않고 패널이 통째로 스크롤 */
+body[data-view="cat"] .panel { overflow-y: auto; }
+body[data-view="cat"] .grid { flex: none; min-height: auto; overflow: visible; }
+body[data-view="cat"] .console { height: 84px; }

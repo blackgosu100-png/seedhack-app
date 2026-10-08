@@ -10,8 +10,9 @@
   const key = (it) => `${it.pid}:${it.vid ?? ""}`;
   const clock = () => new Date().toLocaleTimeString("en-GB");
   const pct = (v, d = 1) => (v == null ? "-" : (v * 100).toFixed(d) + "%");
-  const V = { GO: ["go", "GO · 소싱해 볼 만한 시장"], 검토: ["warn", "검토 · 조건부로 볼 만함"], "큰 시장": ["warn", "큰 시장 · 큰 시장 기준으로 보세요"], DROP: ["stop", "DROP · 다른 카테고리를 보세요"] };
-  const AD_TXT = { go: "광고 시 여유", warn: "광고 시 빠듯", stop: "광고 시 적자" };
+  const V = { GO: ["go", "GO · 진입해 볼 만한 시장"], 검토: ["warn", "HOLD · 조건부로 볼 만함"], "큰 시장": ["warn", "HOLD · 큰 시장 기준으로 보세요"], DROP: ["stop", "DROP · 다른 카테고리를 보세요"] };
+  const AD_TXT = { go: "광고해도 남음", warn: "광고 시 빠듯", stop: "광고 시 적자" };
+  const SIGN = { go: "GO", warn: "HOLD", stop: "DROP" }; // 시그널: 광고로 1개 팔 때 남는가
   // 광고 판정 = "광고로 1개 팔 때 드는 광고비(전환당 비용)"와 "1개 남는 돈(마진)" 비교. 카드·수집함·리스트업이 같이 쓴다.
   //  · 클릭비용 기본 145원, 광고 전환 비율 40% = 대표님 실제 광고 11개 캠페인(광고비 997만원·클릭 68,221·판매 1,675) 평균:
   //    평균 클릭비용 약 146원(VAT 포함), 광고 전환율 약 2.5% ≈ 상세페이지 전환율(6~7%)의 40%
@@ -74,9 +75,9 @@
   // ---------- 카드 ----------
   function cardHtml(it, i, d) {
     const ex = it.ex;
-    const relTxt = it.rel != null ? ` <span class="rel ${it.hot || ""}">${it.hot === "hot" ? "🔥" : it.hot === "cold" ? "❄" : ""}${it.rel.toFixed(1)}배</span>` : "";
+    const relTxt = it.rel != null ? ` <span class="rel ${it.hot || ""}">전환 ${it.rel.toFixed(1)}×</span>` : "";
     const adRow = it.ad ? `<div class="ad ${it.ad}" title="전환당 광고비 = 클릭비용 ÷ (전환율 × 광고 전환 비율) · ${AdModel.note()} · 1개 마진 = 판매가 × 목표 마진(원가를 넣으면 리스트업에서 실제 마진으로 다시 판정)">
-        <b>${it.ad === "go" ? "🟢" : it.ad === "warn" ? "🟡" : "🔴"} ${AD_TXT[it.ad]}</b>
+        <b><i class="sg ${it.ad}">${SIGN[it.ad]}</i> ${AD_TXT[it.ad]}</b>
         <span>1개 팔 때 광고비 약 ${won(it.cpa)}원 · 1개 마진 약 ${won(it.unitM)}원</span>
         <span>클릭당 ${won(it.beCpc)}원보다 비싸면 적자</span></div>` : "";
     const inList = d.kind === "kw" && window.Listup?.has(it.pid);
@@ -119,11 +120,11 @@
     const e = enrich(d);
     if (!d) { $("insight").innerHTML = ""; $("counts").innerHTML = ""; return e; }
     if (d.kind === "kw") {
-      $("counts").innerHTML = `<b class="g">🟢${e.adGo}</b> <b class="y">🟡${e.adWarn}</b> <b class="r">🔴${e.adStop}</b>`;
+      $("counts").innerHTML = `<b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b>`;
       $("insight").innerHTML = e.n
         ? `<span>상품 ${d.items.length}개 · 실판매 ${e.n}개</span><span>28일 판매 합 <b>${won(e.sales)}</b> · 판매액 <b>${man(e.rev)}원</b></span>
            <span>중앙 전환율 <b>${pct(e.med)}</b> · 🔥 <b>${e.hot}</b></span><span>가격 <b>${won(d.minPrice)}~${won(d.maxPrice)}원</b></span>
-           <span>광고 <b class="g">🟢${e.adGo}</b> <b class="y">🟡${e.adWarn}</b> <b class="r">🔴${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
+           <span>시그널 <b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
         : `<span class="dim">이 검색 결과에는 실판매 지표가 있는 상품이 없습니다.</span>`;
     } else {
       const c = { go: 0, warn: 0, stop: 0 };
@@ -131,8 +132,8 @@
       $("counts").innerHTML = `<b class="g">●${c.go}</b> <b class="y">●${c.warn}</b> <b class="r">●${c.stop}</b>`;
       $("insight").innerHTML = e && e.n
         ? `<span>실판매 ${e.n}개 · 중앙 전환율 <b>${pct(e.med)}</b></span><span>🔥 전환율 상위 <b>${e.hot}</b></span>
-           <span>광고 <b class="g">🟢${e.adGo}</b> <b class="y">🟡${e.adWarn}</b> <b class="r">🔴${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
-        : `<span class="dim">🎯 Wing 28일 판매량을 받으면 전환율 비교(🔥)와 광고 가능성(🟢🟡🔴)이 나옵니다</span>`;
+           <span>시그널 <b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
+        : `<span class="dim">🎯 Wing 28일 판매량을 받으면 전환율 비교와 GO / HOLD / DROP 시그널이 나옵니다</span>`;
     }
     return e;
   }
@@ -153,21 +154,104 @@
   $("pmKw").onclick = () => go("kw");
   $("pmCat").onclick = () => go("cat");
 
+  // ---------- 대시보드에서 카테고리 고르기 ----------
+  // Wing 화면을 직접 뒤지지 않아도 되게: 저장된 카테고리 목록에서 검색 → 고르면 Wing이 그 카테고리를 열고 응답이 오면 판정
+  let catTree = null, catSel = -1, catRows = [], catKids = null, catByCode = null;
+  const catQ = $("catQ"), catList = $("catList");
+  const L = [1, 2, 3, 4].map((n) => $(`catL${n}`));
+  async function loadCatTree() {
+    const t = await api.invoke("cat:tree"); catTree = t?.nodes || null;
+    if (catTree) {
+      catKids = new Map(); catByCode = new Map();
+      for (const n of catTree) { catByCode.set(n.code, n); const k = n.parent || "ROOT"; if (!catKids.has(k)) catKids.set(k, []); catKids.get(k).push(n); }
+      fillLevel(0, "ROOT");
+    } else { L.forEach((s, i) => { s.innerHTML = `<option value="">${i + 1}차</option>`; s.disabled = true; }); L[0].innerHTML = `<option value="">카테고리 목록 없음 — 검색창을 눌러 불러오기</option>`; L[0].disabled = false; }
+    return catTree;
+  }
+  // 윙처럼 1차 → 2차 → 3차 → 4차: 고르면 다음 칸이 채워지고, 말단이면 바로 판정
+  function fillLevel(i, parentCode) {
+    const kids = (catKids?.get(parentCode) || []).slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    const sel = L[i]; if (!sel) return;
+    sel.innerHTML = `<option value="">${i + 1}차 (${kids.length})</option>` + kids.map((n) => `<option value="${n.code}">${esc(n.name)}${n.leaf ? "" : " ›"}</option>`).join("");
+    sel.disabled = !kids.length;
+    for (let j = i + 1; j < 4; j++) { L[j].innerHTML = `<option value="">${j + 1}차</option>`; L[j].disabled = true; }
+    $("catGo").disabled = true;
+  }
+  function selectedNode() { for (let i = 3; i >= 0; i--) if (L[i].value) return catByCode.get(L[i].value); return null; }
+  L.forEach((sel, i) => sel.addEventListener("change", () => {
+    const n = catByCode?.get(sel.value);
+    if (!n) { fillLevel(i + 1, "__none__"); return; }
+    fillLevel(i + 1, n.code);
+    $("catGo").disabled = false;
+    if (n.leaf) pickCat(n); // 말단이면 바로 판정
+  }));
+  $("catGo").onclick = () => pickCat(selectedNode());
+  function syncCascade(n) { // 검색으로 고른 카테고리를 단계 칸에도 반영
+    const chain = []; let c = n; while (c) { chain.unshift(c); c = c.parent ? catByCode.get(c.parent) : null; }
+    fillLevel(0, "ROOT");
+    chain.forEach((node, i) => { if (L[i]) { L[i].value = node.code; fillLevel(i + 1, node.code); } });
+    $("catGo").disabled = false;
+  }
+  function recentCodes() { try { return (catData ? [String(catData.code)] : []); } catch { return []; } }
+  function renderCatList() {
+    const q = catQ.value.trim();
+    if (!catTree) {
+      catList.innerHTML = `<div class="hint">카테고리 목록이 아직 없습니다. Wing에 로그인한 뒤 한 번만 불러오면 됩니다.<br><button type="button" id="catLoad">카테고리 목록 불러오기</button></div>`;
+      catList.hidden = false;
+      $("catLoad").onclick = async () => { $("catLoad").textContent = "불러오는 중… (Wing 인기상품 화면을 엽니다)"; await api.invoke("cat:loadTree"); };
+      return;
+    }
+    if (!q) { catList.hidden = true; return; }
+    const terms = q.split(/\s+/).filter(Boolean);
+    catRows = catTree.filter((n) => terms.every((t) => n.path.includes(t)))
+      .sort((a, b) => (b.leaf - a.leaf) || (a.name.length - b.name.length) || a.path.localeCompare(b.path, "ko")).slice(0, 40);
+    catSel = catRows.length ? 0 : -1;
+    catList.innerHTML = catRows.length ? catRows.map((n, i) => `<div class="row ${i === catSel ? "on" : ""}" data-i="${i}"><b>${esc(n.name)}</b><span class="p">${esc(n.path.split(">").slice(0, -1).join(" › "))}</span><span class="d">${n.leaf ? "말단" : `${n.depth}차`}</span></div>`).join("")
+      : `<div class="hint">'${esc(q)}'에 맞는 카테고리가 없습니다</div>`;
+    catList.hidden = false;
+  }
+  async function pickCat(n) {
+    if (!n) return;
+    catList.hidden = true; catQ.value = ""; catQ.blur();
+    if (catByCode && L.every((s, i) => !s.value || catByCode.get(s.value)?.code !== n.code)) syncCascade(n);
+    $("cat").textContent = `${n.path.replace(/>/g, " › ")} · 불러오는 중…`;
+    $("call").className = "call wait"; $("call").textContent = "Wing 응답 대기";
+    const r = await api.invoke("cat:open", { code: n.code, name: n.name });
+    if (r?.error) $("cat").textContent = r.error;
+  }
+  catQ.addEventListener("input", renderCatList);
+  catQ.addEventListener("focus", () => { if (catTree && catQ.value.trim()) renderCatList(); else if (!catTree) renderCatList(); });
+  catQ.addEventListener("keydown", (e) => {
+    if (catList.hidden || !catRows.length) { if (e.key === "Escape") catList.hidden = true; return; }
+    if (e.key === "ArrowDown") { catSel = Math.min(catRows.length - 1, catSel + 1); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { catSel = Math.max(0, catSel - 1); e.preventDefault(); }
+    else if (e.key === "Enter") { pickCat(catRows[catSel]); return; }
+    else if (e.key === "Escape") { catList.hidden = true; return; }
+    else return;
+    catList.querySelectorAll(".row").forEach((el, i) => el.classList.toggle("on", i === catSel));
+    catList.querySelector(".row.on")?.scrollIntoView({ block: "nearest" });
+  });
+  catList.addEventListener("mousedown", (e) => { const row = e.target.closest(".row"); if (row) { e.preventDefault(); pickCat(catRows[+row.dataset.i]); } });
+  document.addEventListener("mousedown", (e) => { if (!e.target.closest(".catpick")) catList.hidden = true; });
+  api.on("cattree", () => { loadCatTree().then(() => { if (!catList.hidden) renderCatList(); }); });
+  loadCatTree();
+
   // ---------- 화면 전환(왼쪽 사이드바) ----------
   // view: 지금 본문에 보이는 화면. kw·cat은 패널 화면(cat = Wing 화면 + 오른쪽 판정 칸), 나머지는 메인 프로세스의 탭과 같다.
   const VIEWS = {
     kw: ["🔎 키워드 분석", "키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"],
-    cat: ["🚦 카테고리 판정", "Wing 쿠팡 트렌드 → 인기상품 검색에서 카테고리를 고르면 오른쪽 칸이 판정합니다"],
+    cat: ["🚦 카테고리 진단", "1차 → 4차를 고르면 Wing 인기상품으로 바로 진단합니다 · 말단을 고르면 자동 실행"],
     wing: ["🔑 Wing 로그인", "Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"],
     clean: ["🛒 쿠팡 검색", "쿠키 없는 클린 세션 — 개인화 없는 검색 순위"],
     collect: ["📦 수집함", "쿠팡 화면과 키워드 분석에서 본 상품이 자동으로 쌓입니다"],
     list: ["📋 리스트업", "고른 상품의 1688 원가·마진 계산"],
     cn: ["🇨🇳 1688", "이미지 검색 · 상품 페이지에서 리스트업에 넣기"],
     chat: ["💬 판매자 문의", "한글로 묻고 중국어로 보내기 · 답이 오면 다음 질문을 이어 보냄"],
+    detail: ["📄 상세페이지", "1688 상세 이미지 → 한글 상세페이지 자동 생성 · 피그마 내보내기"],
     dash: ["📊 판매 관리", "로켓그로스 대시보드"],
   };
   const DASH = { margin: "📊 마진 대시보드", ads: "🎯 광고 보고서", coupons: "🎟️ 쿠폰 관리", stock: "🏬 재고 조회" };
-  const SITE_VIEWS = new Set(["cat", "wing", "clean", "cn", "chat", "dash"]); // 머리줄에 주소창이 보이는 화면
+  const SITE_VIEWS = new Set(["wing", "clean", "cn", "chat", "dash"]); // 머리줄에 주소창이 보이는 화면 (cat 은 키워드 분석처럼 패널 전체)
   let view = "wing", dashId = null, sideMin = false;
   try { sideMin = localStorage.getItem("sideMin") === "1"; } catch {}
   // 메인 프로세스에 틀 크기(사이드바 폭 · Wing 오른쪽 칸 폭)를 알린다
@@ -175,7 +259,7 @@
     document.body.classList.toggle("side-min", sideMin);
     $("sideFold").textContent = sideMin ? "»" : "«";
     $("sideFold").title = sideMin ? "사이드바 펼치기" : "사이드바 접기";
-    const strip = view === "cat" || document.body.classList.contains("locked") ? 400 : 0;
+    const strip = document.body.classList.contains("locked") ? 400 : 0; // 카테고리 판정은 이제 본문 전체(오른쪽 칸 없음)
     api.invoke("ui:frame", { side: sideMin ? 64 : 200, strip });
   };
   function showView(v, dash) {
@@ -191,14 +275,15 @@
     $("bNewClean").hidden = v !== "clean";
     $("listup").hidden = v !== "list";
     $("collect").hidden = v !== "collect";
-    $("siteHint").hidden = v === "list" || v === "collect" || v === "kw";
+    $("siteHint").hidden = v === "list" || v === "collect" || v === "kw" || v === "cat";
+    $("detail").hidden = v !== "detail"; if (v === "detail") $("siteHint").hidden = true; // 📄 상세페이지(패널 화면)
     $("hintT").textContent = v === "dash" ? "로켓그로스 대시보드를 불러오는 중입니다…" : "화면을 불러오는 중입니다…";
     if (v === "kw" || v === "cat") { if (pmode !== v) setMode(v); }
     frame();
   }
   // 사이드바에서 고른 화면으로: 메인 프로세스 탭을 바꾸고(kw는 사이트 화면을 모두 숨김) 화면을 그린다
   function go(v, dash) {
-    const tab = v === "cat" ? "wing" : v === "dash" ? `dash:${dash || dashId || "margin"}` : v;
+    const tab = v === "dash" ? `dash:${dash || dashId || "margin"}` : v; // cat 은 메인에 "cat" 으로 — 사이트 화면을 모두 숨긴다
     showView(v, dash);
     api.invoke("nav:tab", tab);
     if (v === "kw") setTimeout(() => $("kwInput").focus(), 30);
@@ -283,7 +368,7 @@
     prog(0.15);
     $("kwForm").querySelector("button").disabled = true;
     $("kwForm").querySelector("button").textContent = "검색 중…";
-    const scan = window.AiScan?.start(kw); // 시연용 AI 분석 화면(실제 값만 표시)
+    const scan = window.AiScan?.start(kw, pages); // 시그널 스캔(발표 모드) 또는 진행 띠 — 실제 값만 표시
     const since = Date.now();
     if (view !== "kw") go("kw");
     const cpOpen = api.invoke("kw:coupang", kw).catch(() => false); // ② 쿠팡 탭에서 같은 검색어 1번(뒤에서) → 카드 가격(쿠폰가)을 수집함에 읽어 둔다
@@ -321,7 +406,7 @@
       if (!el) {
         clearInterval(revealTimer);
         kwData.items.filter((it) => it.hot === "hot").slice(0, 5).forEach((it) => log("go", `🔥 전환율 상위 · ${esc(it.name.slice(0, 24))} — 전환율 ${pct(it.cvr)} (중앙 ${pct(e.med)}의 ${it.rel.toFixed(1)}배)`));
-        log("sys", `■ '${esc(kw)}' 상품 ${kwData.items.length}개 · 28일 판매 합 ${won(e.sales)} · 판매액 ${man(e.rev)}원 · 광고 🟢${e.adGo} 🟡${e.adWarn} 🔴${e.adStop}${r.cached ? " · 저장된 결과" : ""}`);
+        log("sys", `■ '${esc(kw)}' 상품 ${kwData.items.length}개 · 28일 판매 합 ${won(e.sales)} · 판매액 ${man(e.rev)}원 · 시그널 GO ${e.adGo} · HOLD ${e.adWarn} · DROP ${e.adStop}${r.cached ? " · 저장된 결과" : ""}`);
         return;
       }
       el.classList.add("on");
@@ -379,7 +464,7 @@
     const exByKey = Object.fromEntries((catData?.key === d.key ? catData.items : []).filter((it) => it.ex).map((it) => [key(it), it.ex]));
     d.items.forEach((it) => { if (!it.ex && exByKey[key(it)]) it.ex = exByKey[key(it)]; });
     catData = d;
-    if (view === "wing") showView("cat"); // Wing 화면을 보는 중이면 오른쪽 판정 칸을 연다
+    if (view === "wing") go("cat"); // Wing 화면을 보는 중에 응답이 오면 판정 화면(본문 전체)으로
     else if (pmode !== "cat" && view !== "kw") setMode("cat");
     clearInterval(revealTimer);
     $("cat").textContent = `Wing 쿠팡 트렌드 · ${d.path ? d.path + " > " : ""}${d.name} · ${d.date}`;
@@ -395,7 +480,7 @@
     const finish = () => {
       clearInterval(revealTimer);
       setVerdict(d); insight(d);
-      log(V[d.verdict]?.[0] || "sys", `■ 카테고리 판정: <b>${esc(d.verdict)}</b>${d.yuan > 0 ? ` · 1688 ¥${d.yuan.toFixed(1)} 이하` : ""}${d.note ? ` · ${esc(d.note)}` : ""}`);
+      log(V[d.verdict]?.[0] || "sys", `■ 카테고리 진단: <b>${esc(d.verdict)}</b>${d.yuan > 0 ? ` · 1688 ¥${d.yuan.toFixed(1)} 이하` : ""}${d.note ? ` · ${esc(d.note)}` : ""}`);
     };
     const step = () => {
       const el = cards[i];
@@ -419,7 +504,7 @@
     catData = d;
     if (pmode !== "cat") return;
     setVerdict(d); insight(d); renderGrid(d);
-    if (same) log(V[d.verdict]?.[0] || "sys", `■ 판정 갱신: <b>${esc(d.verdict)}</b>`);
+    if (same) log(V[d.verdict]?.[0] || "sys", `■ 진단 갱신: <b>${esc(d.verdict)}</b>`);
   }
 
   // ---------- 메인 프로세스 이벤트 ----------
@@ -428,11 +513,12 @@
   api.on("live:refresh", (d) => updateCat(d));
   api.on("nav", ({ tab, url, dash }) => {
     // 메인 프로세스가 탭을 바꾼 경우(쿠팡 새 탭, 리스트업 → 1688, 잠금 등)에도 화면을 맞춘다. Wing은 판정 칸을 보던 중이면 유지
-    const v = tab === "wing" && view === "cat" ? "cat" : tab;
+    const v = tab;
     if (v !== view || (v === "dash" && dash && dash !== dashId)) showView(v, dash);
     if (document.activeElement !== $("url")) $("url").value = url || "";
     if (tab === "list") window.Listup?.render();
     if (tab === "collect") window.Collect?.load();
+    if (tab === "detail") window.Detail?.show();
     if (tab === "wing") footStatus();
   });
   api.on("exact:progress", ({ pos, total, status, msg }) => {
@@ -444,7 +530,7 @@
       if (status === "done" && catData) {
         const e = enrich(catData);
         catData.items.filter((it) => it.hot === "hot").forEach((it) => log("go", `🔥 전환율 상위 · ${esc(it.name.slice(0, 24))} — 전환율 ${pct(it.cvr)} (중앙 ${pct(e.med)}의 ${it.rel.toFixed(1)}배)`));
-        if (e?.n) log("sys", `■ 전환율 비교·광고 가능성: 🔥${e.hot} · 광고 🟢${e.adGo} 🟡${e.adWarn} 🔴${e.adStop} (본전 ROAS ${Math.round(e.end * 100)}%)`);
+        if (e?.n) log("sys", `■ 전환율 비교·광고 가능성: 🔥${e.hot} · 시그널 GO ${e.adGo} · HOLD ${e.adWarn} · DROP ${e.adStop} (본전 ROAS ${Math.round(e.end * 100)}%)`);
       }
     }
   });
@@ -457,7 +543,7 @@
     insight(catData);
     catData.items.forEach((it, i) => it.ex && refreshCard(i, i === idx));
     const it = catData.items[idx];
-    if (it.ad === "stop") log("stop", `🔴 광고 시 적자 · ${esc(it.name.slice(0, 22))} — 1개당 광고비 약 ${won(it.cpa)}원 > 마진 약 ${won(it.unitM)}원`);
+    if (it.ad === "stop") log("stop", `DROP · 광고 시 적자 · ${esc(it.name.slice(0, 22))} — 1개당 광고비 약 ${won(it.cpa)}원 > 마진 약 ${won(it.unitM)}원`);
   });
   // 자동 업데이트: 새 버전을 다 받으면 버튼 표시
   api.on("update", ({ version }) => { $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ ${version} 업데이트 · 다시 시작`; });

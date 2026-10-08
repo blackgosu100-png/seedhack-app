@@ -3,7 +3,23 @@
 // 추가 요청은 보내지 않는다(사람이 Wing에서 카테고리를 고를 때 Wing이 스스로 받는 응답만 사용).
 import { store } from "./store.js";
 
-const WATCH = /\/tenants\/rfm-ss\/api\/trends\/search/;
+const WATCH = /\/tenants\/rfm-ss\/api\/(trends\/search|cms\/categories$)/;
+const IS_TREE = /\/cms\/categories$/;
+
+// 카테고리 트리(약 18MB)를 대시보드 선택용으로 평탄화: {code,name,path,depth,parent,leaf}
+export function flattenTree(root) {
+  const out = [];
+  const walk = (node, path, depth, parent) => {
+    const dto = node?.displayItemCategoryDto || {};
+    const isRoot = dto.name === "ROOT" || depth === 0;
+    const kids = (node?.child || []).filter((c) => (c?.displayItemCategoryDto?.status || "ACTIVE") === "ACTIVE");
+    const p = isRoot ? [] : [...path, dto.name];
+    if (!isRoot && dto.displayItemCategoryCode != null) out.push({ code: String(dto.displayItemCategoryCode), name: dto.name, path: p.join(">"), depth, parent, leaf: kids.length === 0 });
+    kids.forEach((c) => walk(c, p, depth + 1, isRoot ? null : String(dto.displayItemCategoryCode)));
+  };
+  (Array.isArray(root) ? root : [root]).forEach((r) => walk(r, [], Array.isArray(root) ? 1 : 0, null));
+  return out;
+}
 
 const today = () => {
   const d = new Date();
@@ -45,6 +61,10 @@ export function handleResponse(url, postData, bodyText, pageUrl) {
   if (!WATCH.test(url)) return null;
   let data;
   try { data = JSON.parse(bodyText); } catch { return null; }
+  if (IS_TREE.test(url)) {
+    try { const nodes = flattenTree(data); if (nodes.length) { store.set("cattree", { ts: Date.now(), nodes }); return { tree: nodes.length }; } } catch {}
+    return null;
+  }
   const items = data?.searchItems;
   if (!Array.isArray(items) || !items.length) return null;
   const { code, query, sort, start } = parseSearchBody(postData);
@@ -78,7 +98,7 @@ export function watchWing(wc, onSnapshot, onLog) {
     if (wc.isDestroyed() || dbg.isAttached()) return;
     try {
       dbg.attach("1.3");
-      dbg.sendCommand("Network.enable").catch(() => {});
+      dbg.sendCommand("Network.enable", { maxTotalBufferSize: 64 * 1024 * 1024, maxResourceBufferSize: 48 * 1024 * 1024 }).catch(() => {}); // 카테고리 트리(약 18MB)도 읽히게
       if (why) onLog?.("dim", `네트워크 감시 다시 연결 (${why})`);
       warned = false;
     } catch (e) {
@@ -101,7 +121,8 @@ export function watchWing(wc, onSnapshot, onLog) {
         const res = await dbg.sendCommand("Network.getResponseBody", { requestId: params.requestId });
         const body = res.base64Encoded ? Buffer.from(res.body, "base64").toString("utf8") : res.body;
         const snap = handleResponse(r.url, r.postData, body, wc.getURL());
-        if (snap) onSnapshot(snap);
+        if (snap?.tree) { onLog?.("sys", `▶ 카테고리 목록 ${snap.tree}개 저장 — 대시보드에서 바로 고를 수 있습니다`); onSnapshot(snap); }
+        else if (snap) onSnapshot(snap);
       } else if (method === "Network.loadingFailed") {
         reqs.delete(params.requestId);
       }

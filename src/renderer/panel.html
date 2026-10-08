@@ -2,12 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'">
 <title>씨드핵 SEEDHACK</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="panel.css">
 <link rel="stylesheet" href="listup.css">
 <link rel="stylesheet" href="aiscan.css">
+<link rel="stylesheet" href="detail.css">
 </head>
 <body>
 <aside class="side" id="side" aria-label="메뉴">
@@ -15,7 +16,7 @@
   <nav class="nav" id="nav" aria-label="화면">
     <div class="nav-sec">분석</div>
     <button id="tKw" class="nav-item" type="button" data-view="kw" title="키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"><span class="ic">🔎</span><span class="lbl">키워드 분석</span></button>
-    <button id="tCat" class="nav-item" type="button" data-view="cat" title="Wing 쿠팡 트렌드 → 인기상품 검색에서 카테고리를 고르면 판정"><span class="ic">🚦</span><span class="lbl">카테고리 판정</span></button>
+    <button id="tCat" class="nav-item" type="button" data-view="cat" title="카테고리를 고르면 Wing 인기상품으로 판정"><span class="ic">🚦</span><span class="lbl">카테고리 진단</span></button>
     <div class="nav-sec">모으기</div>
     <button id="tWing" class="nav-item on" type="button" data-view="wing" title="Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"><span class="ic">🔑</span><span class="lbl">Wing 로그인</span></button>
     <button id="tClean" class="nav-item" type="button" data-view="clean" title="쿠키·로그인 없는 쿠팡 화면 — 개인화 없는 검색 순위"><span class="ic">🛒</span><span class="lbl">쿠팡 검색</span></button>
@@ -25,6 +26,7 @@
     <div class="nav-sec">중국 소싱</div>
     <button id="tCn" class="nav-item" type="button" data-view="cn" title="1688 — 리스트업 행의 🔍1688로 이미지 검색, 상품 페이지에서 '리스트업에 넣기'"><span class="ic">🇨🇳</span><span class="lbl">1688</span></button>
     <button id="tChat" class="nav-item" type="button" data-view="chat" title="1688 판매자 문의 — 채팅 화면과 진행 상황(답이 오면 다음 질문을 자동으로 이어 보냄)"><span class="ic">💬</span><span class="lbl">판매자 문의</span><b id="chcount" class="cnt gray" hidden>0</b></button>
+    <button id="tDetail" class="nav-item" type="button" data-view="detail" title="1688 상세 이미지 → 한글 상세페이지 자동 생성"><span class="ic">📄</span><span class="lbl">상세페이지</span><b id="dcount" class="cnt gray" hidden>0</b></button>
     <div class="nav-sec">판매 관리</div>
     <button id="tMargin" class="nav-item" type="button" data-view="dash" data-dash="margin" title="로켓그로스 마진 대시보드"><span class="ic">📊</span><span class="lbl">마진 대시보드</span></button>
     <button id="tAds" class="nav-item" type="button" data-view="dash" data-dash="ads" title="쿠팡 광고 보고서 분석"><span class="ic">🎯</span><span class="lbl">광고 보고서</span></button>
@@ -105,6 +107,7 @@
       <div class="lu-wrap"><table class="lu" id="luTable"><thead id="luHead"></thead><tbody id="luBody"></tbody></table></div>
       <p class="lu-empty" id="luEmpty">아직 담은 상품이 없습니다. <b>③ 📦 수집함</b>에서 상품을 체크하고 <b>☆ 리스트업 담기</b>를 누르거나, <b>🔎 키워드 분석</b> 카드의 <b>☆ 리스트업 담기</b>를 누르세요.</p>
     </div>
+    <div class="detail" id="detail" hidden></div>
   </section>
 
   <aside class="panel" id="panel" aria-label="신호등 패널">
@@ -150,17 +153,28 @@
 
     <!-- 카테고리 인기상품 모드 -->
     <div class="catbox" id="catBox" hidden>
+      <div class="catpick">
+        <div class="cascade" id="catCascade">
+          <select id="catL1" aria-label="1차 카테고리"><option value="">1차</option></select>
+          <select id="catL2" aria-label="2차 카테고리" disabled><option value="">2차</option></select>
+          <select id="catL3" aria-label="3차 카테고리" disabled><option value="">3차</option></select>
+          <select id="catL4" aria-label="4차 카테고리" disabled><option value="">4차</option></select>
+          <button id="catGo" class="pri small" type="button" disabled title="고른 카테고리의 인기상품으로 판정">▶ 판정</button>
+        </div>
+        <input id="catQ" type="search" placeholder="또는 이름으로 찾기 · 예: 빨래건조대" autocomplete="off" spellcheck="false">
+        <div id="catList" class="catlist" hidden></div>
+      </div>
       <div class="ctrl">
         <div class="seg" role="group" aria-label="판정 기준">
           <button id="mNiche" type="button" aria-pressed="true">틈새</button>
           <button id="mBig" type="button" aria-pressed="false">큰 시장</button>
         </div>
-        <button id="bJudge" class="pri small" type="button" title="지금 Wing에서 보고 있는 카테고리를 판정">🚦 판정</button>
+        <button id="bJudge" class="pri small" type="button" title="지금 Wing에서 보고 있는 카테고리의 시장 시그널 진단">🚦 진단</button>
       </div>
       <div class="verdict">
         <div class="tl" id="tl"><i></i><i></i><i></i></div>
         <div class="vt">
-          <div class="cat" id="cat">Wing 쿠팡 트렌드 → 인기상품 검색에서 카테고리를 고르면 판정합니다</div>
+          <div class="cat" id="cat">위 검색창에서 카테고리를 고르면 판정합니다</div>
           <div class="call wait" id="call">대기 중</div>
           <div class="chips" id="chips"></div>
           <div class="yuan" id="yuan"></div>
@@ -199,6 +213,7 @@
 <script src="panel.js"></script>
 <script src="rg.js"></script>
 <script src="listup.js"></script>
+<script src="detail.js"></script>
 <script src="collect.js"></script>
 <script src="gate.js"></script>
 </body>

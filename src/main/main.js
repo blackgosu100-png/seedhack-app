@@ -22,6 +22,7 @@ import { DEFAULTS, buildMarkets, judge, isPB, pbList } from "../shared/strategy-
 import { dhashFromGray, grayFromBGRA, rankBySimilarity, decidePrice, koHint, toNum } from "./sku-core.js";
 import { parseCard, rankCards, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
 import { initChat } from "./chat.js";
+import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WING_TREND = "https://wing.coupang.com/tenants/rfm-ss/coupang-trends/popularity-search";
@@ -221,6 +222,7 @@ function createWindow() {
   win.contentView.addChildView(wingView);
   hookView(wingView, "wing");
   watchWing(wingView.webContents, (snap) => {
+    if (snap?.tree) { send("cattree", { count: snap.tree }); return; } // 카테고리 목록 저장됨 → 대시보드 검색창 갱신
     current = snap;
     const p = buildPayload(snap);
     if (p) { log("sys", `▶ Wing 인기상품 응답 수신 · ${snap.name} · 상품 ${snap.items.length}개`); send("live", p); }
@@ -307,6 +309,7 @@ ipcMain.handle("auth:open", (_e, url) => { if (/^https:\/\/(rocketgrowth-sale-da
 
 // ---------- 패널 요청 처리 ----------
 ipcMain.handle("nav:tab", (_e, tab) => {
+  if (tab === "cat") { try { if (!/popularity-search/.test(wingView.webContents.getURL())) wingView.webContents.loadURL(WING_TREND); } catch {} } // 판정 화면을 열면 뒤에서 Wing 인기상품 화면을 준비(카테고리 목록도 이때 저장됨)
   if (!licensed() && tab !== "wing") { send("nav", { tab: "wing", url: wingView.webContents.getURL() }); return; } // 잠금: Wing(판매자 확인용)만
   const dash = /^dash:/.test(tab) ? tab.slice(5) : null; // 📊 판매 관리: "dash:margin" 처럼 대시보드 메뉴 id
   if (dash) tab = "dash";
@@ -317,7 +320,7 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   if (tab === "chat") chat.show(true); // ⑥ 💬 문의 탭: 채팅 화면(처음이면 마지막 문의 대화를 연다)
   layout(); sendTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
   const v = tab === "wing" ? wingView : tab === "clean" ? cleanView : tab === "cn" ? cnView : tab === "chat" ? chat.view() : tab === "dash" ? dashView : null;
-  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : "리스트업 — 중국 원가·마진 계산" });
+  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
 });
 // 화면(panel.js)이 알려 주는 틀 크기: 왼쪽 사이드바 폭, Wing 오른쪽 칸 폭
 ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
@@ -371,6 +374,12 @@ const chat = initChat({
   sendPanel: send,
   isShown: () => active === "chat",
   isCnShown: () => active === "cn",
+});
+// 📄 상세페이지 자동 생성: 1688 상품 화면의 📄 버튼(detail:fromPage) 또는 패널(detail:run) → 파이프라인 → 패널 📄 화면(사이트 화면은 layout()이 모두 숨김)
+initDetail({
+  ipcMain, app, getWin: () => win, store, log, send,
+  translate: (texts) => chat.translate(texts), getCnSession: () => cnView?.webContents.session || session.fromPartition("persist:1688"), getCnView: () => cnView,
+  showDetail: () => { active = "detail"; layout(); send("nav", { tab: "detail", url: "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" }); },
 });
 ipcMain.handle("chat:inquire", (e, p) => (cnView && e.sender === cnView.webContents ? chat.inquire({ offerId: String(p?.offerId || ""), title: String(p?.title || "") }) : { error: "1688 상품 화면에서만 됩니다" }));
 ipcMain.handle("chat:state", () => chat.state());
@@ -713,6 +722,18 @@ ipcMain.handle("nav:go", (_e, text) => {
   (active === "wing" ? wingView : cleanView).webContents.loadURL(url);
 });
 ipcMain.handle("nav:newClean", () => { active = "clean"; createClean(); layout(); });
+
+// 대시보드에서 카테고리 고르기: 저장된 트리를 주고, 고르면 Wing 화면을 그 카테고리 주소로 연다(Wing이 스스로 인기상품을 받아오면 CDP가 읽어 판정)
+ipcMain.handle("cat:tree", () => { const t = store.get("cattree"); return t ? { ts: t.ts, nodes: t.nodes } : null; });
+ipcMain.handle("cat:loadTree", () => { wingView.webContents.loadURL(WING_TREND); return { ok: true }; });
+ipcMain.handle("cat:open", (_e, { code, name }) => {
+  if (!/^\d+$/.test(String(code || ""))) return { error: "카테고리 코드가 없습니다" };
+  const u = new URL(WING_TREND); u.searchParams.set("categoryCode", String(code)); u.searchParams.set("categoryName", String(name || ""));
+  wingView.webContents.loadURL(u.href);
+  log("sys", `▶ 카테고리 열기 · ${name} (${code}) — Wing 응답을 받으면 판정합니다`);
+  return { ok: true };
+});
+ipcMain.on("cattree:changed", () => {});
 
 ipcMain.handle("live:open", () => {
   let code = null;
