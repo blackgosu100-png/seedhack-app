@@ -448,6 +448,7 @@ ipcMain.handle("cp:to1688", (e, p) => {
   return { ok: true };
 });
 ipcMain.handle("cn:target", (e) => (fromCn(e) ? cnTarget : null));
+ipcMain.handle("cn:present", () => true); // 해커 화면이 기본(구 발표 모드) — 1688 화면에도 적용
 const fromCn = (e) => !!(cnView && e.sender === cnView.webContents) || !!(probeView && e.sender === probeView.webContents);
 
 // ---- 결과 목록 → 판매자 추천 TOP ----

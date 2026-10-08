@@ -33,7 +33,6 @@
   // ---------- 콘솔 ----------
   function log(cls, html) {
     const con = $("con");
-    if (cls === "dim" && document.body.classList.contains("present")) return;
     const p = document.createElement("p");
     p.className = cls;
     p.innerHTML = `<span class="t">[${clock()}]</span> ${html}`;
@@ -216,8 +215,9 @@
     if (catByCode && L.every((s, i) => !s.value || catByCode.get(s.value)?.code !== n.code)) syncCascade(n);
     $("cat").textContent = `${n.path.replace(/>/g, " › ")} · 불러오는 중…`;
     $("call").className = "call wait"; $("call").textContent = "Wing 응답 대기";
+    window.AiScan?.diagnose(n.path); // 발표 모드면 진단 해커 화면(Wing 응답을 기다리는 동안부터)
     const r = await api.invoke("cat:open", { code: n.code, name: n.name });
-    if (r?.error) $("cat").textContent = r.error;
+    if (r?.error) { $("cat").textContent = r.error; if (window.AiScan?.current?.kind === "cat") window.AiScan.current.fail(r.error); }
   }
   catQ.addEventListener("input", renderCatList);
   catQ.addEventListener("focus", () => { if (catTree && catQ.value.trim()) renderCatList(); else if (!catTree) renderCatList(); });
@@ -467,6 +467,8 @@
     if (view === "wing") go("cat"); // Wing 화면을 보는 중에 응답이 오면 판정 화면(본문 전체)으로
     else if (pmode !== "cat" && view !== "kw") setMode("cat");
     clearInterval(revealTimer);
+    // 발표 모드: 카테고리 진단 해커 화면(고를 때 띄운 화면이 있으면 이어서, 없으면 새로)
+    if (view === "cat") { const sc = window.AiScan?.current?.kind === "cat" ? window.AiScan.current : window.AiScan?.diagnose(`${d.path ? d.path + " > " : ""}${d.name}`); sc?.run(d); }
     $("cat").textContent = `Wing 쿠팡 트렌드 · ${d.path ? d.path + " > " : ""}${d.name} · ${d.date}`;
     $("call").className = "call wait"; $("call").textContent = "판정 중…";
     $("tl").className = "tl"; $("chips").innerHTML = ""; $("yuan").textContent = "";
@@ -522,6 +524,7 @@
     if (tab === "wing") footStatus();
   });
   api.on("exact:progress", ({ pos, total, status, msg }) => {
+    if (window.AiScan?.current?.kind === "exact") window.AiScan.current.progress({ pos, total, status, msg });
     prog(total ? pos / total : 0);
     const cls = /✕|실패|제한|정지|한도|로그인/.test(msg) ? "stop" : status === "done" ? "sys" : /재사용/.test(msg) ? "dim" : "go";
     log(cls, `${status === "done" ? "■" : "↳"} [${pos}/${total}] ${esc(msg)}`);
@@ -541,6 +544,7 @@
     catData.items[idx].ex = ex;
     if (pmode !== "cat") return;
     insight(catData);
+    if (window.AiScan?.current?.kind === "exact") window.AiScan.current.item({ ...catData.items[idx], key: k }); // 전환율·시그널 계산 뒤 해커 화면에 도장
     catData.items.forEach((it, i) => it.ex && refreshCard(i, i === idx));
     const it = catData.items[idx];
     if (it.ad === "stop") log("stop", `DROP · 광고 시 적자 · ${esc(it.name.slice(0, 22))} — 1개당 광고비 약 ${won(it.cpa)}원 > 마진 약 ${won(it.unitM)}원`);
@@ -588,18 +592,8 @@
   $("bReload").onclick = () => api.invoke("nav:reload");
   $("bHome").onclick = () => api.invoke("nav:home");
   $("bNewClean").onclick = () => api.invoke("nav:newClean");
-  // 발표 모드: 확대 1.25배 + 기록 창 축소 + 진단·저장값 같은 내부 문구 숨김
-  const setPresent = async (on) => {
-    document.body.classList.toggle("present", on);
-    $("bPresent").setAttribute("aria-pressed", String(on));
-    await api.invoke("view:zoom", on ? 1.25 : 1);
-    try { localStorage.setItem("present", on ? "1" : "0"); } catch {}
-  };
-  $("bPresent").onclick = async () => {
-    const on = !document.body.classList.contains("present");
-    await setPresent(on);
-    if (on) precheck();
-  };
+  // 해커 스타일(구 발표 모드)이 기본: 분석할 때 전체 화면 AI 연출. 확대(줌)는 쓰지 않는다 — 2026-10-09 사용자 결정
+  document.body.classList.add("present");
   // 사전 점검: 시연 직전에 로그인·정지·사용량을 한 줄로
   async function precheck() {
     const c = await api.invoke("check:status");
@@ -607,7 +601,6 @@
     const g = c.gate ? `✕ 조회 정지: ${c.gate.reason} (${new Date(c.gate.until).toLocaleTimeString("ko-KR")}까지)` : "✔ 조회 가능";
     log(c.wing === "ok" && !c.gate ? "go" : "stop", `점검 · ${wing} · ${g} · 오늘 조회 ${c.today}건 · 최근 10분 ${c.win10}/60건 · 수집함 ${c.collect}개`);
   }
-  try { if (localStorage.getItem("present") === "1") setPresent(true); } catch {}
   $("bJudge").onclick = async () => {
     log("sys", "▶ 지금 보고 있는 카테고리를 판정합니다");
     const d = await api.invoke("live:open");
@@ -624,8 +617,10 @@
     const b = await api.invoke("budget:get");
     busy = true; $("bExact").disabled = true; $("bStop").hidden = false;
     log("sys", `▶ 정확한 28일 조회·판매량 조회 · ${need.length}개 · Wing 상품 매칭 검색(요청 간격 4초)${b.budget ? ` · 하루 예산 ${b.used}/${b.budget}` : ""}`);
+    // 🎤 발표 모드: 판매량 받기 해커 화면(조회 순서 그대로)
+    window.AiScan?.exact(need.map((it) => ({ key: key(it), img: it.img, name: it.name, order: it.order, price: it.ex?.price ?? it.price, reviews: it.reviews })), `${catData.path ? catData.path + " > " : ""}${catData.name || ""}`);
     const r = await api.invoke("exact:start", need.map((it) => ({ pid: it.pid, vid: it.vid, iid: it.iid, name: it.name })));
-    if (r?.error) { log("stop", `✕ ${esc(r.error)}`); busy = false; $("bExact").disabled = false; $("bStop").hidden = true; }
+    if (r?.error) { if (window.AiScan?.current?.kind === "exact") window.AiScan.current.fail(r.error); log("stop", `✕ ${esc(r.error)}`); busy = false; $("bExact").disabled = false; $("bStop").hidden = true; }
   };
   $("bStop").onclick = () => api.invoke("exact:stop");
   $("bXlsx").onclick = async () => {
