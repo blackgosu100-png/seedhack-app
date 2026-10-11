@@ -1674,8 +1674,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         try {
           const r = await ses.fetch(u, { headers: { Referer: "https://www.coupang.com/" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const buf = Buffer.from(await r.arrayBuffer()); const im = nativeImage.createFromBuffer(buf); const sz = im.isEmpty() ? null : im.getSize();
-          if (!sz || sz.width < 300 || sz.height < 120) continue; // 아이콘·배너 조각은 뺀다
-          const ext = /png/i.test(r.headers.get("content-type") || "") ? "png" : /webp/i.test(r.headers.get("content-type") || "") ? "webp" : "jpg";
+          const ext = /png/i.test(r.headers.get("content-type") || "") ? "png" : /webp/i.test(r.headers.get("content-type") || "") || /^RIFF/.test(buf.subarray(0, 4).toString("latin1")) ? "webp" : "jpg";
+          if (sz ? sz.width < 300 || sz.height < 120 : ext !== "webp" || buf.length < 20000) continue; // 아이콘·배너 조각은 뺀다(webp 는 nativeImage 가 못 열어 크기 대신 용량으로)
           fs.writeFileSync(path.join(refDir, `${String(i + 1).padStart(2, "0")}.${ext}`), buf); ok++;
         } catch (err) { log("dim", `  🧲 상세 이미지 못 받음 ${u.slice(0, 80)} (${err?.message || err})`); }
         prog("download", `상세 이미지 ${ok}/${urls.length}장 받는 중`, (i + 1) / urls.length);
