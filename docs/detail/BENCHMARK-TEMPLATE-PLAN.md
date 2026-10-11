@@ -67,3 +67,26 @@
 ## 6. 열린 질문(대표님)
 - 템플릿 이름을 사용자가 짓게 할지, 자동(카테고리+날짜)으로 할지 → 기본 자동 + 바꾸기 권장.
 - 수강생 간 공유는 파일 주고받기로 시작해도 되는지(공유 DB 는 베타 뒤).
+
+## 7. 구현 기록 (2026-10-11, 4장·5장 순서대로 — 커밋 bb8d12a → 0b0009b + 하네스)
+| 단계 | 파일 | 상태 |
+|---|---|---|
+| 1 | `src/main/detail/templates.js` · `test/detail/templates.test.js` | 변환(ocr_lines·measured·섹션 원문 제외)·overrides·.seedtpl.json 왕복·출처 캐시 — node --test 8개 통과(전체 170개) |
+| 2 | `src/main/detail/index.js` · `plan-core.js` | `detail:templates`/`detail:themes` = 기본 + 내 템플릿(kind mine), `start({ templateRef, keepExtra })`, `detail:template:*`, `detail:captureReference`, `reference.keepExtra` → applyReferenceOrder |
+| 3 | `src/preload/coupang.cjs` | 🧲 템플릿으로 저장(📝 리뷰 분석·📂 리뷰 기록 아래) → 상세 이미지 주소 수집 → 이름(카테고리+상품명 10자) → 진행 띠(리뷰 패널 스타일) |
+| 4 | `src/renderer/detail.js` · `detail.css` | 확인 화면 ⑤ = 고른 한 장 + "다른 디자인 고르기 ▾"(기본 8 · 내 템플릿 · 📥 가져오기), 세부 조정 칩(overrides, 바꾼 것만 저장), 「레퍼런스 그대로 / 우리 강점 섹션 유지」 토글, 이름·내보내기·삭제. 결과 화면 ↻ 목록에도 내 템플릿·가져오기 |
+| 5 | `src/main/detail/extract.js` | `mergeTaobaoPhotos`: `userData/taobao-reviews/<id>/review-NN` → tNN(detail, "타오바오 참고", 기본 제외 — 확인 화면에서 켜서 씀). 옵션·사이즈 섹션엔 들어가지 않음 |
+
+### 7-1. 실측 — 저장 → 템플릿 선택 → 생성 (하네스 `test/detail/template-flow.js`, 임시 userData, 작업 폴더 복사)
+- 재료: 쿠팡 클린맥스 상세 이미지 26장(1단계 때 받아 둔 `~/Downloads/coupang_cleanmax_detail_images (1)`) → 작업 `20261010-220704-950582055367`(실리콘 힙업 밴드, v5)에 적용.
+- 🧲 저장(분석): **148초 · $0.229**(haiku) → `template.json` 7KB(섹션 24개, 원문 없음) + `guard.json` 324줄(표절 가드용, 내보내기 제외).
+- 내보내기 `.seedtpl.json` 14KB → 가져오기 왕복: 토큰 동일, madeBy "받음", 새 id. 세부 조정 `spacing=airy` → chips 반영 확인.
+- 템플릿 선택 → 생성: **151초 · $0.277**(카피 sonnet 1회, 섹션 10개). 섹션 순서 = 레시피와 일치(hero→notice→problem→feature→before_after→feature×2→versatility→faq→spec), plan.meta.refTokens 적용, 키커 POINT 1·2·3 / Difference 1 / USAGE.
+- 표절 가드: 79줄 중 비슷한 줄 1 → 고쳐 씀 1, 재검사 0, 근거 주장 0건. 템플릿 재사용 자체는 비용 0(reference.json 을 보관함에서 바로 씀).
+- 결과 폴더: `test/detail/out/template-flow-cleanmax-20261011/` (슬라이스 5장 · preview.png · plan/copy/sections.json · report.json · template/).
+- 합계 **약 5분 · $0.51**(저장 1회 + 생성 1회). 두 번째 상품부터는 저장 비용 없이 생성 비용만.
+
+### 7-2. 남은 것
+- **실제 쿠팡 화면에서 🧲 버튼 라이브 검증**: 하네스가 새 세션(숨은 창)으로 상품 화면을 열면 쿠팡이 Access Denied 로 막아(검색 화면은 열림, 홈 경유·재시도도 막힘) 라이브 버튼은 실행 중인 앱을 다시 시작해야 확인할 수 있다(앱이 사용 중이어서 이번엔 재시작하지 않음). 핸들러(`detail:captureReference`)의 내려받기·분석·보관함 경로는 하네스에서 가짜 sender 로 호출해 검증했고, 이미지 수집 선택자는 쿠팡 상세 구조가 바뀌면 손봐야 한다.
+- 템플릿 이름 기본값은 쿠팡 카테고리(breadcrumb) + 상품명 10자 — 카테고리를 못 읽는 화면이면 상품명만.
+- 3-2 ③ "내 결과물에서 템플릿 만들기"(작업 폴더 → 템플릿)는 아직. 공유 DB(pool_templates)는 베타 뒤.
