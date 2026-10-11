@@ -140,3 +140,29 @@ table.lu { border-collapse: separate; border-spacing: 0; font-size: 12px; backgr
 /* 🚚 로켓그로스 자동 입출고비 */
 .lu td.in input.auto { color: #1d4ed8; font-weight: 700; }
 .lu td.rgs { text-align: center; font-size: 11.5px; }
+
+/* 리스트업 관리: ☑ 선택 · ⠿ 끌어서 순서 · 선택 막대 · ↶ 되돌리기 */
+.lu th.mg, .lu td.mg { width: 84px; min-width: 84px; padding: 0 4px; white-space: nowrap; }
+.lu td.mg { text-align: left; }
+.lu .mg .pk { display: inline-flex; align-items: center; padding: 0 4px; cursor: pointer; vertical-align: middle; }
+.lu .mg .pk input { width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: #15803d; }
+.lu td.mg .grip { display: inline-block; width: 18px; text-align: center; color: #94a3b8; font-size: 15px; cursor: grab; user-select: none; vertical-align: middle; }
+.lu td.mg .grip:hover { color: var(--s-text); }
+.lu td.mg .grip:active { cursor: grabbing; }
+.lu td.mg b { display: inline-block; min-width: 22px; text-align: right; font-weight: 500; vertical-align: middle; }
+.lu tbody tr.sel td.no { background: #dcfce7; color: #166534; }
+.lu tbody tr.sel td { background-image: linear-gradient(rgba(21,128,61,.06), rgba(21,128,61,.06)); }
+.lu tbody tr.dragging td { opacity: .45; }
+.lu tbody tr.drop-a td { box-shadow: inset 0 3px 0 #15803d; }
+.lu tbody tr.drop-b td { box-shadow: inset 0 -3px 0 #15803d; }
+.lu tbody tr.moved td { animation: luMoved 1.6s ease-out; }
+@keyframes luMoved { from { background-color: #bbf7d0; } to { background-color: transparent; } }
+.lu-sel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 14px; background: #f0fdf4; border-bottom: 1px solid #bbf7d0; font-size: 13px; }
+.lu-sel b { color: #166534; font-size: 14px; margin-right: 6px; }
+.lu-sel button { font: 12.5px var(--sans); border: 1px solid var(--s-line2); background: #fff; color: var(--s-text); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.lu-sel button:hover { border-color: #15803d; }
+.lu-sel button.bad { color: var(--s-bad); border-color: #fecaca; }
+.lu-sel button.bad:hover { background: var(--s-bad); color: #fff; border-color: var(--s-bad); }
+.lu-sel button.ghost { border-color: transparent; background: transparent; color: var(--s-text2); }
+.lu-sel button.undo { margin-left: auto; background: #111827; color: #fff; border-color: #111827; font-weight: 600; }
+.lu td.del button:hover { background: var(--s-bad); color: #fff; border-color: var(--s-bad); }

@@ -106,6 +106,16 @@
         <button id="luAdd" class="sec" type="button">+ 빈 행</button>
         <button id="luXlsx" class="pri" type="button">⬇ 엑셀로 저장</button>
       </div>
+      <div class="lu-sel" id="luSel" hidden>
+        <b id="luSelN"></b>
+        <button type="button" data-mv="top" data-tip="⤒ 선택한 상품을 맨 위로">⤒ 맨 위로</button>
+        <button type="button" data-mv="up" data-tip="↑ 한 칸 위로">↑</button>
+        <button type="button" data-mv="down" data-tip="↓ 한 칸 아래로">↓</button>
+        <button type="button" data-mv="bottom" data-tip="⤓ 선택한 상품을 맨 아래로">⤓ 맨 아래로</button>
+        <button type="button" data-act="del" class="bad" data-tip="✕ 선택한 상품 빼기 (되돌리기 가능)">✕ 빼기</button>
+        <button type="button" data-act="none" class="ghost">선택 해제</button>
+        <button type="button" id="luUndo" class="undo" hidden></button>
+      </div>
       <p class="lu-help">노란 칸(<b>위안</b>, 판매가, 내 예상 월판매)을 넣으면 바로 계산됩니다. <b>최대 위안</b> = 이 가격 이하로 사 오면 목표 마진이 남는 1688 가격. 월 손익은 넣은 판매량 기준 <b>가정</b>입니다. 엑셀은 대표님 양식 27열 그대로(계산 칸은 수식). 엑셀에서 한 열을 복사해 붙여넣으면 아래로 채워집니다.</p>
       <div class="lu-wrap"><table class="lu" id="luTable"><thead id="luHead"></thead><tbody id="luBody"></tbody></table></div>
       <p class="lu-empty" id="luEmpty">아직 담은 상품이 없습니다. <b>③ 📦 수집함</b>에서 상품을 체크하고 <b>☆ 리스트업 담기</b>를 누르거나, <b>🔎 키워드 분석</b> 카드의 <b>☆ 리스트업 담기</b>를 누르세요.</p>

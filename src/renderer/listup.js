@@ -14,6 +14,8 @@
   let rows = [], cfg = { fx: 300, fee: 0.1188, adRate: 0.1 }, saveT = null;
   const stratBusy = new Set(); // 🧠 판매전략 AI 요청 중인 행
   let autoSt = { cur: null, q: [], left: 0, paused: false }; // 1688 자동 조사 줄 상태(main이 알려 줌)
+  const picked = new Set(); // ☑ 체크한 행(id) — 선택 이동·삭제
+  let undo = null, undoT = null; // ↶ 마지막 삭제 되돌리기 {items:[{row, i}]}
   let full = false; // 기본은 "간단 보기"(핵심 칸만), 전체 보기 = 대표님 양식 27열
   try { full = localStorage.getItem("luFull") === "1"; } catch {}
 
@@ -121,7 +123,7 @@
 
   function head() {
     $("luHead").innerHTML =
-      `<tr class="grp"><th class="no" rowspan="2">No.</th>${GROUPS.map(([g, span], i) => `<th colspan="${span}" class="${i === GROUPS.length - 1 ? "ext" : ""}">${g}</th>`).join("")}<th rowspan="2" class="del"></th></tr>` +
+      `<tr class="grp"><th class="no mg" rowspan="2"><label class="pk" data-tip="☑ 전체 선택 / 해제"><input type="checkbox" id="luAll" aria-label="전체 선택" ${rows.length && rows.every((r) => picked.has(r.id)) ? "checked" : ""}></label>No.</th>${GROUPS.map(([g, span], i) => `<th colspan="${span}" class="${i === GROUPS.length - 1 ? "ext" : ""}">${g}</th>`).join("")}<th rowspan="2" class="del"></th></tr>` +
       `<tr>${COLS.map(([f, h, k, w]) => `<th style="min-width:${w}px;width:${w}px" class="${k === "c" ? "calc" : ""} ${EXT.has(f) ? "ext" : ""}" title="${esc(TIPS[f] || "")}">${typeof h === "function" ? h() : h}</th>`).join("")}</tr>`;
   }
 
@@ -179,7 +181,8 @@
   }
   function rowHtml(r, ri) {
     const c = calc(r);
-    return `<tr data-r="${ri}"><td class="no">${ri + 1}</td>${COLS.map((col) => cellHtml(r, ri, col, c)).join("")}<td class="del"><button type="button" data-del="${ri}" title="이 행 삭제">✕</button></td></tr>`;
+    const on = picked.has(r.id);
+    return `<tr data-r="${ri}" class="${on ? "sel" : ""}"><td class="no mg"><label class="pk"><input type="checkbox" data-pick="${ri}" aria-label="${ri + 1}번 선택" ${on ? "checked" : ""}></label><span class="grip" draggable="true" data-grip="${ri}" data-tip="⠿ 끌어서 순서 바꾸기" aria-label="끌어서 순서 바꾸기">⠿</span><b>${ri + 1}</b></td>${COLS.map((col) => cellHtml(r, ri, col, c)).join("")}<td class="del"><button type="button" data-del="${ri}" data-tip="✕ 이 상품 빼기 (되돌리기 가능)" aria-label="이 상품 빼기">✕</button></td></tr>`;
   }
   function totals() {
     const sum = (f) => rows.reduce((a, r) => a + (calc(r)[f] ?? 0), 0);
@@ -190,6 +193,7 @@
       : `${rows.length}개 중 ${withM}개 기준 (가정) · 월 매출 ${won(sum("revM"))}원 · 월 순이익 ${won(net)}원 · 월 원가 ${won(costM)}원${costM ? ` · 원가 100만원당 ${won((net / costM) * 1e6)}원 남음` : ""}`;
   }
   function render() {
+    rows.forEach((r) => { if (r.id == null) r.id = Date.now() + Math.random(); });
     rows.forEach(applyRg);
     head();
     $("luBody").innerHTML = rows.map(rowHtml).join("");
@@ -199,6 +203,45 @@
     $("luView").textContent = full ? "간단 보기" : "전체 27열 보기";
     $("cFx").value = cfg.fx; $("cFee").value = String(cfg.fee); $("cAd").value = Math.round(cfg.adRate * 100);
     totals();
+    selBar();
+  }
+  // ☑ 선택 막대 — 체크한 행이 있을 때만: 맨 위로 · 위로 · 아래로 · 맨 아래로 · 빼기 / ↶ 되돌리기는 삭제 직후 10초
+  function selBar() {
+    [...picked].forEach((id) => { if (!rows.some((r) => r.id === id)) picked.delete(id); });
+    const k = picked.size, bar = $("luSel");
+    bar.hidden = !k && !undo;
+    $("luSelN").textContent = k ? `${k}개 선택` : "";
+    bar.querySelectorAll("[data-mv],[data-act='del'],[data-act='none']").forEach((b) => { b.hidden = !k; });
+    const u = $("luUndo");
+    u.hidden = !undo;
+    if (undo) u.textContent = `↶ 되돌리기 (${undo.items.length}개 뺌)`;
+  }
+  // 순서 이동: ids 묶음을 to 위치(남은 행 기준 인덱스) 앞에 끼워 넣는다
+  function moveTo(ids, to) {
+    const set = new Set(ids), moving = rows.filter((r) => set.has(r.id)), rest = rows.filter((r) => !set.has(r.id));
+    to = Math.max(0, Math.min(rest.length, to));
+    rows = [...rest.slice(0, to), ...moving, ...rest.slice(to)];
+    render(); save();
+    window.PanelHooks?.onListupChange();
+    moving.forEach((r) => $("luBody").querySelector(`tr[data-r="${rows.indexOf(r)}"]`)?.classList.add("moved"));
+  }
+  function step(ids, d) { // 한 칸씩: 묶음의 맨 앞(위로)/맨 뒤(아래로) 기준
+    const idx = rows.map((r, i) => (ids.includes(r.id) ? i : -1)).filter((i) => i >= 0);
+    if (!idx.length) return;
+    const first = idx[0], last = idx[idx.length - 1], cnt = idx.length;
+    moveTo(ids, d < 0 ? first - 1 : last - cnt + 2);
+  }
+  function remove(ids) {
+    const set = new Set(ids);
+    const items = rows.map((row, i) => ({ row, i })).filter((x) => set.has(x.row.id));
+    if (!items.length) return;
+    rows = rows.filter((r) => !set.has(r.id));
+    ids.forEach((id) => picked.delete(id));
+    undo = { items };
+    clearTimeout(undoT); undoT = setTimeout(() => { undo = null; selBar(); }, 10000);
+    render(); save();
+    window.PanelHooks?.onListupChange();
+    window.PanelHooks?.log("sys", `■ 리스트업에서 ${items.length}개 뺌 · ↶ 되돌리기 10초`);
   }
   function refreshCalc(ri) {
     const tr = $("luBody").querySelector(`tr[data-r="${ri}"]`);
@@ -386,19 +429,80 @@
     const tr = $("luBody").querySelector(`tr[data-r="${i}"]`);
     if (tr) { tr.classList.add("filled"); tr.scrollIntoView({ block: "nearest" }); setTimeout(() => tr.classList.remove("filled"), 2500); }
   });
-  // 삭제 — 한 번 누르면 "삭제?"로 바뀌고, 다시 누르면 삭제
+  // ✕ 빼기 — 바로 빠지고 10초 동안 ↶ 되돌리기
   $("luBody").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-del]");
+    if (b) remove([rows[+b.dataset.del].id]);
+  });
+  // ☑ 선택
+  $("luBody").addEventListener("change", (e) => {
+    const c = e.target.closest("input[data-pick]");
+    if (!c) return;
+    const r = rows[+c.dataset.pick];
+    if (c.checked) picked.add(r.id); else picked.delete(r.id);
+    c.closest("tr").classList.toggle("sel", c.checked);
+    const all = $("luAll"); if (all) all.checked = rows.every((x) => picked.has(x.id));
+    selBar();
+  });
+  $("luHead").addEventListener("change", (e) => {
+    if (e.target.id !== "luAll") return;
+    rows.forEach((r) => (e.target.checked ? picked.add(r.id) : picked.delete(r.id)));
+    render();
+  });
+  $("luSel").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
     if (!b) return;
-    if (!b.classList.contains("arm")) {
-      b.classList.add("arm"); b.textContent = "삭제?";
-      setTimeout(() => { b.classList.remove("arm"); b.textContent = "✕"; }, 2500);
+    const ids = rows.filter((r) => picked.has(r.id)).map((r) => r.id);
+    if (b.id === "luUndo") {
+      if (!undo) return;
+      undo.items.forEach(({ row, i }) => rows.splice(Math.min(i, rows.length), 0, row)); // 원래 자리로(앞 번호부터)
+      undo = null; clearTimeout(undoT);
+      render(); save();
+      window.PanelHooks?.onListupChange();
       return;
     }
-    rows.splice(+b.dataset.del, 1);
-    render(); save();
-    window.PanelHooks?.onListupChange();
+    const mv = b.dataset.mv;
+    if (mv === "top") moveTo(ids, 0);
+    else if (mv === "bottom") moveTo(ids, rows.length);
+    else if (mv === "up") step(ids, -1);
+    else if (mv === "down") step(ids, 1);
+    else if (b.dataset.act === "del") remove(ids);
+    else if (b.dataset.act === "none") { picked.clear(); render(); }
   });
+  // ⠿ 끌어서 순서 바꾸기 — 체크한 행을 잡으면 체크한 행 전체가 함께 움직인다
+  let drag = null;
+  const clearMark = () => $("luBody").querySelectorAll(".drop-a,.drop-b").forEach((t) => t.classList.remove("drop-a", "drop-b"));
+  $("luBody").addEventListener("dragstart", (e) => {
+    const g = e.target.closest?.("[data-grip]");
+    if (!g) return;
+    const r = rows[+g.dataset.grip];
+    drag = picked.has(r.id) ? rows.filter((x) => picked.has(x.id)).map((x) => x.id) : [r.id];
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(r.id));
+    const tr = g.closest("tr"); e.dataTransfer.setDragImage(tr, 20, 17);
+    requestAnimationFrame(() => drag?.forEach((id) => $("luBody").querySelector(`tr[data-r="${rows.findIndex((x) => x.id === id)}"]`)?.classList.add("dragging")));
+    window.SeedTip?.hide();
+  });
+  $("luBody").addEventListener("dragover", (e) => {
+    if (!drag) return;
+    const tr = e.target.closest("tr[data-r]");
+    if (!tr) return;
+    e.preventDefault();
+    const rc = tr.getBoundingClientRect(), below = e.clientY > rc.top + rc.height / 2;
+    clearMark(); tr.classList.add(below ? "drop-b" : "drop-a");
+  });
+  $("luBody").addEventListener("drop", (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    const tr = e.target.closest("tr[data-r]");
+    const ids = drag; drag = null; clearMark();
+    if (!tr) return render();
+    const target = rows[+tr.dataset.r], below = tr.classList.contains("drop-b") || e.clientY > tr.getBoundingClientRect().top + tr.offsetHeight / 2;
+    if (ids.includes(target.id)) return render();
+    const rest = rows.filter((r) => !ids.includes(r.id));
+    moveTo(ids, rest.indexOf(target) + (below ? 1 : 0));
+  });
+  $("luBody").addEventListener("dragend", () => { if (drag) { drag = null; clearMark(); render(); } });
 
   // 계수 설정
   const setCfg = async (patch) => { cfg = await api.invoke("calc:set", patch); render(); };
