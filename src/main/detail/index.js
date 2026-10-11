@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { offerUrl } from "./extract-core.js"; // 📄 주소 칸 입력 → 1688 상품 주소(순수 함수, extract-core.test.js)
+import { createStore as createTemplateStore, themeAsTemplate, overrideChips, sourceKey as templateSourceKey, defaultName as templateDefaultName, newId as templateNewId } from "./templates.js"; // 🧲 내 템플릿 보관함(2단계, templates.test.js)
 
 const { nativeImage, shell, BrowserWindow } = electron;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -117,6 +118,9 @@ async function mod(name, log) {
 
 export function initDetail({ ipcMain, app, getWin, store, log, translate, getCnSession, getCnView, send, showDetail, openCn }) {
   const ROOT = () => path.join(app.getPath("userData"), "detail");
+  const TPL = createTemplateStore(path.join(app.getPath("userData"), "templates")); // 🧲 내 템플릿 보관함 userData/templates/<id>/template.json
+  const themeList = () => [...THEMES.map(themeAsTemplate), ...TPL.summaries()]; // 기본 테마 + 내 템플릿(화면 테마 목록)
+  const isMine = (id) => TPL.has(id);
   const jobDirOf = (jobId) => path.join(ROOT(), jobId);
   let cur = null; // 지금 도는 작업 { jobId, dir, status, step, pct, t0, cancelled, title, templateId, events }
   const changed = () => send("detail:changed", { count: listJobs().length, running: cur ? cur.jobId : null });
@@ -170,9 +174,21 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
   // Moast keyContent 형식(상품 유형 / 핵심 소구 / 주요 장점 / 상세 구성·스펙 / 추천 타겟 / 상세페이지 기획 방향 / 주의할 표현) — A3 가 brief_text 를 주면 그대로, 아니면 기획안 JSON 으로 조립
   // 벤치마킹 레퍼런스 불러오기: info.reference 가 reference.json 이면 그대로, 이미지 폴더면 reference.js 로 분석(OCR 무료 + 비전 haiku 1회) → reference/reference.json 에 보관(같은 원본이면 재사용)
   async function jobReference(job, dir, mods) {
-    const src = readJson(path.join(dir, "info.json"))?.reference; if (!src) return null;
+    const info = readJson(path.join(dir, "info.json")) || {}, keepExtra = !!info.refKeepExtra;
     const saved = path.join(dir, "reference", "reference.json"), cached = readJson(saved);
-    if (cached?.tokens && cached.srcKey === String(src)) return cached;
+    // 🧲 내 템플릿(info.templateRef): 보관함에서 reference 모양으로(overrides 적용 + 가드 줄) — 분석 없음·비용 0. overrides·토글이 바뀌면 다시 쓴다
+    if (info.templateRef) {
+      const t = TPL.get(info.templateRef);
+      if (!t) { emit(job, "brief", "△ 고른 템플릿이 보관함에 없어요 → 기본 구성으로", null, 1); return null; }
+      const key = `tpl:${t.id}:${JSON.stringify(t.overrides || {})}:${keepExtra ? 1 : 0}`;
+      if (cached?.tokens && cached.srcKey === key) return cached;
+      const r = { ...TPL.reference(t.id, { keepExtra }), srcKey: key };
+      fs.mkdirSync(path.dirname(saved), { recursive: true }); writeJson(saved, r);
+      emit(job, "brief", `✔ 내 템플릿 「${t.name}」 · 섹션 ${(r.sections || []).length}개 · ${r.tokens.align === "left" ? "왼쪽 정렬" : "가운데 정렬"}${r.tokens.colors?.brand ? ` · 강조 색 ${r.tokens.colors.brand}` : ""}${keepExtra ? " · 우리 강점 섹션 유지" : ""}`, null, 1);
+      return r;
+    }
+    const src = info.reference; if (!src) return null;
+    if (cached?.tokens && cached.srcKey === `${src}:${keepExtra ? 1 : 0}`) return cached;
     try {
       let r = /\.json$/i.test(src) ? readJson(src) : null;
       if (!r && exists(src) && mods.reference?.buildReference) {
@@ -181,9 +197,10 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         if (r?.cost?.usd != null) { job.costs.reference = r.cost.usd; job.costUsd = (job.costUsd || 0) + r.cost.usd; }
       }
       if (!r?.tokens) { emit(job, "brief", "△ 레퍼런스를 읽지 못했어요 → 기본 구성으로", null, 1); return null; }
-      fs.mkdirSync(path.dirname(saved), { recursive: true }); writeJson(saved, { ...r, srcKey: String(src) });
+      const out = { ...r, keepExtra, srcKey: `${src}:${keepExtra ? 1 : 0}` };
+      fs.mkdirSync(path.dirname(saved), { recursive: true }); writeJson(saved, out);
       emit(job, "brief", `✔ 레퍼런스 · 섹션 ${(r.sections || []).length}개 · ${r.tokens.align === "left" ? "왼쪽 정렬" : "가운데 정렬"}${r.tokens.colors?.brand ? ` · 강조 색 ${r.tokens.colors.brand}` : ""}`, null, 1);
-      return { ...r, srcKey: String(src) };
+      return out;
     } catch (e) { log("warn", `△ 📄 레퍼런스 오류 (${e?.message || e})`); return null; }
   }
   async function makeBriefText(mods, brief, ctx) {
@@ -250,7 +267,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const nLoc = items.filter((x) => x.kind !== "option" && !x.excluded).length;
     const modes = { localize: { usd: Math.round((0.13 + nLoc * 0.4 * 0.039) * 100) / 100, minutes: Math.max(2, Math.ceil(nLoc / 8)), /* 실측(커피 랙 24장): 번역 $0.13 + 사진 위 글 AI 지우기 7장×$0.039, 약 3분 */ label: "원본 한글화" }, scene: { usd: Math.round(usd * 100) / 100, minutes, label: "AI 장면 연출" } };
     modes.both = { usd: Math.round((modes.localize.usd + modes.scene.usd) * 100) / 100, minutes: modes.scene.minutes + 1, label: "둘 다" };
-    return { ...info, claims: cleanClaims(info.claims), claimTypes: CLAIMS, mode: info.mode || "both", modes, themes: THEMES, dir, url: info.url || src.url || "", gallery: items.filter((x) => x.kind === "gallery" || x.kind === "main"), sku: items.filter((x) => x.kind === "option" || x.kind === "sku"), detail: items.filter((x) => !["gallery", "main", "option", "sku"].includes(x.kind)), templates: TEMPLATES, estimate: { sections, usd: Math.round(usd * 100) / 100, minutes, sceneOn } };
+    const tplSel = info.templateRef ? TPL.get(info.templateRef) : null; // 🧲 고른 내 템플릿(세부 조정 칩 포함)
+    return { ...info, claims: cleanClaims(info.claims), claimTypes: CLAIMS, mode: info.mode || "both", modes, themes: themeList(), templateRef: tplSel ? tplSel.id : "", templateChips: tplSel ? overrideChips(tplSel) : null, refKeepExtra: !!info.refKeepExtra, dir, url: info.url || src.url || "", gallery: items.filter((x) => x.kind === "gallery" || x.kind === "main"), sku: items.filter((x) => x.kind === "option" || x.kind === "sku"), detail: items.filter((x) => !["gallery", "main", "option", "sku"].includes(x.kind)), templates: TEMPLATES, estimate: { sections, usd: Math.round(usd * 100) / 100, minutes, sceneOn } };
   }
   function infoSet(id, patch) {
     const dir = jobDirOf(id); const info = readJson(path.join(dir, "info.json")); if (!info) return { error: "상품 정보가 아직 없습니다" };
@@ -258,7 +276,10 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     if (typeof patch.product_name_ko === "string") out.product_name_ko = patch.product_name_ko.slice(0, 80);
     if (typeof patch.brief_text === "string") out.brief_text = patch.brief_text.slice(0, 6000);
     if (typeof patch.templateId === "string" && TEMPLATES.some((t) => t.id === patch.templateId)) out.templateId = patch.templateId;
-    if (typeof patch.theme === "string" && THEMES.some((t) => t.id === patch.theme)) out.theme = patch.theme;
+    if (typeof patch.theme === "string" && THEMES.some((t) => t.id === patch.theme)) { out.theme = patch.theme; delete out.templateRef; } // 기본 테마를 고르면 내 템플릿 선택은 풀린다
+    if (typeof patch.theme === "string" && isMine(patch.theme)) patch = { ...patch, templateRef: patch.theme }; // 테마 자리에 내 템플릿 id 가 와도 된다
+    if (typeof patch.templateRef === "string") { if (patch.templateRef && isMine(patch.templateRef)) { out.templateRef = patch.templateRef; out.theme = "custom"; delete out.reference; } else if (!patch.templateRef) { delete out.templateRef; if (out.theme === "custom" && !out.reference) out.theme = "ivory"; } }
+    if (typeof patch.refKeepExtra === "boolean") out.refKeepExtra = patch.refKeepExtra; // 레퍼런스 그대로(false) / 우리 강점 섹션 유지(true)
     if (["localize", "scene", "both"].includes(patch.mode)) out.mode = patch.mode;
     if (patch.logos && typeof patch.logos === "object") out.logos = { ...(out.logos || {}), ...Object.fromEntries(Object.entries(patch.logos).map(([k, v]) => [String(k), !!v])) };
     if (patch.claims && typeof patch.claims === "object") out.claims = cleanClaims({ ...(out.claims || {}), ...Object.fromEntries(Object.entries(patch.claims).map(([k, v]) => [k, { ...(out.claims?.[k] || {}), ...(v || {}) }])) });
@@ -1482,7 +1503,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     { // 렌더 내역: 이전 result.json 의 renders(또는 옛 out/ 바로 아래 결과)를 이어받아 이번 렌더를 덧붙인다
       const prevR = migrateRenders(readJson(path.join(dir, "result.json")) || {});
       if (!qa && prevR.qa?.background) result.qa = prevR.qa; // 뒤 작업(빠진 장면 채우기·테마)이 앞 렌더의 뒤 검수 결과를 지우지 않게
-      const entry = { theme: job.theme || null, sections: Array.isArray(rendered.sections) ? rendered.sections.map((x) => ({ type: x.type, id: x.id || null, y: x.y, h: x.h ?? null })) : [], width: rendered.width || plan.meta?.width || WIDTH, label: job.regen?.label || "", id: job.renderId, templateId: job.templateId, createdAt: Date.now(), dir: `out/${job.renderId}`, slices: rendered.slices, preview: rendered.preview, html: rendered.html, figmaManifest: rendered.figmaManifest, figmaBundle: rendered.figmaBundle || `out/${job.renderId}/figma-bundle.json`, qa: qa ? qa.score : null, sliceCount: rendered.slices.length };
+      const entry = { theme: job.theme || null, templateRef: job.theme === "custom" ? readJson(path.join(dir, "info.json"))?.templateRef || null : null, sections: Array.isArray(rendered.sections) ? rendered.sections.map((x) => ({ type: x.type, id: x.id || null, y: x.y, h: x.h ?? null })) : [], width: rendered.width || plan.meta?.width || WIDTH, label: job.regen?.label || "", id: job.renderId, templateId: job.templateId, createdAt: Date.now(), dir: `out/${job.renderId}`, slices: rendered.slices, preview: rendered.preview, html: rendered.html, figmaManifest: rendered.figmaManifest, figmaBundle: rendered.figmaBundle || `out/${job.renderId}/figma-bundle.json`, qa: qa ? qa.score : null, sliceCount: rendered.slices.length };
       result.renders = [...(prevR.renders || []).filter((x) => x.id !== entry.id), entry];
       if (extraRender) { const r2 = extraRender.rendered; result.renders = [...result.renders.filter((x) => x.id !== extraRender.id), { id: extraRender.id, templateId: "localize", mode: "localize", createdAt: Date.now(), dir: `out/${extraRender.id}`, slices: r2.slices, preview: r2.preview, html: r2.html, figmaManifest: r2.figmaManifest, figmaBundle: r2.figmaBundle, sliceCount: r2.slices.length, qa: null, sections: (r2.sections || []).map((x) => ({ type: x.type, id: x.id || null, y: x.y })), width: r2.width || WIDTH, label: "원본 한글화" }]; }
       entry.mode = job.mode || null;
@@ -1495,8 +1516,10 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
 
   // ---------- 작업 시작/취소 ----------
   // reference: 벤치마킹 레퍼런스(reference.json 경로 또는 이미지 폴더) — info.json 에 적고 테마 custom · 섹션·카피는 새로(장면은 섹션 id 를 이어 받아 재사용)
-  function start({ source, jobId, templateId, reuse, fresh = [], review, phase, regen = null, skipQa = false, theme = null, bg = false, mode = null, reference = null }) {
-    if (jobId && reference) { const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; writeJson(f, { ...inf, reference: String(reference), theme: "custom" }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
+  // templateRef: 🧲 내 템플릿 id — info.json 에 적고 테마 custom(보관함 토큰·섹션 순서·각도) · 섹션·카피는 새로. keepExtra: 우리 강점 섹션 유지 토글(생략하면 info 값 그대로)
+  function start({ source, jobId, templateId, reuse, fresh = [], review, phase, regen = null, skipQa = false, theme = null, bg = false, mode = null, reference = null, templateRef = null, keepExtra = null }) {
+    if (jobId && reference) { const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.templateRef; writeJson(f, { ...inf, reference: String(reference), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
+    if (jobId && templateRef) { if (!isMine(templateRef)) return { error: "그 템플릿이 보관함에 없습니다" }; const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.reference; writeJson(f, { ...inf, templateRef: String(templateRef), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
     // 가드: v5 작업(sections.json 이 있거나 plan v5)에서 다른 템플릿을 고르면 옛 v1 구성으로 다시 짜지 않고 card 엔진 테마만 바꾼다
     if (jobId && reuse && templateId && templateId !== "card" && isV5Job(jobId)) {
       if (!theme) theme = THEMES.some((t) => t.id === templateId) ? templateId : "ivory";
@@ -1575,20 +1598,97 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
 
   // ---------- IPC ----------
   ipcMain.handle("detail:list", () => listJobs());
-  ipcMain.handle("detail:templates", () => templates());
+  ipcMain.handle("detail:templates", () => [...templates(), ...TPL.summaries().map((t) => ({ ...t, ready: true }))]); // v1 템플릿 + 🧲 내 템플릿(kind "mine")
   // 벤치마킹(1단계 POC): { jobId, reference(reference.json 경로 또는 레퍼런스 이미지 폴더) } → 섹션 순서·카피 각도·custom 테마로 다시 생성
   ipcMain.handle("detail:reference", (_e, p = {}) => {
     const id = String(p.jobId || ""); if (!id || !exists(path.join(jobDirOf(id), "info.json"))) return { error: "먼저 상품 정보를 가져와야 합니다" };
     if (!p.reference || !exists(String(p.reference))) return { error: "레퍼런스(이미지 폴더 또는 reference.json)를 찾지 못했습니다" };
     return start({ jobId: id, templateId: "card", reuse: true, phase: "generate", skipQa: true, reference: String(p.reference), regen: { label: "벤치마킹 템플릿" } });
   });
-  ipcMain.handle("detail:themes", () => THEMES);
+  ipcMain.handle("detail:themes", () => themeList()); // 기본 테마(kind theme) + 내 템플릿(kind mine)
   ipcMain.handle("detail:qa:apply", (_e, p = {}) => applySuggestion(String(p.jobId || ""), p.i));
   // v5: 테마만 바꿔 다시 그림(구성·장면·카피 그대로, AI 호출 0) → 새 렌더 탭
   ipcMain.handle("detail:theme", (_e, p = {}) => {
     const id = String(p.jobId || ""); if (!isV5Job(id)) return { error: "v5(카드) 결과에서만 테마를 바꿀 수 있습니다" };
+    if (isMine(p.theme)) return start({ jobId: id, templateId: "card", reuse: true, phase: "generate", skipQa: true, templateRef: String(p.theme), keepExtra: typeof p.keepExtra === "boolean" ? p.keepExtra : null, regen: { label: `🧲 ${TPL.get(p.theme)?.name || "내 템플릿"}` } }); // 내 템플릿: 섹션 순서·카피 각도까지 → 섹션·카피 새로
     const th = THEMES.some((t) => t.id === p.theme) ? p.theme : null; if (!th) return { error: "없는 테마입니다" };
     return start({ jobId: id, templateId: "card", theme: th, reuse: true, phase: "generate", skipQa: true, regen: { theme: true, label: `테마 ${th}` } });
+  });
+  // ---- 🧲 내 템플릿 보관함 ----
+  ipcMain.handle("detail:template:list", () => TPL.summaries());
+  ipcMain.handle("detail:template:get", (_e, p = {}) => { const t = TPL.get(String(p.id || "")); return t ? { ...t, chips: overrideChips(t) } : { error: "템플릿이 없습니다" }; });
+  // 이름·분류·overrides(세부 조정) 저장. jobId 를 주고 그 작업이 이 템플릿을 쓰는 custom 결과면 손잡이만 바꿔 다시 그린다(AI 0)
+  ipcMain.handle("detail:template:set", (_e, p = {}) => {
+    const id = String(p.id || ""); if (!isMine(id)) return { error: "템플릿이 없습니다" };
+    let t = TPL.get(id);
+    if (p.overrides && typeof p.overrides === "object") t = TPL.setOverrides(id, p.overrides, { merge: p.merge !== false });
+    if (typeof p.name === "string" || typeof p.category === "string") t = TPL.update(id, { name: p.name, category: p.category });
+    if (t?.error) return t;
+    send("detail:changed", { templates: true });
+    const jobId = String(p.jobId || "");
+    if (jobId && p.rerender && isV5Job(jobId) && readJson(path.join(jobDirOf(jobId), "info.json"))?.templateRef === id) return { ...start({ jobId, templateId: "card", theme: "custom", reuse: true, phase: "generate", skipQa: true, regen: { theme: true, label: `🧲 세부 조정 · ${t.name}` } }), template: { ...t, chips: overrideChips(t) } };
+    return { ok: true, template: { ...t, chips: overrideChips(t) } };
+  });
+  ipcMain.handle("detail:template:remove", (_e, p = {}) => { const r = TPL.remove(String(p.id || "")); if (!r.error) send("detail:changed", { templates: true }); return r; });
+  ipcMain.handle("detail:template:export", async (_e, p = {}) => {
+    const t = TPL.get(String(p.id || "")); if (!t) return { error: "템플릿이 없습니다" };
+    let file = String(p.file || "");
+    if (!file) { const r = await electron.dialog.showSaveDialog(getWin?.() || undefined, { title: "템플릿 내보내기 (.seedtpl.json — 카톡·강의 자료로 주고받기)", defaultPath: path.join(app.getPath("downloads"), `${t.name.replace(/[\\/:*?"<>|]/g, "_")}.seedtpl.json`), filters: [{ name: "씨드핵 템플릿", extensions: ["json"] }] }); if (r.canceled || !r.filePath) return { cancelled: true }; file = r.filePath; }
+    const r = TPL.exportTo(t.id, file); if (!r.error) log("go", `■ 🧲 템플릿 내보내기 · ${t.name} · ${r.file}`); return r;
+  });
+  ipcMain.handle("detail:template:import", async (_e, p = {}) => {
+    let file = String(p.file || "");
+    if (!file) { const r = await electron.dialog.showOpenDialog(getWin?.() || undefined, { title: "템플릿 가져오기 (.seedtpl.json)", properties: ["openFile"], filters: [{ name: "씨드핵 템플릿", extensions: ["json"] }] }); if (r.canceled || !r.filePaths?.[0]) return { cancelled: true }; file = r.filePaths[0]; }
+    const t = TPL.importFrom(file); if (t.error) return t;
+    log("go", `■ 🧲 템플릿 가져오기 · ${t.name}`); send("detail:changed", { templates: true });
+    return { ok: true, template: { ...t, chips: overrideChips(t) } };
+  });
+  // 내 템플릿으로 다시 생성: { jobId, templateId, keepExtra } (detail:reference 와 같은 흐름 — custom 테마 + 섹션 순서·각도 + 가드)
+  ipcMain.handle("detail:template:use", (_e, p = {}) => {
+    const id = String(p.jobId || ""); if (!id || !exists(path.join(jobDirOf(id), "info.json"))) return { error: "먼저 상품 정보를 가져와야 합니다" };
+    if (!isMine(p.templateId)) return { error: "그 템플릿이 보관함에 없습니다" };
+    return start({ jobId: id, templateId: "card", reuse: true, phase: "generate", skipQa: true, templateRef: String(p.templateId), keepExtra: typeof p.keepExtra === "boolean" ? p.keepExtra : null, regen: { label: `🧲 ${TPL.get(p.templateId)?.name || "내 템플릿"}` } });
+  });
+  // 🧲 쿠팡 화면 버튼: { url, name, category, images:[주소] } → 상세 이미지 내려받기(보낸 화면의 세션) → reference.buildReference → 보관함. 진행은 보낸 화면으로(detail:captureProgress)
+  let capturing = null;
+  ipcMain.handle("detail:captureReference", async (e, p = {}) => {
+    const senderUrl = (() => { try { return e.sender.getURL(); } catch { return ""; } })();
+    if (!/^https:\/\/([\w-]+\.)*coupang\.com\//.test(senderUrl)) return { error: "쿠팡 상품 화면에서만 됩니다" };
+    const url = String(p.url || senderUrl).split("#")[0], key = templateSourceKey({ url });
+    const dup = TPL.findBySource(key); if (dup && !p.force) return { ok: true, existing: true, template: { ...TPL.get(dup.id), chips: null } };
+    if (capturing) return { error: "이미 템플릿을 만드는 중입니다 — 끝난 뒤 다시 눌러 주세요" };
+    const urls = [...new Set((Array.isArray(p.images) ? p.images : []).map((u) => String(u || "").trim().replace(/^\/\//, "https://")).filter((u) => /^https:\/\/[\w.-]*coupangcdn\.com\//i.test(u)))].slice(0, 60);
+    if (urls.length < 2) return { error: "상세 이미지를 찾지 못했어요 — 상품 화면을 아래로 한 번 내려(상세 이미지가 뜨게) 다시 눌러 주세요" };
+    const prog = (step, msg, frac = 0) => { try { e.sender.send("detail:captureProgress", { step, msg, frac }); } catch {} };
+    const name = String(p.name || "").slice(0, 80), category = String(p.category || "").slice(0, 40);
+    const tplName = String(p.tplName || "").slice(0, 40) || templateDefaultName({ category, name });
+    const id = templateNewId(), refDir = path.join(TPL.dirOf(id), "ref");
+    capturing = id; const t0 = Date.now();
+    try {
+      fs.mkdirSync(refDir, { recursive: true });
+      const ses = e.sender.session; let ok = 0;
+      for (const [i, u] of urls.entries()) {
+        try {
+          const r = await ses.fetch(u, { headers: { Referer: "https://www.coupang.com/" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const buf = Buffer.from(await r.arrayBuffer()); const im = nativeImage.createFromBuffer(buf); const sz = im.isEmpty() ? null : im.getSize();
+          if (!sz || sz.width < 300 || sz.height < 120) continue; // 아이콘·배너 조각은 뺀다
+          const ext = /png/i.test(r.headers.get("content-type") || "") ? "png" : /webp/i.test(r.headers.get("content-type") || "") ? "webp" : "jpg";
+          fs.writeFileSync(path.join(refDir, `${String(i + 1).padStart(2, "0")}.${ext}`), buf); ok++;
+        } catch (err) { log("dim", `  🧲 상세 이미지 못 받음 ${u.slice(0, 80)} (${err?.message || err})`); }
+        prog("download", `상세 이미지 ${ok}/${urls.length}장 받는 중`, (i + 1) / urls.length);
+      }
+      if (ok < 2) return { error: "상세 이미지를 받지 못했어요(쿠팡이 막았거나 이미지가 없음)" };
+      const refMod = await mod("reference", log); if (!refMod?.buildReference) return { error: "레퍼런스 분석 모듈이 없습니다" };
+      prog("analyze", `🧲 ${ok}장 분석 중 — 글자·색·섹션 순서·설득 흐름 (1~5분)`, 0.05);
+      const ref = await refMod.buildReference({ input: refDir, outDir: TPL.dirOf(id), log: (cls, text) => { log(cls, text); if (/🧲/.test(String(text))) prog("analyze", String(text).replace(/^\s*🧲\s*/, "").slice(0, 80), 0.5); } });
+      if (ref?.error && !ref?.tokens) return { error: ref.error };
+      const tpl = TPL.saveFromReference(ref, { id, name: tplName, category, source: { kind: "coupang", url, productName: name, key, capturedAt: new Date().toISOString().slice(0, 10) } });
+      if (tpl.error) return tpl;
+      const usd = ref.cost?.usd; log("go", `■ 🧲 템플릿 저장 · 「${tpl.name}」 · 상세 ${ok}장 · 섹션 ${(tpl.sections || []).length}개 · ${((Date.now() - t0) / 1000).toFixed(0)}초${usd != null ? ` · $${Number(usd).toFixed(3)}` : ""} · ${TPL.dirOf(id)}`);
+      send("detail:changed", { templates: true });
+      return { ok: true, template: { ...tpl, chips: null }, images: ok, ms: Date.now() - t0, usd: usd ?? null };
+    } catch (err) { log("warn", `△ 🧲 템플릿 저장 실패 (${err?.message || err})`); return { error: String(err?.message || err) }; }
+    finally { capturing = null; if (!TPL.has(id)) try { fs.rmSync(TPL.dirOf(id), { recursive: true, force: true }); } catch {} }
   });
   ipcMain.handle("detail:get", (_e, p) => get(p?.jobId, p?.renderId));
   ipcMain.handle("detail:cancel", (_e, p) => cancel(p?.jobId));

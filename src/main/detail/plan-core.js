@@ -555,7 +555,7 @@ export function planSectionsV5({ brief = {}, styleGuide = null, vision = null, o
     const old = prev.sections || prev, cnt = {};
     for (const sec of secs) { const k = (cnt[sec.type] = (cnt[sec.type] || 0) + 1); const o = old.filter((x) => x.type === sec.type)[k - 1]; sec.id = o ? o.id : `v5-${sec.type}${k > 1 ? `-${k}` : ""}`; }
   }
-  if (reference?.sections?.length) { const r = applyReferenceOrder(secs, reference); r.sections.refDropped = r.dropped; r.sections.refRemoved = r.removed; return r.sections; } // 벤치마킹: 레퍼런스 순서·각도
+  if (reference?.sections?.length) { const r = applyReferenceOrder(secs, reference, { keepExtra: !!reference.keepExtra }); r.sections.refDropped = r.dropped; r.sections.refRemoved = r.removed; return r.sections; } // 벤치마킹: 레퍼런스 순서·각도
   return secs;
 }
 
