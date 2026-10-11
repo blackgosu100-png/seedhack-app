@@ -612,6 +612,10 @@ function start() {
   .sg-rv-btn{position:fixed;right:18px;top:calc(50% + 46px);z-index:2147483647;border:0;border-radius:9px;background:#1e1b4b;color:#fff;font:800 12.5px -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:10px 13px;box-shadow:0 8px 24px rgba(0,0,0,.3);cursor:pointer}
   .sg-rv-btn:hover{background:#312e81}
   .sg-rv-hbtn{top:calc(50% + 92px);background:#fff;color:#1e1b4b;border:1px solid #c7d2fe;font-size:12px;padding:7px 12px}.sg-rv-hbtn:hover{background:#eef2ff}
+  .sg-tpl-btn{top:calc(50% + 134px);background:#0f766e}.sg-tpl-btn:hover{background:#115e59}
+  .sg-rv .tplform{display:flex;gap:8px;align-items:center;margin:12px 0 6px;flex-wrap:wrap}.sg-rv .tplform label{color:#9fb3c8;font-size:12px}.sg-rv .tplform input{flex:1;min-width:220px;background:#111827;border:1px solid #334155;border-radius:8px;color:#e6edf3;padding:8px 10px;font:600 13px -apple-system,"Apple SD Gothic Neo",sans-serif}
+  .sg-rv .tplform .go{background:#0f766e;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer}.sg-rv .tplform .go:disabled{opacity:.5;cursor:default}
+  .sg-rv .tplnote{color:#9fb3c8;font-size:12px;margin:6px 0 0}.sg-rv .tplnote b{color:#e6edf3}
   .sg-rv-bg{position:fixed;inset:0;z-index:2147483647;background:rgba(2,6,12,.62);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:28px 12px}
   .sg-rv{width:min(940px,100%);background:#0b0f14;color:#e6edf3;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);font:13px/1.55 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:20px 22px}
   .sg-rv h3{margin:0 0 2px;font-size:16px}.sg-rv .sub{color:#9fb3c8;font-size:12px}
@@ -826,14 +830,75 @@ function start() {
     }
   }
   revBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); if (onDetail()) openReviews(); else openHistory(); }, true);
+
+  // ---- 🧲 템플릿으로 저장 (상품 상세 화면) ----
+  // 이 상세페이지의 구조(섹션 순서·색·정렬·키커·설득 흐름)만 뽑아 📄 상세페이지 "내 템플릿" 보관함에 넣는다. 문장·사진은 복사하지 않는다(앱의 guardSimilarity).
+  // 여기서는 상세 이미지 주소만 모아 보낸다(내려받기·분석은 앱 메인 detail:captureReference — 같은 쿠팡 세션으로 받음). 진행은 detail:captureProgress 로 돌아온다.
+  const tplBtn = document.createElement("button");
+  tplBtn.type = "button"; tplBtn.className = "sg-rv-btn sg-tpl-btn"; tplBtn.textContent = "🧲 템플릿으로 저장";
+  tplBtn.title = "이 상세페이지의 구조(섹션 순서·색·정렬·설득 흐름)를 내 템플릿으로 보관 — 📄 상세페이지 화면에서 골라 씁니다. 문장·사진은 가져오지 않습니다";
+  const DETAIL_SEL = ".product-detail-content-inside, #productDetail, .prod-detail, [class*='product-detail-content'], [class*='vendor-item-detail'], [class*='detail-content'], #btfTab ~ *";
+  const SKIP_SEL = ".prod-image, [class*='prod-image'], [class*='review'], [class*='recommend'], [class*='banner'], header, nav, footer, [class*='adr'], [class*='Ad-']";
+  const imgSrc = (im) => (im.currentSrc || im.src || im.dataset.src || im.dataset.imgSrc || im.dataset.lazy || im.getAttribute("data-original") || "").trim();
+  function collectDetailImages() {
+    const seen = new Set(), out = [];
+    const push = (im) => { const u = imgSrc(im).replace(/^\/\//, "https://"); if (!/^https:\/\/[\w.-]*coupangcdn\.com\//i.test(u) || seen.has(u)) return; const w = im.naturalWidth || im.width || 0, h = im.naturalHeight || im.height || 0; if ((w && w < 300) || (h && h < 100)) return; seen.add(u); out.push(u); };
+    const boxes = [...document.querySelectorAll(DETAIL_SEL)].filter((b) => !b.closest(SKIP_SEL));
+    for (const b of boxes) for (const im of b.querySelectorAll("img")) push(im);
+    if (out.length < 2) { // 상세 영역을 못 찾으면: 화면 아래쪽(첫 화면 아래)의 큰 그림만
+      for (const im of document.images) { if (im.closest(SKIP_SEL)) continue; const r = im.getBoundingClientRect(); if (r.top + window.scrollY < 900) continue; if ((im.naturalWidth || im.width) < 400) continue; push(im); }
+    }
+    return out;
+  }
+  const pageCategory = () => [...document.querySelectorAll("#breadcrumb a, .breadcrumb a, [class*='breadcrumb'] a, [class*='Breadcrumb'] a")].map((a) => a.textContent.trim()).filter((t) => t && !/^홈$|coupang/i.test(t)).slice(-3).join(">");
+  const pageName = () => (document.querySelector("h1, h2[class*='title'], [class*='prod-buy-header'] h2")?.textContent || document.title).replace(/\s*[-|]\s*쿠팡!?\s*$/, "").trim().slice(0, 80);
+  const tplDefaultName = (cat, name) => { const c = String(cat || "").split(/\s*[>›]\s*/).filter(Boolean).pop() || ""; const n = String(name || "").replace(/\s+/g, " ").slice(0, 10).trim(); return [c, n].filter(Boolean).join(" ") || "내 템플릿"; };
+  let tplProg = null;
+  ipcRenderer.on("detail:captureProgress", (_e, p) => { try { tplProg?.(p || {}); } catch {} });
+  async function openTemplateCapture() {
+    const pid = detailPid(); if (!pid || revOpen) return;
+    let stop = false;
+    const name = pageName(), cat = pageCategory();
+    const { box } = overlay(() => { stop = true; tplProg = null; });
+    const draw = () => {
+      const imgs = collectDetailImages();
+      box.innerHTML = `<button class="x" data-close>닫기</button><h3>🧲 템플릿으로 저장</h3><div class="sub">${esc(name)}${cat ? ` · ${esc(cat)}` : ""}</div>
+        <p class="tplnote">이 상세페이지의 <b>구조</b>(섹션 순서 · 색 · 정렬 · 키커 · 설득 흐름)만 뽑아 📄 상세페이지의 <b>내 템플릿</b>에 넣습니다. 문장·사진은 가져오지 않아요(내 상품 글로 다시 씁니다).</p>
+        <div class="tick">상세 이미지 <b>${imgs.length}</b>장 찾음${imgs.length < 2 ? " — 화면을 아래로 내려 상세 이미지가 뜨게 한 뒤 「다시 찾기」" : ""}</div>
+        <div class="tplform"><label>이름</label><input class="sg-tpl-name" value="${esc(tplDefaultName(cat, name))}" maxlength="40" spellcheck="false"><button type="button" class="x" data-rescan>다시 찾기</button><button type="button" class="go" data-go ${imgs.length < 2 ? "disabled" : ""}>🧲 저장 시작</button></div>
+        <p class="tplnote">분석은 1~5분 · 약 $0.15~0.4(haiku). 같은 상품은 다시 분석하지 않습니다.</p>`;
+      box.dataset.n = String(imgs.length); box.__imgs = imgs;
+    };
+    draw();
+    box.addEventListener("click", async (e) => {
+      if (e.target.closest("[data-rescan]")) { e.preventDefault(); draw(); return; }
+      const go = e.target.closest("[data-go]"); if (!go) return;
+      e.preventDefault(); go.disabled = true;
+      const tplName = box.querySelector(".sg-tpl-name")?.value.trim() || tplDefaultName(cat, name);
+      const imgs = box.__imgs || [];
+      box.innerHTML = `<button class="x" data-close>닫고 계속 진행</button><h3>🧲 템플릿 만드는 중 · ${esc(tplName)}</h3><div class="sub" data-s>상세 이미지 ${imgs.length}장 받는 중…</div><div class="bar"><i style="width:2%"></i></div><div class="tick"></div>`;
+      const sEl = box.querySelector("[data-s]"), bar = box.querySelector(".bar i"), tick = box.querySelector(".tick");
+      const line = (t) => { const d = document.createElement("div"); d.textContent = t; tick.prepend(d); while (tick.children.length > 6) tick.lastChild.remove(); };
+      tplProg = (p) => { if (stop) return; const base = p.step === "download" ? 0 : 30, span = p.step === "download" ? 30 : 65; bar.style.width = `${Math.min(97, base + span * (Number(p.frac) || 0))}%`; if (p.msg) { sEl.textContent = p.msg; line(p.msg); } };
+      ipcRenderer.send("cp:log", `🧲 템플릿 저장 시작 · ${name.slice(0, 30)} · 상세 ${imgs.length}장`);
+      let r; try { r = await ipcRenderer.invoke("detail:captureReference", { url: location.href.split("#")[0], name, category: cat, tplName, images: imgs }); } catch (err) { r = { error: err?.message || String(err) }; }
+      tplProg = null; if (stop) return;
+      if (r?.error) { sEl.textContent = `✕ ${r.error}`; bar.style.width = "0%"; return; }
+      bar.style.width = "100%";
+      const t = r.template || {};
+      sEl.innerHTML = r.existing ? `이미 보관함에 있어요 · <b>${esc(t.name)}</b> (다시 분석하지 않음)` : `✔ 보관함에 저장 · <b>${esc(t.name)}</b> · 섹션 ${(t.sections || []).length}개 · ${Math.round((r.ms || 0) / 1000)}초${r.usd != null ? ` · $${Number(r.usd).toFixed(2)}` : ""}`;
+      line("📄 상세페이지 화면 → 확인 화면 「디자인 스타일」에서 이 템플릿을 고르면 그 구조로 만듭니다.");
+    });
+  }
+  tplBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); openTemplateCapture(); }, true);
   const mountRev = () => {
     if (!revStyle.isConnected) (document.head || document.documentElement).appendChild(revStyle);
     const want = onDetail() ? "📝 리뷰 분석" : "📝 리뷰 기록";
     if (testPage) { if (revBtn.isConnected) revBtn.remove(); return; }
     if (revBtn.textContent !== want) revBtn.textContent = want;
     if (!revBtn.isConnected) (document.body || document.documentElement).appendChild(revBtn);
-    if (onDetail()) { if (!histBtn.isConnected) (document.body || document.documentElement).appendChild(histBtn); }
-    else if (histBtn.isConnected) histBtn.remove();
+    if (onDetail()) { if (!histBtn.isConnected) (document.body || document.documentElement).appendChild(histBtn); if (!tplBtn.isConnected) (document.body || document.documentElement).appendChild(tplBtn); }
+    else { if (histBtn.isConnected) histBtn.remove(); if (tplBtn.isConnected) tplBtn.remove(); }
   };
   histBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); openHistory(); }, true);
   mountRev();
