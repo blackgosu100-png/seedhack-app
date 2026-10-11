@@ -3,15 +3,15 @@
 import electron, { app, BrowserWindow, WebContentsView, ipcMain, dialog, shell, session, net, nativeImage, clipboard } from "electron";
 import path from "node:path";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { store } from "./store.js";
 import { watchWing } from "./wing.js";
 import { runExact, stopExact, lookupOne, gate } from "./exact.js";
 import { buildXlsx } from "./excel.js";
-import { lookup } from "./kwdb.js";
+import { lookup, recommend } from "./kwdb.js";
 import { searchKeyword } from "./kwsearch.js";
 import { buildListupXlsx, buildCollectXlsx } from "./listup-excel.js";
-import { upsertPage, upsertMetric, listCollect, removeCollect, countCollect } from "./collect.js";
+import { upsertPage, upsertMetric, listCollect, removeCollect, countCollect, pickCollect } from "./collect.js";
 import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId } from "./auth.js";
 import { DASHBOARD_URL } from "./auth-config.js";
 import { recommendViaCli, cliAvailable } from "./ai-cli.js";
@@ -19,8 +19,13 @@ import { parseSpecs } from "./spec-core.js";
 import updaterPkg from "electron-updater";
 const { autoUpdater } = updaterPkg;
 import { DEFAULTS, buildMarkets, judge, isPB, pbList } from "../shared/strategy-core.js";
-import { dhashFromGray, grayFromBGRA, rankBySimilarity, decidePrice, koHint, toNum } from "./sku-core.js";
-import { parseCard, rankCards, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
+import { REVIEW_CAP } from "../shared/review-core.js";
+import { summarize as hyojaSummarize } from "../shared/hyoja-core.js";
+import { dhashFromGray, grayFromBGRA, rankBySimilarity, specRerank, decidePrice, koHint, toNum } from "./sku-core.js";
+import { parseCard, rankCards, decideCost, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
+import { combo, scan as kwScan, draw as kwDraw, famousBrands } from "./kw-combo.js";
+import { STRATEGY_SYSTEM, STRATEGY_SCHEMA, renderStrategyInput } from "./strategy-prompt.js";
+import { runStructured } from "./detail/cli.js";
 import { initChat } from "./chat.js";
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
 
@@ -320,7 +325,7 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   if (tab === "chat") chat.show(true); // ⑥ 💬 문의 탭: 채팅 화면(처음이면 마지막 문의 대화를 연다)
   layout(); sendTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
   const v = tab === "wing" ? wingView : tab === "clean" ? cleanView : tab === "cn" ? cnView : tab === "chat" ? chat.view() : tab === "dash" ? dashView : null;
-  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
+  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "reco" ? "💡 키워드 추천" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
 });
 // 화면(panel.js)이 알려 주는 틀 크기: 왼쪽 사이드바 폭, Wing 오른쪽 칸 폭
 ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
@@ -380,6 +385,8 @@ initDetail({
   ipcMain, app, getWin: () => win, store, log, send,
   translate: (texts) => chat.translate(texts), getCnSession: () => cnView?.webContents.session || session.fromPartition("persist:1688"), getCnView: () => cnView,
   showDetail: () => { active = "detail"; layout(); send("nav", { tab: "detail", url: "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" }); },
+  // 📄 화면의 주소 칸: 1688 탭을 보이게 열고 그 주소로 이동(화면이 보여야 지연 로딩 이미지·상세가 깨어난다). 읽기가 끝나면 showDetail 로 돌아온다
+  openCn: (url) => { createCn(url); active = "cn"; layout(); send("nav", { tab: "cn", url }); },
 });
 ipcMain.handle("chat:inquire", (e, p) => (cnView && e.sender === cnView.webContents ? chat.inquire({ offerId: String(p?.offerId || ""), title: String(p?.title || "") }) : { error: "1688 상품 화면에서만 됩니다" }));
 ipcMain.handle("chat:state", () => chat.state());
@@ -398,8 +405,9 @@ ipcMain.handle("chat:act", (_e, { a, id } = {}) => {
 });
 const IMG_CDN = "https://thumbnail6.coupangcdn.com/thumbnails/remote/230x230ex/image/";
 // 리스트업 행 → 1688 이미지 검색. 사진은 클립보드에도 넣어 둔다(검색이 바로 안 뜨면 1688 검색창 카메라 아이콘에 Ctrl+V)
-ipcMain.handle("cn:search", async (_e, { rowId, name, img, allow, price }) => {
-  cnTarget = { rowId, name: String(name || "").slice(0, 40), allow: Number(allow) > 0 ? Number(allow) : null, price: Number(String(price || "").replace(/[^\d.]/g, "")) || null }; // allow: 리스트업 허용 소싱가(¥)
+ipcMain.handle("cn:search", (_e, p) => { autoPause("직접 🔍1688 검색"); return cnSearch(p); });
+async function cnSearch({ rowId, name, keyword, img, allow, price, auto = false }) {
+  cnTarget = { rowId, name: String(name || "").slice(0, 80), keyword: String(keyword || "").slice(0, 40), allow: Number(allow) > 0 ? Number(allow) : null, price: Number(String(price || "").replace(/[^\d.]/g, "")) || null, auto: !!auto }; // allow: 리스트업 허용 소싱가(¥) · auto: 담기 자동 조사
   cnRank = null; probeStop();
   const src = !img ? "" : /^https?:/.test(img) ? img : IMG_CDN + String(img).replace(/^\//, "");
   // 1688 이미지 검색은 "사진 주소"로는 결과가 안 나온다 → 1688 첫 화면의 이미지 검색 칸에 사진 파일을 올려 주는 방식(cn.cjs).
@@ -419,7 +427,7 @@ ipcMain.handle("cn:search", async (_e, { rowId, name, img, allow, price }) => {
         if (!r.ok) { why = `HTTP ${r.status}`; continue; }
         const im = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
         if (im.isEmpty()) { why = "그림 해석 실패"; continue; }
-        cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() };
+        cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
         cnPhotoHash = imageHash(im); // 상품 페이지에서 "사진과 같은 옵션" 고를 때 비교용
         copied = true;
         try { (electron.clipboard || clipboard).writeImage(im); clip = true; } catch {} // 클립보드는 보조 수단 — 실패해도 자동 검색은 진행
@@ -432,8 +440,109 @@ ipcMain.handle("cn:search", async (_e, { rowId, name, img, allow, price }) => {
   send("nav", { tab: "cn", url: "1688 이미지 검색" });
   log("sys", `▶ 1688 이미지 검색 · ${cnTarget.name}${copied ? " — 사진을 1688 화면에 자동으로 올립니다" : ""}${clip ? " (클립보드에도 복사됨)" : ""}`);
   if (!copied) log("stop", `✕ 상품 사진을 받지 못해 자동 이미지 검색을 못 합니다 (${why}) — 1688 첫 화면의 '以图搜款'에 사진을 직접 올려 주세요 · ${src.slice(0, 120)}`);
+  if (!copied && auto) autoFail("상품 사진을 받지 못함");
   return { copied };
+}
+
+// ---- 🎯 담기 → 1688 자동 조사 줄: 이미지 검색 → 판매자 점수 → 진짜 옵션가 → AI → 원가 기준(decideCost) → 리스트업 위안 칸 + 알림 ----
+// 한 번에 하나씩, 상품 사이 20~40초 쉼(1688 보안 인증을 덜 부르게). 보안 인증·직접 검색이 끼면 멈추고 사람에게.
+let autoQ = [], autoCur = null, autoTimer = null, autoPaused = false;
+const autoGap = () => 20000 + Math.floor(Math.random() * 20000);
+const AUTO_LIMIT_MS = 6 * 60 * 1000;
+const autoPush = () => send("auto:state", { cur: autoCur ? { rowId: autoCur.rowId, name: autoCur.name } : null, queue: autoQ.map((x) => x.rowId), left: autoQ.length, paused: autoPaused });
+// 🧠 판매전략 AI: 리스트업 한 행의 사실·계산값 → 전술 3~6개. 개발 실행은 Claude CLI(구독), 배포판은 서버 중계(task:"strategy" — 서버 준비 전)
+ipcMain.handle("ai:strategy", async (_e, input) => {
+  if (!input?.name) return { error: "상품 정보가 없습니다" };
+  const useCli = !app.isPackaged && process.env.SIGNAL_AI !== "server" && cliAvailable();
+  log("sys", `▶ 판매전략 AI · ${String(input.name).slice(0, 26)} (${useCli ? "Claude CLI·구독" : "서버 중계"})`);
+  try {
+    let j;
+    if (useCli) j = await runStructured({ system: STRATEGY_SYSTEM, schema: STRATEGY_SCHEMA, text: renderStrategyInput(input), model: process.env.SIGNAL_AI_MODEL || "sonnet" });
+    else {
+      const vendorId = await wingVendorId();
+      if (!vendorId) return { error: "Wing에 로그인되어 있어야 AI를 쓸 수 있습니다 (① Wing 탭)" };
+      const r = await net.fetch(`${DASHBOARD_URL}/api/signal/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_id: vendorId, task: "strategy", input }) });
+      j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) return { error: j?.error || `서버 응답 ${r.status} — 판매전략 서버 중계가 아직 준비되지 않았을 수 있습니다` };
+    }
+    if (j?.error) return { error: j.error };
+    log("go", `■ 판매전략 · ${String(input.name).slice(0, 22)} — ${String(j.result?.summary || "").slice(0, 80)}${j.costUsd != null ? ` · $${Number(j.costUsd).toFixed(3)}` : ""}`);
+    return { ok: true, result: j.result, model: j.model };
+  } catch (err) { return { error: err?.message || String(err) }; }
 });
+// 🔬 정확도 대조 파일: 키워드 검색마다 Wing 값·쿠팡 화면 값·카드 글을 나란히 저장 (userData/accuracy/검색어.json, 최근 30개)
+ipcMain.handle("diag:save", (_e, p) => {
+  try {
+    const dir = path.join(app.getPath("userData"), "accuracy");
+    fs.mkdirSync(dir, { recursive: true });
+    const name = String(p?.kw || "kw").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40);
+    fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify({ kw: p?.kw, ts: new Date().toISOString(), rows: Array.isArray(p?.rows) ? p.rows.slice(0, 120) : [] }, null, 1));
+    const files = fs.readdirSync(dir).map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((a, b) => b.t - a.t);
+    files.slice(30).forEach(({ f }) => fs.unlinkSync(path.join(dir, f)));
+    return { ok: true };
+  } catch (e) { return { error: e?.message || String(e) }; }
+});
+ipcMain.handle("cn:queue", (_e, p) => {
+  if (!p?.rowId || !p?.img) return { error: "사진이 없는 상품은 자동 조사를 못 합니다" };
+  if (autoCur?.rowId === p.rowId || autoQ.some((x) => x.rowId === p.rowId)) return { ok: true, already: true };
+  autoQ.push({ rowId: p.rowId, name: String(p.name || "").slice(0, 80), keyword: p.keyword || "", img: p.img, allow: p.allow, price: p.price });
+  log("sys", `▶ 1688 자동 조사 줄에 넣음 · ${String(p.name || "").slice(0, 26)} (${autoCur ? `대기 ${autoQ.length}번째` : "바로 시작"})`);
+  if (!autoCur && !autoPaused && !autoTimer) autoNext();
+  autoPush();
+  return { ok: true, pos: autoQ.length };
+});
+ipcMain.handle("cn:queueAct", (_e, a) => {
+  if (a === "resume") { autoPaused = false; log("sys", "▶ 1688 자동 조사 다시 시작"); if (!autoCur) autoNext(); }
+  else if (a === "stop") { autoQ = []; autoPaused = false; if (autoCur) autoFail("사용자가 멈춤"); log("sys", "■ 1688 자동 조사 멈춤 · 줄 비움"); }
+  autoPush();
+  return { ok: true };
+});
+function autoNext() {
+  clearTimeout(autoTimer); autoTimer = null;
+  if (autoPaused || autoCur) return;
+  autoCur = autoQ.shift() || null;
+  if (!autoCur) { autoPush(); return; }
+  log("sys", `▶ 1688 자동 조사 · ${autoCur.name.slice(0, 26)}${autoQ.length ? ` · 남은 ${autoQ.length}개` : ""}`);
+  autoTimer = setTimeout(() => autoFail("시간 초과(6분)"), AUTO_LIMIT_MS);
+  autoPush();
+  cnSearch({ ...autoCur, auto: true }).catch((err) => autoFail(err?.message || String(err)));
+}
+function autoEnd(result) {
+  const cur = autoCur; autoCur = null; clearTimeout(autoTimer); autoTimer = null;
+  if (cnTarget?.auto) cnTarget.auto = false;
+  send("auto:done", { rowId: cur?.rowId, name: cur?.name || "", ...result });
+  if (autoQ.length && !autoPaused) { log("dim", `  다음 상품까지 잠깐 쉼 (1688 보안 인증 예방)`); autoTimer = setTimeout(autoNext, autoGap()); }
+  else if (!autoQ.length) log("go", "■ 1688 자동 조사 끝");
+  autoPush();
+}
+function autoFail(why) {
+  if (!autoCur) return;
+  log("warn", `△ 1688 자동 조사 실패 · ${autoCur.name.slice(0, 26)} — ${why} (리스트업 🔍1688로 직접 해 보세요)`);
+  autoEnd({ ok: false, why });
+}
+function autoPause(why) {
+  if (!autoCur && !autoQ.length) return;
+  if (autoCur) { autoQ.unshift(autoCur); autoCur = null; }
+  clearTimeout(autoTimer); autoTimer = null; autoPaused = true;
+  log("warn", `△ 1688 자동 조사 일시정지 — ${why} · 남은 ${autoQ.length}개 (리스트업에서 ▶ 다시 시작)`);
+  autoPush();
+}
+// pushRank 때마다: 자동 조사 중인 상품의 AI 판단(또는 실패)이 끝났으면 원가를 정해 리스트업에 넣는다
+function autoCheck() {
+  if (!autoCur || !cnTarget?.auto || cnTarget.rowId !== autoCur.rowId || !cnRank) return;
+  if (cnRank.captcha) { autoPause("1688 보안 인증 — 1688 탭에서 슬라이더를 밀어 주세요"); return; }
+  if (!cnRank.ai || cnRank.aiBusy) return;
+  const cost = costNow();
+  const picks = cnRank.ai?.picks?.length ? cnRank.ai.picks : cnRank.ranked || [];
+  const top = picks[0];
+  if (!cost || !top?.offerId) { autoFail("추천할 1688 상품을 못 찾음"); return; }
+  const allow = autoCur.allow > 0 ? autoCur.allow : null;
+  const verdict = allow == null ? null : cost.yuan <= allow ? "ok" : "over";
+  const cnUrl = `https://detail.1688.com/offer/${top.offerId}.html`;
+  send("listup:fill", { rowId: autoCur.rowId, cnUrl, yuan: cost.yuan, auto: { how: cost.how, sure: cost.sure, warn: cost.warn || "", option: top.optionLabel || "", ai: !cnRank.ai?.error } });
+  log(verdict === "over" ? "warn" : "go", `■ 1688 자동 조사 완료 · ${autoCur.name.slice(0, 22)} → ¥${cost.yuan} (${cost.how}${cost.sure ? "" : " · 추정"})${allow ? ` · 허용 ¥${allow.toFixed(1)} ${verdict === "ok" ? "이하 ✔" : "초과 ✕"}` : ""}${cost.warn ? ` · ⚠ ${cost.warn}` : ""}`);
+  autoEnd({ ok: true, yuan: cost.yuan, sure: cost.sure, how: cost.how, warn: cost.warn || "", allow, verdict });
+}
 // 쿠팡 화면 사진 위 🔍1688: 수집함의 지표(있으면)와 함께 리스트업에 담고, 리스트업 화면이 이어서 1688 검색을 연다
 ipcMain.handle("cp:to1688", (e, p) => {
   if (!fromClean(e)) return { error: "잘못된 요청" };
@@ -461,19 +570,39 @@ const probeGap = () => 8000 + Math.floor(Math.random() * 7000); // 8~15초 무�
 function rankNow() {
   if (!cnRank) return null;
   const weights = { ...DEFAULT_WEIGHTS, ...(store.get("settings")?.rankWeights || {}) };
-  const r = rankCards(cnRank.cards, { allow: cnTarget?.allow ?? null, weights });
-  cnRank.ranked = r.ranked; cnRank.medianPrice = r.medianPrice;
+  const r = rankCards(cnRank.cards, { allow: cnTarget?.allow ?? null, weights, target: { name: cnTarget?.name || "", keyword: cnTarget?.keyword || "" } }); // target: 다른 상품(엉뚱한 물체로 찾은 결과) 거르기
+  cnRank.ranked = r.ranked; cnRank.medianPrice = r.medianPrice; cnRank.offTarget = r.excluded.filter((x) => x.offTarget).length;
   const top = r.ranked.slice(0, 8).map((x) => ({ ...x, verdictKo: VERDICT_KO[x.verdict] || x.verdict }));
   return { top, total: cnRank.cards.length, excluded: r.excluded.length, allow: cnTarget?.allow ?? null, medianPrice: r.medianPrice,
-    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, captcha: !!cnRank.captcha };
+    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, captcha: !!cnRank.captcha, cost: costNow() };
 }
-const pushRank = () => { const r = rankNow(); if (r && cnView) cnView.webContents.send("cn:rankUpdate", r); return r; };
-ipcMain.handle("cn:rank", (e, p) => {
+// 원가 기준: AI 추천(없으면 점수) 상위 3개 → 1순위의 확인된 옵션가, 애매하면 확인된 것들의 중간값
+function costNow() {
+  const card = (id) => cnRank.cards.find((o) => o.offerId === id) || {};
+  const picks = cnRank.ai?.picks?.length ? cnRank.ai.picks : (cnRank.ranked || []);
+  const list = picks.slice(0, 3).map((p) => { const c = card(p.offerId), price = p.price ?? c.realPrice ?? c.price ?? null;
+    return { offerId: p.offerId, price, real: c.realPrice != null, sure: c.realPrice != null && !!c.priceSure && price === c.realPrice }; });
+  return decideCost(list);
+}
+const pushRank = () => { const r = rankNow(); if (r && cnView) cnView.webContents.send("cn:rankUpdate", r); autoCheck(); return r; };
+ipcMain.handle("cn:rank", async (e, p) => {
   if (!cnView || e.sender !== cnView.webContents || !cnTarget) return { error: "리스트업에서 🔍1688로 들어온 검색이 아닙니다" };
   const cards = (Array.isArray(p?.cards) ? p.cards : []).slice(0, 80).map((c, i) => parseCard(c.lines, { rank: i + 1, offerId: String(c.offerId || ""), img: c.img || "" }))
-    .map((c) => ({ ...c, realPrice: cnRank?.cards.find((o) => o.offerId === c.offerId)?.realPrice ?? null, option: cnRank?.cards.find((o) => o.offerId === c.offerId)?.option ?? null }));
+    .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
+  // 1688 원문 제목이 중국어면 "같은 상품인지"(쿠팡 상품명·대표키워드 겹침)를 볼 수 없다 → 제목만 번역해(저장해 둔 번역 재사용) 판단에 쓴다. 8초 넘으면 번역 없이 진행
+  const zh = cards.filter((c) => /[\u4e00-\u9fff]/.test(c.title || "") && !/[가-힣]{2}/.test(c.title || ""));
+  if (zh.length) {
+    const tr = (async () => { for (let i = 0; i < zh.length; i += 40) { const part = zh.slice(i, i + 40), ko = await chat.translate(part.map((c) => c.title)); part.forEach((c, j) => { if (ko[j]) c.titleKo = ko[j]; }); } })();
+    await Promise.race([tr.catch((err) => log("dim", `  1688 제목 번역 실패: ${err?.message || err}`)), new Promise((res) => setTimeout(res, 8000))]);
+    log("dim", `  1688 제목 번역 ${zh.filter((c) => c.titleKo).length}/${zh.length}개 (같은 상품 확인용)`);
+  }
   cnRank = { cards };
   const r = rankNow();
+  // 후보를 하나도 못 읽었으면 실제 카드 글자를 남긴다(1688 표기·언어가 바뀌었을 때 규칙을 맞추는 근거)
+  if (!r.top.length && cnTarget.auto) setTimeout(() => autoFail("1688 후보가 없음"), 0);
+  if (!r.top.length && p?.cards?.length) log("dim", `  1688 카드를 못 읽음 · 예: ${(p.cards[0].lines || []).map((x) => String(x).trim()).filter(Boolean).join(" | ").slice(0, 400)}`);
+  const off = cnRank.offTarget || 0;
+  if (off) log("dim", `  1688 다른 상품 의심 ${off}개 뺌 (쿠팡 상품명·대표키워드와 제목이 거의 안 겹침 — 사진 일부만 잘라 찾은 결과)`);
   log("sys", `▶ 1688 후보 ${cards.length}개 읽음 · 상위 ${r.top.slice(0, 3).map((x) => `${x.score}점`).join("/")}${cnTarget.allow ? ` · 허용 소싱가 ¥${cnTarget.allow.toFixed(1)}` : " · 허용 소싱가 없음(리스트업 판매가 필요)"}`);
   return r;
 });
@@ -513,7 +642,7 @@ ipcMain.handle("cn:ai", async (e) => {
   // 개발 실행 + Claude CLI 있음 → 구독 CLI로(개발자 시험용). 그 밖(배포판)은 서버 중계(강사 키, 수강생 승인·하루 한도)
   const useCli = !app.isPackaged && process.env.SIGNAL_AI !== "server" && cliAvailable();
   const vendorId = useCli ? null : await wingVendorId();
-  if (!useCli && !vendorId) return { error: "Wing에 로그인되어 있어야 AI 추천을 쓸 수 있습니다 (① Wing 탭)" };
+  if (!useCli && !vendorId) { const error = "Wing에 로그인되어 있어야 AI 추천을 쓸 수 있습니다 (① Wing 탭)"; cnRank.ai = { error }; pushRank(); return { error }; } // 자동 조사는 AI 없이 확인된 옵션가로 이어 간다
   cnRank.aiBusy = true; cnRank.ai = null; pushRank();
   const cards = cnRank.ranked.slice(0, useCli ? 15 : 25).map((c, i) => ({ // CLI는 느려서 후보를 줄인다
     n: i + 1, offerId: c.offerId, title: c.title, price: c.price, shipping: c.shipping, sales: c.sales, moq: c.moq, repeat: c.repeat, years: c.years, rank: c.rank,
@@ -552,7 +681,8 @@ ipcMain.handle("cn:ai", async (e) => {
 // 상품 페이지 상세 글·속성표에서 크기·무게·박스 수량 읽기 (리스트업 🚚 물류 칸 자동 입력용)
 ipcMain.handle("cn:specs", (e, p) => (fromCn(e) ? parseSpecs({ text: String(p?.text || "").slice(0, 20000), attrText: String(p?.attrText || "").slice(0, 4000), optionLabel: p?.optionLabel || "" }) : { found: false }));
 
-ipcMain.on("cn:captcha", (e) => { if (cnView && e.sender === cnView.webContents) log("stop", "✕ 1688 보안 인증(슬라이더)이 떴습니다 — 1688 탭에서 직접 밀어 주세요. 프로그램은 대신 풀지 않습니다."); });
+ipcMain.on("cn:captcha", (e) => { if (cnView && e.sender === cnView.webContents) { log("stop", "✕ 1688 보안 인증(슬라이더)이 떴습니다 — 1688 탭에서 직접 밀어 주세요. 프로그램은 대신 풀지 않습니다."); autoPause("1688 보안 인증"); } });
+ipcMain.on("cn:noResult", (e, why) => { if (cnView && e.sender === cnView.webContents && cnTarget?.auto) autoFail(String(why || "1688 결과 없음").slice(0, 80)); });
 
 ipcMain.handle("cn:probeMode", (e) => !!(probeView && e.sender === probeView.webContents));
 ipcMain.on("cn:probeResult", (e, r) => {
@@ -579,6 +709,49 @@ ipcMain.handle("cn:pending", (e) => {
 });
 ipcMain.handle("cn:pendingDone", (e) => { if (cnView && e.sender === cnView.webContents) cnPending = null; });
 
+// ---- 🛍 타오바오에서 같은 상품 찾기 + 📷 리뷰 사진 모으기 ----
+// 1688은 도매라 싸지만 상세·리뷰 사진이 약하다 → 같은 사진으로 타오바오를 찾아, 직접 촬영한 판매자 상세와 구매자 리뷰 사진을 참고 자료로 모은다.
+// 1688 탭(같은 알리바바 로그인)에서 연다. 화면에 뜬 것만 읽고, 사진 검색·리뷰 저장은 사람이 누를 때만.
+let cnPhoto = null, tbPending = null;
+ipcMain.handle("tb:search", (e) => {
+  if (!fromCn(e)) return { error: "1688 탭에서만 됩니다" };
+  if (!cnPhoto) return { error: "쿠팡 상품 사진이 없습니다 — 리스트업에서 🔍1688로 먼저 검색해 주세요" };
+  tbPending = { ...cnPhoto, ts: Date.now() };
+  log("sys", `▶ 🛍 타오바오에서 같은 상품 찾기 · ${cnTarget?.name || ""} — 같은 쿠팡 사진으로 타오바오 사진 검색`);
+  cnView.webContents.loadURL("https://www.taobao.com/");
+  return { ok: true };
+});
+ipcMain.handle("tb:pending", (e) => (fromCn(e) && tbPending && Date.now() - tbPending.ts < 10 * 60 * 1000 ? tbPending : null));
+ipcMain.handle("tb:pendingDone", (e) => { if (fromCn(e)) tbPending = null; });
+ipcMain.on("tb:log", (e, t) => { if (fromCn(e)) log("dim", `  🛍 ${String(t).slice(0, 900)}`); });
+ipcMain.handle("tb:translate", async (e, texts) => (fromCn(e) ? chat.translate((Array.isArray(texts) ? texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 500))) : []));
+// 고른 리뷰 사진을 폴더에 저장(+번역한 리뷰 글) → 폴더를 연다. 상세페이지에 쓸지는 사람이 고른다(다른 판매자·구매자 사진의 권리 주의)
+ipcMain.handle("tb:saveReviews", async (e, p = {}) => {
+  if (!fromCn(e)) return { error: "1688 탭에서만 됩니다" };
+  const id = String(p.itemId || "item").replace(/[^\w-]/g, "").slice(0, 30) || "item";
+  const dir = path.join(app.getPath("userData"), "taobao-reviews", id);
+  fs.mkdirSync(dir, { recursive: true });
+  const items = (Array.isArray(p.items) ? p.items : []).slice(0, 80);
+  const ses = cnView?.webContents.session || session.fromPartition("persist:1688");
+  let ok = 0; const lines = [`${p.title || ""}`, p.url || "", ""];
+  for (const [i, it] of items.entries()) {
+    const u = String(it.url || "");
+    if (!/^https:\/\/[\w.-]*(alicdn|taobaocdn|tbcdn)\.(com|cn)\//i.test(u)) continue;
+    try {
+      const r = await ses.fetch(u, { headers: { Referer: "https://item.taobao.com/" } });
+      if (!r.ok) continue;
+      const ext = /png/i.test(r.headers.get("content-type") || "") ? "png" : "jpg";
+      fs.writeFileSync(path.join(dir, `review-${String(i + 1).padStart(2, "0")}.${ext}`), Buffer.from(await r.arrayBuffer()));
+      ok++;
+      lines.push(`review-${String(i + 1).padStart(2, "0")}: ${it.ko || ""}${it.zh ? `\n   (원문) ${it.zh}` : ""}`);
+    } catch {}
+  }
+  fs.writeFileSync(path.join(dir, "리뷰내용.txt"), lines.join("\n"), "utf8");
+  log("go", `■ 📷 타오바오 리뷰 사진 ${ok}/${items.length}장 저장 · ${dir}`);
+  shell.openPath(dir);
+  return { ok: true, saved: ok, dir };
+});
+
 // ---- 상품 페이지 옵션(SKU) 가격: 쿠팡 사진과 가장 비슷한 옵션을 고른다 ----
 // 1688 결과 목록의 ¥는 옵션 중 최저가라 부품·차액 같은 낚시 옵션이 섞이면 실제 가격과 다르다.
 let cnPhotoHash = null;
@@ -603,16 +776,26 @@ ipcMain.handle("cn:sku", async (e, p) => {
   const entries = Array.isArray(p?.entries) ? p.entries.slice(0, 60) : [];
   const withHash = [];
   for (const it of entries) withHash.push({ ...it, hash: it.img ? await hashImageUrl(it.img) : null, ko: koHint(it.label) });
-  const ranked = cnPhotoHash ? rankBySimilarity(cnPhotoHash, withHash) : withHash.map((x, i) => ({ ...x, i, dist: null }));
+  const name = cnTarget?.name || ""; // 사진이 같은 옵션은 쿠팡 상품명의 규격(4단·대형·2개입·120cm)으로 가른다
+  const ranked = specRerank(cnPhotoHash ? rankBySimilarity(cnPhotoHash, withHash) : withHash.map((x, i) => ({ ...x, i, dist: null })), name);
   const out = { hasPhoto: !!cnPhotoHash, ranked: ranked.map(({ hash, ...r }) => ({ ...r, price: toNum(r.price) })) }; // 가격은 숫자로(원문 "¥11.2" 그대로 흘러가 "¥¥" 표시되던 문제)
   if (p?.stage === "items") {
-    const d = decidePrice(withHash, { photoHash: cnPhotoHash });
+    const d = decidePrice(withHash, { photoHash: cnPhotoHash, name });
     out.decision = { ...d, pick: d.pick ? { i: d.pick.i, label: d.pick.label, price: d.pick.price, dist: d.pick.dist ?? null, ko: koHint(d.pick.label) } : null,
       alts: d.alts.map((a) => ({ i: a.i, label: a.label, price: a.price, dist: a.dist ?? null, ko: koHint(a.label) })) };
   }
   return out;
 });
 ipcMain.on("cn:log", (e, text) => { if (cnView && e.sender === cnView.webContents) log("dim", `  1688 · ${String(text).slice(0, 900)}`); });
+// 상품 페이지에서 사람이 옵션을 직접 고르면 그 가격을 "확인됨"으로 — 추천 카드·원가 기준에 바로 반영
+ipcMain.on("cn:optPick", (e, p) => {
+  if (!cnView || e.sender !== cnView.webContents || !cnRank) return;
+  const c = cnRank.cards.find((o) => o.offerId === String(p?.offerId || "")), price = Number(p?.price);
+  if (!c || !(price > 0)) return;
+  Object.assign(c, { realPrice: price, priceSure: true, priceHow: "직접 고른 옵션", option: { label: String(p?.label || "").slice(0, 80), ko: "", dist: null } });
+  log("dim", `  1688 옵션 직접 선택 · ${c.offerId} → ¥${price} (${String(p?.label || "").slice(0, 30)})`);
+  pushRank();
+});
 ipcMain.handle("cn:pick", (e, p) => {
   if (!cnView || e.sender !== cnView.webContents || !cnTarget) return { error: "넣을 리스트업 행이 없습니다 — 리스트업에서 🔍1688을 먼저 눌러 주세요" };
   const yuan = Number(p?.yuan);
@@ -658,6 +841,14 @@ ipcMain.handle("cp:batch", async (e, { query, pids }) => {
   collectChanged();
   return { hits, cached: !!res.cached, total: res.items.length };
 });
+// 📦 담기: 쿠팡 화면의 상품 하나를 사람이 직접 수집함에 넣는다(네트워크 요청 없음)
+ipcMain.handle("cp:pick", (e, it) => {
+  if (!fromClean(e) || !/^\d+$/.test(String(it?.pid || ""))) return { error: "상품을 찾지 못했습니다" };
+  const n = pickCollect({ pid: String(it.pid), vid: it.vid || "", name: String(it.name || "").slice(0, 120), price: Number(it.price) || null, img: String(it.img || "").slice(0, 400) }, it.query || "");
+  log("go", `📦 담음 · ${String(it.name || it.pid).slice(0, 30)}${it.query ? ` (${it.query})` : ""} · 수집함 ${n}개`);
+  collectChanged();
+  return { ok: true, count: n };
+});
 ipcMain.handle("cp:metric", async (e, it) => {
   if (!licensed()) return { ...LOCKED, auth: true };
   if (!fromClean(e) || !/^\d+$/.test(String(it?.pid || ""))) return { error: "잘못된 요청" };
@@ -672,6 +863,78 @@ ipcMain.handle("cp:metric", async (e, it) => {
   if (r.ex) log(r.cached ? "dim" : "go", `${r.cached ? "  ↺" : "✔"} 쿠팡 지표 · ${nm} — 판매 ${r.ex.sales ?? "-"} / 조회 ${r.ex.views ?? "-"}${r.cached ? " (저장값)" : ""}`);
   else log(r.paused || r.auth ? "stop" : "warn", `✕ 쿠팡 지표 · ${nm} — ${r.error}`);
   return r;
+});
+// 📝 리뷰 분석: 쿠팡 상품 화면이 최신순으로 받은 리뷰(최대 1,500개 · 더 받기 3,000) → 급증 구간·의심 신호 계산
+// 저장: userData/reviews/상품번호.json(마지막 조회 원문, 최근 200개 상품) + index.json(조회 기록: 상품별 요약·조회 이력 20회)
+// 분석 계산(review-core)은 고칠 때마다 다시 읽는다 — 기준을 다듬을 때 앱 재시작이 필요 없게(쿠팡 차단 위험 줄이기)
+const reviewCore = async () => {
+  const f = path.join(__dirname, "../shared/review-core.js");
+  return import(`${pathToFileURL(f).href}?v=${Math.round(fs.statSync(f).mtimeMs)}`);
+};
+const revDir = () => { const d = path.join(app.getPath("userData"), "reviews"); fs.mkdirSync(d, { recursive: true }); return d; };
+const revIndex = () => { try { return JSON.parse(fs.readFileSync(path.join(revDir(), "index.json"), "utf8")); } catch { return {}; } };
+const revSummary = (a) => ({ got: a.got, total: a.total, firstDate: a.firstDate, burst: a.burst, suspect: a.suspect, older: a.older || null });
+const revDoc = (pid) => { try { return JSON.parse(fs.readFileSync(path.join(revDir(), `${pid}.json`), "utf8")); } catch { return null; } };
+ipcMain.handle("cp:reviews", async (e, p) => {
+  if (!licensed()) return { ok: false, ...LOCKED };
+  if (!fromClean(e) || !/^\d+$/.test(String(p?.pid || ""))) return { ok: false, error: "잘못된 요청" };
+  const reviews = Array.isArray(p.reviews) ? p.reviews.slice(0, REVIEW_CAP * 2) : []; // 기본 1,500 · 더 받기 3,000
+  const { analyzeReviews } = await reviewCore();
+  const a = analyzeReviews({ reviews, total: Number(p.total) || null });
+  const nm = String(p.name || p.pid).slice(0, 24);
+  try {
+    const dir = revDir(), pid = String(p.pid), ts = new Date().toISOString();
+    fs.writeFileSync(path.join(dir, `${pid}.json`), JSON.stringify({ pid, name: String(p.name || ""), ts, src: p.src || "", ms: p.ms || null, total: a.total, sample: p.sample || null, reviews, analysis: a }, null, 1));
+    if (a.ok) {
+      const idx = revIndex(), old = idx[pid] || { runs: [] };
+      idx[pid] = { pid, name: String(p.name || old.name || ""), ts, ...revSummary(a), runs: [{ ts, ...revSummary(a) }, ...(old.runs || [])].slice(0, 20) };
+      const keep = Object.values(idx).sort((x, y) => (x.ts < y.ts ? 1 : -1));
+      keep.slice(200).forEach((x) => { delete idx[x.pid]; try { fs.unlinkSync(path.join(dir, `${x.pid}.json`)); } catch {} });
+      fs.writeFileSync(path.join(dir, "index.json"), JSON.stringify(idx));
+    }
+  } catch (err) { log("warn", `△ 리뷰 저장 실패 — ${err.message}`); }
+  if (a.ok) log("go", `📝 리뷰 분석 · ${nm} — ${a.got}개${a.capped ? `(전체 ${a.total ?? "?"}개 중 최신)` : ""} · ${a.burst ? `급증 ${a.burst.from.slice(5)}~${a.burst.to.slice(5)} · 의심 신호 ${a.suspect}/5` : "급증 구간 없음"}${p.ms ? ` · ${Math.round(p.ms / 1000)}초` : ""}`);
+  else log("warn", `△ 리뷰 분석 · ${nm} — ${a.error}`);
+  return a;
+});
+// 조회 기록 목록 — 예전 조회 파일(index.json 전)도 한 번 읽어 채운다
+ipcMain.handle("cp:reviews:list", async (e) => {
+  if (!fromClean(e)) return [];
+  const dir = revDir(), idx = revIndex();
+  let changed = false;
+  for (const f of fs.readdirSync(dir)) {
+    const pid = (f.match(/^(\d+)\.json$/) || [])[1];
+    if (!pid || idx[pid]) continue;
+    const d = revDoc(pid);
+    if (d?.analysis?.ok) { idx[pid] = { pid, name: d.name, ts: d.ts, ...revSummary(d.analysis), runs: [{ ts: d.ts, ...revSummary(d.analysis) }] }; changed = true; }
+  }
+  if (changed) fs.writeFileSync(path.join(dir, "index.json"), JSON.stringify(idx));
+  return Object.values(idx).sort((x, y) => (x.ts < y.ts ? 1 : -1)).map(({ runs, ...x }) => ({ ...x, runs: (runs || []).length, prevTotal: runs?.[1]?.total ?? null }));
+});
+// 저장된 결과 다시 보기 — 쿠팡에 다시 묻지 않고, 지금 분석 기준으로 다시 계산
+ipcMain.handle("cp:reviews:get", async (e, pid) => {
+  if (!fromClean(e) || !/^\d+$/.test(String(pid || ""))) return { ok: false, error: "잘못된 요청" };
+  const d = revDoc(pid);
+  if (!d) return { ok: false, error: "저장된 결과가 없습니다" };
+  const { analyzeReviews } = await reviewCore();
+  const a = analyzeReviews({ reviews: d.reviews, total: d.total, today: String(d.ts).slice(0, 10) });
+  return { ...a, saved: { ts: d.ts, name: d.name, ms: d.ms } };
+});
+ipcMain.handle("cp:reviews:xlsx", async (e, pid) => {
+  if (!fromClean(e) || !/^\d+$/.test(String(pid || ""))) return { error: "잘못된 요청" };
+  const d = revDoc(pid);
+  if (!d) return { error: "저장된 결과가 없습니다" };
+  const { analyzeReviews } = await reviewCore();
+  d.analysis = analyzeReviews({ reviews: d.reviews, total: d.total, today: String(d.ts).slice(0, 10) });
+  const nm = String(d.name || pid).replace(/[\\/:*?"<>|]/g, "_").slice(0, 30);
+  const def = path.join(app.getPath("downloads"), `리뷰분석_${nm}_${String(d.ts).slice(0, 10)}.xlsx`);
+  const out = (await dialog.showSaveDialog(win, { title: "리뷰 분석 엑셀로 저장", defaultPath: def, filters: [{ name: "Excel", extensions: ["xlsx"] }] })).filePath;
+  if (!out) return { cancelled: true };
+  const { buildReviewXlsx } = await import(`${pathToFileURL(path.join(__dirname, "review-excel.js")).href}?v=${Math.round(fs.statSync(path.join(__dirname, "review-excel.js")).mtimeMs)}`);
+  await buildReviewXlsx(d, revIndex()[pid]?.runs || [], out);
+  log("go", `■ 리뷰 분석 엑셀 저장: ${out}`);
+  shell.showItemInFolder(out);
+  return { path: out };
 });
 
 // 시연·사용 전 점검: Wing 로그인 화면인지, 조회 정지 상태인지, 오늘 몇 건 썼는지
@@ -801,6 +1064,49 @@ ipcMain.handle("collect:export", async (_e, { rows, cpc, margin }) => {
 ipcMain.handle("collect:pagelog", () => store.get("pageLog") || []);
 ipcMain.handle("collect:remove", (_e, pids) => { const n = removeCollect(pids); collectChanged(); return n; });
 ipcMain.handle("kw:db", (_e, keyword) => lookup(keyword).catch(() => ({ month: null, main: null, subs: [] })));
+ipcMain.handle("kw:reco", () => recommend());
+ipcMain.handle("kw:combo", (_e, c) => combo(c || {}));
+ipcMain.handle("kw:scan", (_e, o) => kwScan(o || {}));
+// 🏆 효자상품: 키워드 1개 = Wing 키워드 검색 1번(상품 여러 개의 28일 판매량을 한 번에) → 판매액 상위 N개 + 합계
+//  상품마다 "쿠팡 지표 보기"(1개 4초)를 쓰지 않아서 10개 키워드도 요청 10번이면 끝. 7일 저장 결과는 바로 돌려줌
+// 받은 키워드 결과 다시 보기용: 카드 요약을 키워드별로 저장(기간 제한 없음, 최근 300개) — 껐다 켜도 Wing 조회 없이 그대로 보여 줌
+const HY_KEEP = 300;
+const hySave = (kw, r) => { const all = store.get("hyojaSaved") || {}; all[kw] = { ...r, savedAt: Date.now() }; const ks = Object.keys(all); if (ks.length > HY_KEEP) ks.sort((a, b) => all[a].savedAt - all[b].savedAt).slice(0, ks.length - HY_KEEP).forEach((k) => delete all[k]); store.set("hyojaSaved", all); };
+ipcMain.handle("kw:hyoja", async (_e, { keyword, top = 5, saved = false } = {}) => {
+  if (!licensed()) return LOCKED;
+  const t0 = Date.now();
+  const kw = String(keyword || "");
+  if (saved) { const s = (store.get("hyojaSaved") || {})[kw]; if (s) return { ...s, cached: true, ms: 0 }; } // 지난 결과 다시 열기: 저장본 우선
+  const res = await searchKeyword(kw, 1, wingView.webContents, log, false);
+  if (res.error) return { error: res.error, ms: Date.now() - t0 };
+  const raw = (res.items || []).filter((x) => x.ex?.sales != null).map((x) => ({ name: x.name, brand: x.brand || "", pid: x.pid, vid: x.vid, img: x.img, price: x.ex.price || x.price || 0, reviews: x.reviews, sales: x.ex.sales }));
+  // 카드 숫자(월매출·틈·1688 기준가)는 검색어와 다른 상품을 뺀 뒤 계산 — hyoja-core.js · 유명 브랜드(키워드 DB)는 "틈"에서 뺌
+  const famous = await famousBrands(raw.map((x) => x.brand)).catch(() => new Set());
+  const s = hyojaSummarize(kw, raw, { top, famous });
+  const out = { keyword: kw, ms: Date.now() - t0, cached: !!res.cached, n: s.n,
+    total: { sales: s.sales, rev: s.rev }, price: s.price, gap: s.gap, gapBrandOnly: s.gapBrandOnly, top1Share: s.top1Share, brandShare: s.brandShare, brandTop: s.brandTop, medical: s.medical,
+    drop: s.drop.map((x) => ({ name: x.name, sales: x.sales, why: x.why })),
+    top: { sales: s.top.reduce((t, x) => t + x.sales, 0), rev: s.top.reduce((t, x) => t + x.rev, 0) },
+    items: s.top };
+  hySave(kw, out);
+  return out;
+});
+// 🎁 키워드 받기: 10개 × 하루 10번(대표님 결정 2026-10-11). 이미 받은 키워드·오늘 횟수는 store("recoDraw")에 — 앱을 껐다 켜도 유지(서버 배분은 나중)
+const DRAW_PER = 10, DRAW_DAILY = 10;
+const drawState = () => { const st = store.get("recoDraw") || { day: "", used: 0, seen: [], history: [] }; const today = new Date().toLocaleDateString("sv-SE"); if (st.day !== today) { st.day = today; st.used = 0; } return st; };
+// batches = 받은 시각(at)별 묶음, 최근 순 30개 — 화면을 다시 열면 마지막 묶음을 그대로 보여 주고, 지난 묶음도 고를 수 있게
+const drawBatches = (hist) => { const m = new Map(); for (const k of hist || []) { if (!k.at) continue; if (!m.has(k.at)) m.set(k.at, []); m.get(k.at).push(k); } return [...m.entries()].sort((a, b) => b[0] - a[0]).slice(0, 30).map(([at, items]) => ({ at, items })); };
+ipcMain.handle("kw:drawState", () => { const st = drawState(); return { left: DRAW_DAILY - st.used, daily: DRAW_DAILY, per: DRAW_PER, seenTotal: st.seen.length, history: st.history.slice(0, 200), batches: drawBatches(st.history) }; });
+ipcMain.handle("kw:draw", async (_e, o) => {
+  const st = drawState();
+  if (st.used >= DRAW_DAILY) return { error: "limit", left: 0, daily: DRAW_DAILY };
+  const d = await kwDraw({ seen: st.seen, n: DRAW_PER, opts: o || {} });
+  if (!d.items.length) return { error: "empty", ...d, left: DRAW_DAILY - st.used };
+  st.used++; st.seen.push(...d.items.map((k) => k.kw));
+  st.history = [...d.items.map((k) => ({ ...k, at: Date.now() })), ...(st.history || [])].slice(0, 500);
+  store.set("recoDraw", st);
+  return { ...d, left: DRAW_DAILY - st.used, daily: DRAW_DAILY, seenTotal: st.seen.length };
+}); // 🔍 AI 소싱: 깔때기(단계별 실제 개수·빠진 이유) + 세 묶음 결과 // 💡 조건 조합(로켓그로스·로켓배송·해외배송·리뷰·추세·평균가 적음/많음)
 ipcMain.handle("calc:get", () => calc());
 ipcMain.handle("calc:set", (_e, patch) => { store.set("calc", { ...calc(), ...patch }); return calc(); });
 ipcMain.handle("listup:get", () => store.get("listup") || []);
@@ -834,7 +1140,7 @@ async function selftest() {
     cnTarget = { rowId: 1, name: "시험 상품" };
     // cn:search 처리와 같은 흐름
     const rr = await net.fetch(fakeImg); const im = nativeImage.createFromBuffer(Buffer.from(await rr.arrayBuffer()));
-    cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() };
+    cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
     createCn(CN_HOME); active = "cn"; layout();
     await new Promise((res) => setTimeout(res, 40000));
     console.log("CN_URL", cnView.webContents.getURL().slice(0, 160), "| TITLE", cnView.webContents.getTitle());

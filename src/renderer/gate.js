@@ -16,7 +16,7 @@
     const locked = s.gate && !s.licensed;
     $("gate").hidden = !locked;
     document.body.classList.toggle("locked", locked);
-    ["tKw", "tCat", "tClean", "tCol", "tList", "tCn", "tChat", "tMargin", "tAds", "tCoupons", "tStock"].forEach((id) => ($(id).disabled = locked));
+    ["tKw", "tCat", "tClean", "tCol", "tList", "tCn", "tChat", "tDetail", "tMargin", "tAds", "tCoupons", "tStock"].forEach((id) => ($(id).disabled = locked));
     $("acct").hidden = !s.user;
     if (s.user) $("acct").textContent = `👤 ${s.user.email}${s.user.offline ? " (오프라인)" : ""}`;
     if (!locked) return;

@@ -9,12 +9,14 @@
 <link rel="stylesheet" href="listup.css">
 <link rel="stylesheet" href="aiscan.css">
 <link rel="stylesheet" href="detail.css">
+<link rel="stylesheet" href="reco.css">
 </head>
 <body>
 <aside class="side" id="side" aria-label="메뉴">
   <div class="brand" title="씨드핵 — 매일 한 톨, 시스템처럼."><span class="sig"><i></i><i></i><i></i></span><div class="brand-t"><b class="mono">SEED<span class="hk">HACK</span><span class="cursor">_</span></b><span class="sub">씨드핵 <span class="ver" id="appVer"></span></span></div></div>
   <nav class="nav" id="nav" aria-label="화면">
     <div class="nav-sec">분석</div>
+    <button id="tReco" class="nav-item" type="button" data-view="reco" title="무엇을 팔지 막막할 때 — 로켓그로스가 적거나 해외배송이 많은 키워드를 매달 골라 둡니다"><span class="ic">💡</span><span class="lbl">키워드 추천</span></button>
     <button id="tKw" class="nav-item" type="button" data-view="kw" title="키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"><span class="ic">🔎</span><span class="lbl">키워드 분석</span></button>
     <button id="tCat" class="nav-item" type="button" data-view="cat" title="카테고리를 고르면 Wing 인기상품으로 판정"><span class="ic">🚦</span><span class="lbl">카테고리 진단</span></button>
     <div class="nav-sec">모으기</div>
@@ -81,19 +83,21 @@
         <label class="chk" title="순위는 낮은데 그 순위 기대치보다 1.5배 이상 팔리는 상품"><input id="fHidden" type="checkbox"> 🔥 숨은 강자만</label>
         <label>배송 <select id="fShip"><option value="">전체</option><option value="rocket">로켓 전체</option><option value="로켓배송">로켓배송</option><option value="판매자로켓">판매자로켓</option><option value="일반배송">일반배송</option><option value="해외배송">해외배송</option></select></label>
         <label title="순위에 비해 조회수가 기대치의 30%도 안 되는 상품 — 쿠팡이 중간에 끼워 노출한 자리로 추정">👀 끼워넣기 노출 <select id="fRookie"><option value="">함께 보기</option><option value="hide">제외</option><option value="only">끼워넣기만</option><option value="recent">끼워넣기 · 최근만</option></select></label>
+        <label class="chk" title="쿠팡 화면에서 📦 담기로 직접 담은 상품만"><input id="fPicked" type="checkbox"> 📌 내가 담은 것만</label>
         <label class="chk"><input id="fMetric" type="checkbox" checked> 지표 있는 상품만</label>
         <label class="chk"><input id="fNoAd" type="checkbox"> 광고 칸 제외</label>
         <label class="chk"><input id="fNoPb" type="checkbox" checked> 쿠팡 PB 제외</label>
         <button id="fReset" class="sec" type="button">필터 초기화</button>
       </div>
       <div class="lu-wrap"><table class="lu co" id="coTable"><thead id="coHead"></thead><tbody id="coBody"></tbody></table></div>
-      <p class="lu-empty" id="coEmpty">아직 모은 상품이 없습니다. <b>쿠팡 클린 세션</b>에서 검색한 뒤 <b>📊 쿠팡 지표 표시</b>를 누르면 여기에 자동으로 쌓입니다.</p>
+      <p class="lu-empty" id="coEmpty">아직 모은 상품이 없습니다. <b>쿠팡 검색</b>에서 상품 사진에 마우스를 올려 <b>📦 담기</b>를 누르거나, <b>📊 쿠팡 지표</b>를 누르면 여기에 쌓입니다.</p>
     </div>
 
     <div class="listup" id="listup" hidden>
       <div class="lu-bar">
         <b>📋 소싱 리스트업</b>
         <span class="muted" id="luInfo"></span>
+        <span class="lu-auto" id="luAuto" hidden></span>
         <span class="spacer"></span>
         <label>원가 계수 <input id="cFx" type="number" step="10" class="num"> 원/¥</label>
         <label>수수료 <select id="cFee"><option value="0.1188">부가세 포함 11.88%</option><option value="0.108">부가세 별도 10.8%</option></select></label>
@@ -107,6 +111,7 @@
       <p class="lu-empty" id="luEmpty">아직 담은 상품이 없습니다. <b>③ 📦 수집함</b>에서 상품을 체크하고 <b>☆ 리스트업 담기</b>를 누르거나, <b>🔎 키워드 분석</b> 카드의 <b>☆ 리스트업 담기</b>를 누르세요.</p>
     </div>
     <div class="detail" id="detail" hidden></div>
+    <div class="reco" id="reco" hidden></div>
   </section>
 
   <aside class="panel" id="panel" aria-label="신호등 패널">
@@ -188,6 +193,7 @@
       </div>
       <label class="cpc" title="광고 클릭 1번에 드는 비용. 기본 145원 = 대표님 광고 11개 캠페인 평균(VAT 포함). 쿠팡 광고센터의 내 평균 CPC를 넣으면 더 정확합니다.">클릭 <input id="cpcIn" type="number" min="50" step="10" value="145">원</label>
       <label class="cpc" title="광고로 들어온 손님의 구매율 ÷ 상세페이지 구매율. 기본 40% = 광고 전환율 약 2.5% ÷ 상세페이지 전환율 6~7% (대표님 광고 실적 기준)">광고전환 <input id="convIn" type="number" min="5" max="100" step="5" value="40">%</label>
+      <button id="bLog" class="ghost logbtn" type="button" aria-pressed="false" title="진행 기록 펼치기·접기">📜 기록</button>
       <select id="sortSel" aria-label="정렬">
         <option value="order">기본 순서</option><option value="sales">판매량순</option><option value="rev">판매액순</option><option value="cvr">전환율순</option><option value="price">가격 낮은순</option>
       </select>
@@ -209,10 +215,12 @@
 </main>
 </div>
 <script src="aiscan.js"></script>
+<script src="entry.js"></script>
 <script src="panel.js"></script>
 <script src="rg.js"></script>
 <script src="listup.js"></script>
 <script src="detail.js"></script>
+<script src="reco.js"></script>
 <script src="collect.js"></script>
 <script src="gate.js"></script>
 </body>

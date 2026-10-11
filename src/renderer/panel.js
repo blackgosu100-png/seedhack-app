@@ -11,8 +11,6 @@
   const clock = () => new Date().toLocaleTimeString("en-GB");
   const pct = (v, d = 1) => (v == null ? "-" : (v * 100).toFixed(d) + "%");
   const V = { GO: ["go", "GO · 진입해 볼 만한 시장"], 검토: ["warn", "HOLD · 조건부로 볼 만함"], "큰 시장": ["warn", "HOLD · 큰 시장 기준으로 보세요"], DROP: ["stop", "DROP · 다른 카테고리를 보세요"] };
-  const AD_TXT = { go: "광고해도 남음", warn: "광고 시 빠듯", stop: "광고 시 적자" };
-  const SIGN = { go: "GO", warn: "HOLD", stop: "DROP" }; // 시그널: 광고로 1개 팔 때 남는가
   // 광고 판정 = "광고로 1개 팔 때 드는 광고비(전환당 비용)"와 "1개 남는 돈(마진)" 비교. 카드·수집함·리스트업이 같이 쓴다.
   //  · 클릭비용 기본 145원, 광고 전환 비율 40% = 대표님 실제 광고 11개 캠페인(광고비 997만원·클릭 68,221·판매 1,675) 평균:
   //    평균 클릭비용 약 146원(VAT 포함), 광고 전환율 약 2.5% ≈ 상세페이지 전환율(6~7%)의 40%
@@ -52,7 +50,8 @@
     for (const it of d.items) {
       const price = it.ex?.price ?? it.price;
       it.rev = it.ex?.sales != null && price ? it.ex.sales * price : null; // 28일 판매액
-      if (!(it.ex?.sales != null && it.ex?.views)) { Object.assign(it, { cvr: null, rel: null, hot: null, maxRoas: null, endRoas: end, ad: null, cpa: null }); continue; }
+      it.entry = window.Entry?.forItem(price, { ad: adsOn ? 0.1 : 0 }) || null; // 🎯 추천 판매가 · 1688 허용 위안
+      if (!(it.ex?.sales != null && it.ex?.views)) { Object.assign(it, { cvr: null, rel: null, hot: null, maxRoas: null, endRoas: end, ad: null, adOld: null, sig: null, adShare: null, cpa: null }); continue; }
       const cvr = it.ex.sales / it.ex.views;
       const rel = med && cvrs.length >= 3 ? cvr / med : null;
       const cpa = AdModel.cpa(cvr), unitM = price ? price * margin : null;
@@ -61,11 +60,14 @@
       Object.assign(it, {
         cvr, rel, hot: rel == null ? null : rel >= 1.4 ? "hot" : rel <= 0.75 ? "cold" : null,
         maxRoas, endRoas: end, beCpc, optCpc: beCpc != null ? beCpc / 2 : null,
-        cpa, unitM, ad: adsOn ? AdModel.judge(cpa, unitM) : null,
+        cpa, unitM, adOld: adsOn ? AdModel.judge(cpa, unitM) : null,
+        adShare: cpa ? (price * (adsOn ? 0.1 : 0)) / cpa : null, // 광고비 = 매출 10%로 만들 수 있는 판매 비중(나머지는 자연 검색)
       });
-      if (d.kind === "kw") it.light = it.ad; // 키워드 모드에서는 카드 점 = 광고 판정
+      it.ad = null; // 판정(GO/HOLD/DROP)은 두지 않는다 — 지표는 참고용, 결정은 원가를 넣은 순이익·ROI와 사람이 한다(대표님 방식)
+      if (d.kind === "kw") it.light = null;
     }
     const ads = d.items.filter((it) => it.ad);
+    d.market = window.Entry?.market(d.items.map((it) => ({ price: it.ex?.price ?? it.price, sales: it.ex?.sales }))) || null;
     return { med, n: withCvr.length, hot: d.items.filter((it) => it.hot === "hot").length, end, margin,
       adGo: ads.filter((it) => it.ad === "go").length, adWarn: ads.filter((it) => it.ad === "warn").length, adStop: ads.filter((it) => it.ad === "stop").length,
       sales: withCvr.reduce((a, it) => a + it.ex.sales, 0), rev: d.items.reduce((a, it) => a + (it.rev || 0), 0) };
@@ -75,21 +77,27 @@
   function cardHtml(it, i, d) {
     const ex = it.ex;
     const relTxt = it.rel != null ? ` <span class="rel ${it.hot || ""}">전환 ${it.rel.toFixed(1)}×</span>` : "";
-    const adRow = it.ad ? `<div class="ad ${it.ad}" title="전환당 광고비 = 클릭비용 ÷ (전환율 × 광고 전환 비율) · ${AdModel.note()} · 1개 마진 = 판매가 × 목표 마진(원가를 넣으면 리스트업에서 실제 마진으로 다시 판정)">
-        <b><i class="sg ${it.ad}">${SIGN[it.ad]}</i> ${AD_TXT[it.ad]}</b>
-        <span>1개 팔 때 광고비 약 ${won(it.cpa)}원 · 1개 마진 약 ${won(it.unitM)}원</span>
-        <span>클릭당 ${won(it.beCpc)}원보다 비싸면 적자</span></div>` : "";
-    const inList = d.kind === "kw" && window.Listup?.has(it.pid);
-    const listBtn = d.kind === "kw" ? `<button class="addlist ${inList ? "in" : ""}" data-add="${i}" type="button">${inList ? "★ 리스트업에 담김" : "☆ 리스트업 담기"}</button>` : "";
+    // 참고: 경쟁사가 한 달에 남기는 돈(원가를 알면) · 광고비 10%로 만들 수 있는 판매 비중
+    const bn = window.Listup?.bench?.(it.pid);
+    const adRow = it.ex?.sales != null ? `<div class="ad ref" title="${esc(`경쟁사 월 순이익 = (경쟁사 판매가 − 원가 − 물류비 − 수수료) × 월판매량 − 광고비 ${adsOn ? 10 : 0}% · 같은 원가로 본 추정치(참고용)\n${AdModel.note()}`)}">
+        ${bn ? `<b>경쟁사 월 순이익 약 ${man(bn.net)}원</b><span>개당 ${won(bn.unit)}원 · ROI ${pct(bn.roi)} · 1688 ¥${bn.yuan}${bn.auto && !bn.auto.sure ? " (추정)" : ""} 기준</span>`
+          : window.Listup?.has(it.pid) ? `<b class="dim">경쟁사 월 순이익 · 1688 원가 찾는 중</b>` : `<b class="dim">경쟁사 월 순이익 · ☆ 담으면 원가를 찾아 계산</b>`}
+        ${adsOn && it.adShare != null ? `<span class="dim">광고 10%로 판매의 ${Math.min(100, Math.round(it.adShare * 100))}%까지 · 나머지는 자연 검색</span>` : ""}</div>` : "";
+    const en = it.entry, mk = d.kind === "kw" ? d.market : null; // 가격대는 같은 상품끼리 겨루는 키워드 검색에서만
+    const enRow = en && en.cut > 0 ? `<div class="en ${en.yuan > 0 ? "" : "no"}" title="이 상품보다 ${won(en.cut)}원 싸게(가격대별 체감 할인${en.crossed ? " · 가격 경계 넘김" : ""}) 팔고 수수료 ${Math.round(Entry.cfg.fee * 1000) / 10}% · 광고 ${adsOn ? 10 : 0}% · 마진 ${Math.round(Entry.cfg.margin * 100)}% · 물류 ${won(Entry.cfg.logi)}원(극소형 가정)을 남기는 1688 가격 · 원가 계수 ${Entry.cfg.fx}원/위안${mk ? ` · 이 검색어 잘 팔리는 가격대 ${won(mk.lo)}~${won(mk.hi)}원` : ""}">
+        <b>추천가 ${won(en.price)}원 <small>−${won(en.cut)}</small></b>
+        <span>${en.yuan > 0 ? `1688 <b>¥${en.yuan.toFixed(1)}</b> 이하로 사 오면 OK` : "이 가격대로는 남지 않아요"}${mk && (en.price < mk.lo || en.price > mk.hi) ? " · 잘 팔리는 가격대 밖" : ""}</span></div>` : "";
+    const inList = window.Listup?.has(it.pid);
+    const listBtn = it.pid ? `<button class="addlist ${inList ? "in" : ""}" data-add="${i}" type="button">${inList ? "★ 리스트업에 담김" : "☆ 리스트업 담기"}</button>` : "";
     const link = `https://www.coupang.com/vp/products/${it.pid}${it.vid ? `?vendorItemId=${it.vid}` : ""}`;
     return `<div class="card" data-k="${esc(key(it))}" data-i="${i}">
       <div class="im">${it.img ? `<img loading="lazy" src="${esc(imgUrl(it.img))}" alt="">` : ""}<span class="rk">${it.order}${d.kind === "kw" ? "" : "위"}</span>${it.pb ? `<span class="pb" title="쿠팡 자체 브랜드 — 실판매 지표가 제공되지 않습니다">쿠팡 PB</span>` : ""}<span class="dot ${it.light || "none"}"></span></div>
       <div class="bd"><a class="nm" href="${esc(link)}" target="_blank" title="${esc(it.name)}">${esc(it.name)}</a>
-        <div class="pr">${won(it.ex?.price ?? it.price)}원${priceTag(it)}${it.reviews != null ? `<small>★${it.rating ?? "-"} (${won(it.reviews)})</small>` : ""}</div>
+        <div class="pr"><span class="cpv ${it.priceSrc === "now" || it.priceSrc === "seen" ? "cp" : ""}">${won(it.ex?.price ?? it.price)}원</span>${priceTag(it)}${it.reviews != null ? `<small class="rv ${it.revSrc === "page" ? "cp" : ""}" title="${it.revSrc === "page" ? `쿠팡 화면 리뷰 수${it.revWing != null && it.revWing !== it.reviews ? ` · Wing ${won(it.revWing)}` : ""}` : "Wing 리뷰 수 — 쿠팡 화면에서 아직 못 읽음"}"><i>★</i>${it.rating ?? "-"} <u>(${won(it.reviews)})</u>${it.revSrc === "wing" ? " W" : ""}</small>` : ""}</div>
         <div class="mt"><span>28일 판매</span><b class="${ex?.sales != null ? "ex" : ""}">${ex?.sales != null ? won(ex.sales) : "-"}</b>
           <span>판매액</span><b class="${it.rev != null ? "ex" : ""}">${it.rev != null ? man(it.rev) + "원" : "-"}</b>
           <span>28일 조회</span><b class="${ex?.views != null ? "ex" : ""}">${ex?.views != null ? won(ex.views) : range(it)}</b>
-          <span>전환율</span><b class="${it.cvr != null ? "ex" : ""}">${pct(it.cvr)}${relTxt}</b></div>${adRow}${listBtn}</div></div>`;
+          <span>전환율</span><b class="${it.cvr != null ? "ex" : ""}">${pct(it.cvr)}${relTxt}</b></div>${enRow}${adRow}${listBtn}</div></div>`;
   }
 
   const SORTS = {
@@ -119,20 +127,18 @@
     const e = enrich(d);
     if (!d) { $("insight").innerHTML = ""; $("counts").innerHTML = ""; return e; }
     if (d.kind === "kw") {
-      $("counts").innerHTML = `<b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b>`;
+      $("counts").innerHTML = "";
       $("insight").innerHTML = e.n
         ? `<span>상품 ${d.items.length}개 · 실판매 ${e.n}개</span><span>28일 판매 합 <b>${won(e.sales)}</b> · 판매액 <b>${man(e.rev)}원</b></span>
-           <span>중앙 전환율 <b>${pct(e.med)}</b> · 🔥 <b>${e.hot}</b></span><span>가격 <b>${won(d.minPrice)}~${won(d.maxPrice)}원</b></span>
-           <span>시그널 <b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
+           <span>중앙 전환율 <b>${pct(e.med)}</b> · 🔥 <b>${e.hot}</b></span><span>가격 <b>${won(d.minPrice)}~${won(d.maxPrice)}원</b></span>${d.market ? `<span>🎯 잘 팔리는 가격대 <b>${won(d.market.lo)}~${won(d.market.hi)}원</b> · 판매 상위 중 최저 <b>${won(d.market.strongMin)}원</b></span>` : ""}`
         : `<span class="dim">이 검색 결과에는 실판매 지표가 있는 상품이 없습니다.</span>`;
     } else {
       const c = { go: 0, warn: 0, stop: 0 };
       d.items.forEach((it) => c[it.light] != null && c[it.light]++);
       $("counts").innerHTML = `<b class="g">●${c.go}</b> <b class="y">●${c.warn}</b> <b class="r">●${c.stop}</b>`;
       $("insight").innerHTML = e && e.n
-        ? `<span>실판매 ${e.n}개 · 중앙 전환율 <b>${pct(e.med)}</b></span><span>🔥 전환율 상위 <b>${e.hot}</b></span>
-           <span>시그널 <b class="sg go">GO ${e.adGo}</b> <b class="sg warn">HOLD ${e.adWarn}</b> <b class="sg stop">DROP ${e.adStop}</b> <small>(목표 마진 ${Math.round(e.margin * 100)}% · ${AdModel.note()})</small></span>`
-        : `<span class="dim">🎯 Wing 28일 판매량을 받으면 전환율 비교와 GO / HOLD / DROP 시그널이 나옵니다</span>`;
+        ? `<span>실판매 ${e.n}개 · 중앙 전환율 <b>${pct(e.med)}</b></span><span>🔥 전환율 상위 <b>${e.hot}</b></span>`
+        : `<span class="dim">🎯 Wing 28일 판매량을 받으면 전환율 비교가 나옵니다</span>`;
     }
     return e;
   }
@@ -239,6 +245,7 @@
   // ---------- 화면 전환(왼쪽 사이드바) ----------
   // view: 지금 본문에 보이는 화면. kw·cat은 패널 화면(cat = Wing 화면 + 오른쪽 판정 칸), 나머지는 메인 프로세스의 탭과 같다.
   const VIEWS = {
+    reco: ["💡 키워드 추천", "로켓그로스가 적거나 해외배송이 많은 키워드 · 고르면 바로 분석"],
     kw: ["🔎 키워드 분석", "키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"],
     cat: ["🚦 카테고리 진단", "1차 → 4차를 고르면 Wing 인기상품으로 바로 진단합니다 · 말단을 고르면 자동 실행"],
     wing: ["🔑 Wing 로그인", "Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"],
@@ -277,8 +284,14 @@
     $("collect").hidden = v !== "collect";
     $("siteHint").hidden = v === "list" || v === "collect" || v === "kw" || v === "cat";
     $("detail").hidden = v !== "detail"; if (v === "detail") $("siteHint").hidden = true; // 📄 상세페이지(패널 화면)
+    $("reco").hidden = v !== "reco"; if (v === "reco") $("siteHint").hidden = true; // 💡 키워드 추천(패널 화면)
     $("hintT").textContent = v === "dash" ? "로켓그로스 대시보드를 불러오는 중입니다…" : "화면을 불러오는 중입니다…";
     if (v === "kw" || v === "cat") { if (pmode !== v) setMode(v); }
+    // 키워드 분석: 엑셀 저장·개수를 툴바 한 줄로 올린다(버튼 하나뿐인 줄을 없애 상품 카드를 위로). 다른 화면에선 원래 자리
+    // 카테고리 진단도 같게 — 🎯 Wing 판매량 받기·중지 버튼까지 툴바로
+    if (v === "kw") $("bLog").before($("counts"), $("bXlsx"));
+    else if (v === "cat") $("bLog").before($("counts"), $("bExact"), $("bStop"), $("bXlsx"));
+    else document.querySelector(".acts").append($("bExact"), $("bStop"), $("bXlsx"), $("counts"));
     frame();
   }
   // 사이드바에서 고른 화면으로: 메인 프로세스 탭을 바꾸고(kw는 사이트 화면을 모두 숨김) 화면을 그린다
@@ -288,6 +301,8 @@
     api.invoke("nav:tab", tab);
     if (v === "kw") setTimeout(() => $("kwInput").focus(), 30);
   }
+  // 📜 기록: 키워드 분석에선 진행 기록 칸을 접어 두고 필요할 때만 펼친다
+  $("bLog").onclick = () => { const on = document.body.classList.toggle("log-open"); $("bLog").setAttribute("aria-pressed", String(on)); if (on) $("con").scrollTop = $("con").scrollHeight; };
   $("nav").addEventListener("click", (e) => {
     const b = e.target.closest(".nav-item");
     if (b && !b.disabled) go(b.dataset.view, b.dataset.dash);
@@ -331,27 +346,70 @@
       check();
     });
   }
+  // 검색 뒤 1분 동안: 쿠팡 탭이 이 검색어 화면을 늦게 읽어 오면 "쿠폰 전" 카드만 쿠폰가로 바꾸고 다시 계산·그리기
+  let lateOff = null;
+  function lateCoupon(kw, since) {
+    lateOff?.();
+    let alive = true;
+    const t = setTimeout(() => (alive = false), 60000);
+    const check = async () => {
+      if (!alive || kwData?.keyword !== kw) return;
+      const rows = await api.invoke("collect:get").catch(() => null);
+      if (!rows?.some((r) => r.pos?.[kw]?.ts >= since)) return;
+      const before = kwData.items.filter((it) => it.priceSrc === "wing").length;
+      const c = applyCouponPrices(kwData.items, rows, kw, since); // 다시 적용해도 Wing 원값(listPrice·revWing)은 보존된다
+      if (c.none >= before) return;
+      const prices = kwData.items.slice(0, 36).map((it) => it.price ?? it.ex?.price).filter((p) => p > 0);
+      kwData.minPrice = prices.length ? Math.min(...prices) : null; kwData.maxPrice = prices.length ? Math.max(...prices) : null;
+      insight(kwData); renderGrid(kwData);
+      log("go", `✔ 쿠팡 화면이 늦게 도착 — 쿠폰가 ${before - c.none}개 더 반영하고 다시 계산했습니다${c.off.length ? ` (Wing 판매가와 다름 ${c.off.length}개)` : ""}`);
+      if (!kwData.items.some((it) => it.priceSrc === "wing")) lateOff();
+    };
+    const mine = () => check();
+    if (!cpWaiter) cpWaiter = mine; // 새 검색이 cpWaiter를 쓰는 중이면 끼어들지 않는다
+    lateOff = () => { alive = false; clearTimeout(t); if (cpWaiter === mine) cpWaiter = null; lateOff = null; };
+  }
+  // 쿠팡 화면 값 적용 — 화면에서 "직접 읽은 값"(collect.page)만 쓴다. 규칙:
+  //  ① 가격: 같은 옵션(vendorItemId)일 때만 · Wing가의 35%~150% 안일 때만(단위가격 오독 방지) — 아니면 Wing가 + 이유 표시
+  //  ② 리뷰·별점: 화면에서 읽었으면 화면 값(손님이 보는 숫자), 못 읽었으면 Wing 값 + "Wing" 표시
+  //  ③ 매 검색마다 Wing 값·화면 값·카드 글을 나란히 파일로 남긴다(정확도 대조용)
   function applyCouponPrices(items, rows, kw, since) {
     const by = new Map((rows || []).map((r) => [String(r.pid), r]));
-    const c = { now: 0, seen: 0, none: 0, off: [] };
+    const c = { now: 0, seen: 0, none: 0, off: [], vid: 0, odd: 0, rev: 0 };
+    const diag = [];
     for (const it of items) {
-      const r = by.get(String(it.pid));
-      const seenTs = r?.pos ? Math.max(0, ...Object.values(r.pos).map((p) => p?.ts || 0)) : 0; // 쿠팡 화면에서 본 적 있는 상품만 pos가 있다
-      const wingP = it.ex?.price ?? it.price;
+      const r = by.get(String(it.pid)), pg = r?.page || null;
+      const wingP = it.listPrice ?? it.ex?.price ?? it.price;
       it.listPrice = wingP;
-      if (r?.price > 0 && seenTs) {
-        const fresh = r.pos?.[kw]?.ts >= since;
-        it.price = r.price;
-        if (it.ex) it.ex = { ...it.ex, price: r.price };
-        it.priceSrc = fresh ? "now" : "seen"; it.priceTs = seenTs;
-        fresh ? c.now++ : c.seen++;
-        if (wingP > 0 && r.price !== wingP) c.off.push(r.price / wingP - 1);
-      } else { it.priceSrc = "wing"; c.none++; }
+      if (it.revWing === undefined) { it.revWing = it.reviews ?? null; it.rateWing = it.rating ?? null; }
+      const sameVid = !pg?.vid || !it.vid || String(pg.vid) === String(it.vid);
+      const sane = !(wingP > 0) || (pg?.price >= wingP * 0.35 && pg?.price <= wingP * 1.5);
+      let used = "wing";
+      if (pg?.price > 0 && sameVid && sane) {
+        const fresh = pg.ts >= since && pg.q === kw;
+        it.price = pg.price;
+        if (it.ex) it.ex = { ...it.ex, price: pg.price };
+        it.priceSrc = fresh ? "now" : "seen"; it.priceTs = pg.ts;
+        fresh ? c.now++ : c.seen++; used = it.priceSrc;
+        if (wingP > 0 && pg.price !== wingP) c.off.push(pg.price / wingP - 1);
+      } else {
+        it.priceSrc = pg?.price > 0 && !sameVid ? "vid" : pg?.price > 0 && !sane ? "odd" : "wing";
+        it.pagePrice = pg?.price ?? null;
+        it.priceSrc === "vid" ? c.vid++ : it.priceSrc === "odd" ? c.odd++ : c.none++;
+      }
+      if (pg?.reviews != null) { it.reviews = pg.reviews; it.rating = pg.rating ?? it.rating; it.revSrc = "page"; c.rev++; }
+      else { it.reviews = it.revWing; it.revSrc = "wing"; }
+      diag.push({ order: it.order, pid: it.pid, wingVid: it.vid || "", pageVid: pg?.vid || "", name: String(it.name || "").slice(0, 40),
+        wingPrice: wingP ?? null, pagePrice: pg?.price ?? null, usedPrice: it.price ?? null, priceSrc: it.priceSrc,
+        wingReviews: it.revWing, pageReviews: pg?.reviews ?? null, revSrc: it.revSrc, pageRead: pg?.ts ? new Date(pg.ts).toLocaleString("ko-KR") : null, pageQuery: pg?.q || "", raw: pg?.raw || "" });
     }
+    api.invoke("diag:save", { kw, rows: diag }).catch(() => {});
     return c;
   }
   const priceTag = (it) => {
     if (it.priceSrc === "wing") return ` <small class="ptag nc" title="Wing 판매가 — 쿠폰·즉시할인 적용 전 가격입니다(쿠팡 화면에서 아직 못 본 상품)">쿠폰 전</small>`;
+    if (it.priceSrc === "vid") return ` <small class="ptag nc" title="쿠팡 화면에는 이 상품의 다른 옵션(${won(it.pagePrice)}원)이 떠 있어 Wing 판매가를 씁니다">옵션 다름</small>`;
+    if (it.priceSrc === "odd") return ` <small class="ptag nc" title="쿠팡 화면에서 읽은 ${won(it.pagePrice)}원이 Wing 판매가와 너무 달라(단위가격 등 오독 의심) Wing 판매가를 씁니다">확인 필요</small>`;
     if (!it.priceSrc) return "";
     const when = it.priceSrc === "seen" ? ` · ${new Date(it.priceTs).toLocaleDateString("ko-KR")} 쿠팡 화면` : " · 방금 쿠팡 화면";
     const was = it.listPrice > 0 && it.listPrice !== it.price ? ` <s>${won(it.listPrice)}</s>` : "";
@@ -362,6 +420,7 @@
   async function runSearch(keyword, force = false) {
     const kw = String(keyword || "").trim();
     if (!kw) return;
+    lateOff?.();
     $("kwInput").value = kw;
     const pages = Number($("kwPages").value) || 1;
     log("sys", `▶ 키워드 검색: <b>${esc(kw)}</b> · ${pages}페이지 (페이지마다 Wing 검색 1회)`);
@@ -384,10 +443,11 @@
       const rows = (await cpOpen) ? await waitCoupangPage(kw, since, Math.max(1500, CP_WAIT - (Date.now() - since))) : await api.invoke("collect:get").catch(() => []); // 쿠팡 화면을 못 열었으면 예전에 본 가격만
       const c = applyCouponPrices(r.items, rows, kw, since);
       const avg = c.off.length ? c.off.reduce((a, b) => a + b, 0) / c.off.length : 0;
-      const msg = `쿠폰가 반영 ${c.now + c.seen}/${r.items.length}개 (이번 쿠팡 화면 ${c.now} · 예전에 본 가격 ${c.seen})${c.off.length ? ` · Wing 판매가와 다름 ${c.off.length}개, 평균 ${(avg * 100).toFixed(1)}%` : ""}${c.none ? ` · 쿠폰 전 가격 ${c.none}개` : ""}`;
+      const msg = `쿠폰가 반영 ${c.now + c.seen}/${r.items.length}개 (이번 쿠팡 화면 ${c.now} · 예전에 본 가격 ${c.seen})${c.off.length ? ` · Wing 판매가와 다름 ${c.off.length}개, 평균 ${(avg * 100).toFixed(1)}%` : ""}${c.none ? ` · 쿠폰 전 가격 ${c.none}개` : ""}${c.vid ? ` · 화면엔 다른 옵션 ${c.vid}개` : ""}${c.odd ? ` · 가격 오독 의심 ${c.odd}개` : ""} · 리뷰 화면값 ${c.rev}/${r.items.length}`;
       log(c.now + c.seen ? "go" : "warn", `${c.now + c.seen ? "✔" : "△"} ${msg}`);
       scan?.note(c.now + c.seen ? "go" : "warn", `${c.now + c.seen ? "✔" : "△"} ${esc(msg)}`);
     }
+    if (r.items.some((it) => it.priceSrc === "wing")) lateCoupon(kw, since); // 쿠팡 화면이 늦게 읽히면(12초 넘게) 도착하는 대로 쿠폰가로 다시 그린다
     const prices = r.items.slice(0, 36).map((it) => it.price ?? it.ex?.price).filter((p) => p > 0); // 1페이지 범위
     kwData = { kind: "kw", keyword: kw, date: new Date().toISOString().slice(0, 10), db: r.db, items: r.items,
       minPrice: prices.length ? Math.min(...prices) : null, maxPrice: prices.length ? Math.max(...prices) : null };
@@ -406,7 +466,7 @@
       if (!el) {
         clearInterval(revealTimer);
         kwData.items.filter((it) => it.hot === "hot").slice(0, 5).forEach((it) => log("go", `🔥 전환율 상위 · ${esc(it.name.slice(0, 24))} — 전환율 ${pct(it.cvr)} (중앙 ${pct(e.med)}의 ${it.rel.toFixed(1)}배)`));
-        log("sys", `■ '${esc(kw)}' 상품 ${kwData.items.length}개 · 28일 판매 합 ${won(e.sales)} · 판매액 ${man(e.rev)}원 · 시그널 GO ${e.adGo} · HOLD ${e.adWarn} · DROP ${e.adStop}${r.cached ? " · 저장된 결과" : ""}`);
+        log("sys", `■ '${esc(kw)}' 상품 ${kwData.items.length}개 · 28일 판매 합 ${won(e.sales)} · 판매액 ${man(e.rev)}원${r.cached ? " · 저장된 결과" : ""}`);
         return;
       }
       el.classList.add("on");
@@ -432,19 +492,24 @@
   // 카드의 ☆ 리스트업 담기
   $("grid").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-add]");
-    if (!b || !kwData) return;
-    const it = kwData.items[+b.dataset.add];
+    const d = cur(); // 키워드 분석 · 카테고리 분석 둘 다
+    if (!b || !d) return;
+    const it = d.items[+b.dataset.add];
     if (window.Listup?.has(it.pid)) { api.invoke("nav:tab", "list"); return; }
-    const sub = (kwData.db?.subs || []).find((s) => !s.brand);
-    window.Listup.add({
-      keyword: kwData.keyword, kwVol: kwData.db?.main?.m1 ?? null, subKw: sub?.kw || "", subVol: sub?.m1 ?? null,
-      subs: (kwData.db?.subs || []).slice(0, 15).map((s) => ({ kw: s.kw, m1: s.m1, brand: s.brand })),
-      maxPrice: kwData.maxPrice, minPrice: kwData.minPrice, name: it.name, pid: it.pid,
+    const isKw = d.kind === "kw";
+    const sub = isKw ? (d.db?.subs || []).find((s) => !s.brand) : null;
+    const cps = isKw ? null : d.items.slice(0, 36).map((x) => x.ex?.price ?? x.price).filter((p) => p > 0); // 카테고리: 1페이지(상위 36개) 가격 범위
+    const row = window.Listup.add({
+      keyword: isKw ? d.keyword : `📂 ${d.name || "카테고리"}`, kwVol: isKw ? d.db?.main?.m1 ?? null : null, subKw: sub?.kw || "", subVol: sub?.m1 ?? null,
+      subs: isKw ? (d.db?.subs || []).slice(0, 15).map((s) => ({ kw: s.kw, m1: s.m1, brand: s.brand })) : [],
+      maxPrice: isKw ? d.maxPrice : cps.length ? Math.max(...cps) : null, minPrice: isKw ? d.minPrice : cps.length ? Math.min(...cps) : null, name: it.name, pid: it.pid,
       benchUrl: `https://www.coupang.com/vp/products/${it.pid}${it.vid ? `?vendorItemId=${it.vid}` : ""}`, img: it.img,
-      bSales: it.ex?.sales ?? null, bViews: it.ex?.views ?? null, bCvr: it.cvr, ad: it.ad, maxRoas: it.maxRoas,
-      monthly: "", benchMonthly: it.ex?.sales != null ? Math.round((it.ex.sales * 30) / 28) : null, benchPrice: it.price ?? it.ex?.price,
+      bSales: it.ex?.sales ?? null, bViews: it.ex?.views ?? null, bCvr: it.cvr, ad: it.adOld, maxRoas: it.maxRoas,
+      monthly: "", benchMonthly: it.ex?.sales != null ? Math.round((it.ex.sales * 30) / 28) : null, benchPrice: it.price ?? it.ex?.price, bReviews: it.reviews ?? null, bRating: it.rating ?? null, bShip: it.ex?.ship || it.ship || "", band: isKw && d.market ? { lo: d.market.lo, hi: d.market.hi, strongMin: d.market.strongMin } : null,
+      recPrice: it.entry?.cut > 0 ? it.entry.price : null, recYuan: it.entry?.yuan > 0 ? Math.round(it.entry.yuan * 10) / 10 : null,
     });
-    log("go", `☆ 리스트업에 담음 · ${esc(it.name.slice(0, 26))} — 리스트업에서 위안과 내 예상 월판매량을 넣으세요`);
+    window.Listup.queue1688?.(row); // 🎯 담으면 1688 자동 조사(이미지 검색 → 옵션가 → AI → 원가) — 끝나면 위안 칸 채움 + 알림
+    log("go", `☆ 리스트업에 담음 · ${esc(it.name.slice(0, 26))} — 1688 원가는 자동으로 찾아 위안 칸에 넣습니다`);
     refreshCard(+b.dataset.add, true);
   });
 
@@ -521,6 +586,7 @@
     if (tab === "list") window.Listup?.render();
     if (tab === "collect") window.Collect?.load();
     if (tab === "detail") window.Detail?.show();
+    if (tab === "reco") window.Reco?.show();
     if (tab === "wing") footStatus();
   });
   api.on("exact:progress", ({ pos, total, status, msg }) => {
@@ -533,7 +599,7 @@
       if (status === "done" && catData) {
         const e = enrich(catData);
         catData.items.filter((it) => it.hot === "hot").forEach((it) => log("go", `🔥 전환율 상위 · ${esc(it.name.slice(0, 24))} — 전환율 ${pct(it.cvr)} (중앙 ${pct(e.med)}의 ${it.rel.toFixed(1)}배)`));
-        if (e?.n) log("sys", `■ 전환율 비교·광고 가능성: 🔥${e.hot} · 시그널 GO ${e.adGo} · HOLD ${e.adWarn} · DROP ${e.adStop} (본전 ROAS ${Math.round(e.end * 100)}%)`);
+        if (e?.n) log("sys", `■ 전환율 비교·광고 가능성: 🔥${e.hot} (본전 ROAS ${Math.round(e.end * 100)}%)`);
       }
     }
   });
@@ -547,7 +613,6 @@
     if (window.AiScan?.current?.kind === "exact") window.AiScan.current.item({ ...catData.items[idx], key: k }); // 전환율·시그널 계산 뒤 해커 화면에 도장
     catData.items.forEach((it, i) => it.ex && refreshCard(i, i === idx));
     const it = catData.items[idx];
-    if (it.ad === "stop") log("stop", `DROP · 광고 시 적자 · ${esc(it.name.slice(0, 22))} — 1개당 광고비 약 ${won(it.cpa)}원 > 마진 약 ${won(it.unitM)}원`);
   });
   // 자동 업데이트: 새 버전을 다 받으면 버튼 표시
   api.on("update", ({ version }) => { $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ ${version} 업데이트 · 다시 시작`; });
@@ -679,7 +744,7 @@
   });
 
   // 리스트업 화면이 담김 상태를 바꾸면 카드 버튼을 다시 그린다
-  window.PanelHooks = { onListupChange: () => { if (pmode === "kw" && kwData) renderGrid(kwData); }, log };
+  window.PanelHooks = { onListupChange: () => { const d = cur(); if (d) renderGrid(d); }, log };
   setMode("kw");
   showView("wing");
 })();

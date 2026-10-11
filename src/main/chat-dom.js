@@ -20,9 +20,9 @@ function chatDom(kind, arg) {
     const inputs = all('textarea, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [role="textbox"]').filter((e) => vis(e) && !mine(e));
     const input = inputs.sort((a, b) => area(b) - area(a))[0] || null;
     const ir = input && input.getBoundingClientRect();
-    const sendBtn = all('button, [role="button"], a, span, div').filter((e) => vis(e) && !mine(e) && e.children.length <= 2 && /^(发送|發送|send)\s*(\(s\))?$/i.test((e.innerText || "").trim())).pop() || null;
+    const sendBtn = all('button, [role="button"], a, span, div').filter((e) => vis(e) && !mine(e) && e.children.length <= 2 && /^(发送|發送|send|보내기|전송|발송)\s*(\(s\))?$/i.test((e.innerText || "").trim())).pop() || null;
     // 입력칸 위 상품 카드의 "发送链接(링크 보내기)" — 어떤 상품을 묻는지 판매자에게 먼저 보여 준다
-    const linkBtn = all('button, [role="button"], a, span, div').filter((e) => vis(e) && !mine(e) && e.children.length <= 2 && /^(发送链接|發送鏈接|发送商品|发送宝贝)$/.test((e.innerText || "").trim())).pop() || null;
+    const linkBtn = all('button, [role="button"], a, span, div').filter((e) => vis(e) && !mine(e) && e.children.length <= 2 && /^(发送链接|發送鏈接|发送商品|发送宝贝|링크\s*보내기|링크\s*전송|링크\s*발송|상품\s*보내기)$/.test((e.innerText || "").trim())).pop() || null;
     const blocks = all("div, ul, section, main").filter((e) => vis(e) && !mine(e));
     const above = (e) => { if (!ir) return true; const r = e.getBoundingClientRect(); return r.bottom <= ir.top + 12 && r.right > ir.left + 10 && r.left < ir.right - 10; };
     const txt = (e) => (e.innerText || "").length;
@@ -39,7 +39,7 @@ function chatDom(kind, arg) {
 
   if (kind === "contact") { // 상품 페이지: 판매자 연락 버튼과 회사 이름
     const shown = (e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4 && getComputedStyle(e).visibility !== "hidden"; };
-    const TXT = /^(旺旺|旺旺在线|旺旺咨询|联系供应商|联系卖家|联系商家|联系客服|在线咨询|立即咨询|咨询|客服|和我联系|联系我们|找商家|问商家)$/;
+    const TXT = /^(旺旺|旺旺在线|旺旺咨询|联系供应商|联系卖家|联系商家|联系客服|在线咨询|立即咨询|咨询|客服|和我联系|联系我们|找商家|问商家|문의|문의하기|판매자\s*문의|고객\s*서비스|고객\s*센터|상담|온라인\s*상담|연락하기|판매자\s*연락|공급업체\s*연락)$/; // 1688 한국어판: "문의" / "고객 서비스"
     const el = [...document.querySelectorAll("a, button, [role=button], span, div")].filter((e) => !mine(e) && e.children.length <= 3 && TXT.test((e.innerText || "").trim())).find(shown)
       || [...document.querySelectorAll('[class*="wangwang" i], [class*="ww-light" i], [class*="contact" i] a, [data-spm*="wangwang" i], a[href*="amos"], a[href*="def_cbu_web_im"]')].find(shown) || null;
     const company = ([...document.querySelectorAll('[class*="company-name" i], [class*="companyName"], [class*="shop-name" i], [class*="shopName"], [class*="seller-name" i]')].map((e) => (e.innerText || "").trim()).find((t) => t && t.length < 60)) || "";

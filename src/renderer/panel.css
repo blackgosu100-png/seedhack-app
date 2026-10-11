@@ -9,6 +9,8 @@
   --warn: #d97706; --warn-bg: #fffaeb; --warn-bd: #fedf89;
   --stop: #dc2626; --stop-bg: #fef3f2; --stop-bd: #fecdca;
   --cyan: #0e7490; --info: #2563eb;
+  /* 쿠팡 화면에서 읽은 값(가격·별점·리뷰)은 쿠팡 상품 페이지와 같은 색 — 씨드핵 색(초록=판정)과 섞이지 않게 */
+  --cp-red: #ae0000; --cp-red-bg: #fff1f0; --cp-blue: #346aff; --cp-star: #ffa800;
   /* 사이드바(검은 틀) */
   --side: #0a0c10; --side2: #151a23; --side-line: #1d2430; --side-text: #c9d1dc; --side-dim: #677487; --neon: #3ddc84;
   --sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
@@ -168,16 +170,24 @@ body[data-view="kw"] .card .im, body[data-view="cat"] .card .im { aspect-ratio: 
 .rel.hot { color: #c2410c; } .rel.cold { color: var(--info); }
 .card .ad { margin-top: 6px; padding: 6px 8px; border-radius: 6px; display: grid; gap: 1px; font-size: 10.5px; color: var(--dim); background: var(--deep); border: 1px solid var(--line); }
 .card .ad b { font-size: 11.5px; }
+.card .ad.ref b { color: var(--white); } .card .ad.ref b.dim { color: var(--dim2); font-weight: 600; }
 .card .ad.go { background: var(--go-bg); border-color: var(--go-bd); } .card .ad.go b { color: var(--go); }
 .card .ad.warn { background: var(--warn-bg); border-color: var(--warn-bd); } .card .ad.warn b { color: var(--warn); }
 .card .ad.stop { background: var(--stop-bg); border-color: var(--stop-bd); } .card .ad.stop b { color: var(--stop); }
+.card .en { margin-top: 6px; padding: 6px 8px; border-radius: 6px; display: grid; gap: 1px; font-size: 10.5px; color: var(--dim); background: var(--deep); border: 1px solid var(--line); }
+.card .en > b { font-size: 11.5px; color: var(--go); } .card .en > b small { color: var(--dim); font-weight: 400; margin-left: 4px; }
+.card .en span b { color: var(--go); } .card .en.no > b, .card .en.no span { color: var(--stop); }
 .card .pb { position: absolute; left: 6px; bottom: 6px; background: var(--stop); color: #fff; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 5px; }
 .card .addlist { margin-top: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 0; font-size: 12px; font-weight: 600; color: var(--fg); }
 .card .addlist:hover { border-color: var(--go); color: var(--go); background: var(--go-bg); }
 .card .addlist.in { color: var(--warn); border-color: var(--warn-bd); background: var(--warn-bg); }
 /* 카드 가격 출처: 쿠폰가(쿠팡 화면) / 쿠폰 전(Wing 판매가) */
 .card .pr .ptag { font: 700 10px var(--sans); padding: 0 5px; border-radius: 4px; margin-left: 4px; vertical-align: 1px; }
-.card .pr .ptag.cp { color: var(--go); background: var(--go-bg); }
+.card .pr .cpv.cp { color: var(--cp-red); }
+.card .pr .ptag.cp { color: var(--cp-red); background: var(--cp-red-bg); }
+.card .pr .rv i { font-style: normal; color: var(--dim2); margin-right: 1px; } .card .pr .rv u { text-decoration: none; }
+.card .pr .rv.cp i { color: var(--cp-star); } .card .pr .rv.cp u { color: var(--cp-blue); }
+.cpt { color: var(--cp-red); font-weight: 700; } .cpt-r { color: var(--cp-blue); }
 .card .pr .ptag.nc { color: var(--warn); background: var(--warn-bg); }
 .card .pr s { color: var(--dim2); font: 400 11px var(--mono); margin-left: 3px; }
 @media (prefers-reduced-motion: reduce) { .card, .tl i, .bar2 div { transition: none; } }
@@ -305,3 +315,41 @@ body.present .card .mt { font-size: 12.5px; }
 body[data-view="cat"] .panel { overflow-y: auto; }
 body[data-view="cat"] .grid { flex: none; min-height: auto; overflow: visible; }
 body[data-view="cat"] .console { height: 84px; }
+
+/* 키워드 분석 위쪽 정리: 진행 기록·진행 막대는 접어 두고(📜 기록으로 펼침), 엑셀 저장·개수는 툴바 한 줄로 → 상품 카드가 위로 */
+body[data-view="kw"]:not(.log-open) .console, body[data-view="kw"] .bar2, body[data-view="kw"] .acts { display: none; }
+body[data-view="kw"] .kwbox { padding: 10px 18px 8px; gap: 6px; }
+body[data-view="kw"] .ctrl2 { padding: 6px 18px; }
+body[data-view="kw"] .ctrl2 .counts { margin-left: auto; }
+body[data-view="kw"] .ctrl2 select { margin-left: 0; }
+body[data-view="kw"] .insight { padding-top: 6px; padding-bottom: 6px; }
+body[data-view="kw"] .grid { padding-top: 12px; }
+.logbtn { display: none; font-size: 12px; padding: 4px 9px; }
+body[data-view="kw"] .logbtn { display: inline-flex; }
+.logbtn[aria-pressed="true"] { background: var(--white); color: #fff; border-color: var(--white); }
+
+/* 카테고리 진단도 위쪽 정리(키워드 분석과 같게) */
+body[data-view="cat"]:not(.log-open) .console, body[data-view="cat"] .bar2, body[data-view="cat"] .acts { display: none; }
+body[data-view="cat"] .ctrl2 { padding: 6px 18px; }
+body[data-view="cat"] .ctrl2 .counts { margin-left: auto; }
+body[data-view="cat"] .ctrl2 select { margin-left: 0; }
+body[data-view="cat"] .ctrl2 #bExact { padding: 5px 10px; font-size: 12px; }
+body[data-view="cat"] .logbtn { display: inline-flex; }
+body[data-view="cat"] .insight { padding-top: 6px; padding-bottom: 6px; }
+/* 카테고리 고르기 칸: 고르기만 하는 곳이라 검은 배경 대신 밝은 입력칸(키워드 검색창과 같게) */
+.cascade select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23667085' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center; color: var(--white); border-color: var(--line2); }
+.cascade select, .cascade select option { color: var(--white); }
+.cascade select option { background: #fff; }
+.cascade select:disabled { color: var(--dim2); background-color: var(--deep); opacity: 1; }
+.cascade select:focus, .catpick input:focus { border-color: var(--go); box-shadow: 0 0 0 3px var(--go-bg); }
+.catpick input { background: #fff; color: var(--white); border-color: var(--line2); }
+.catlist { background: #fff; border-color: var(--line2); box-shadow: 0 10px 30px rgb(16 24 40 / .14); }
+.catlist .row { border-bottom-color: var(--surface2, #f1f3f5); }
+.catlist .row:hover, .catlist .row.on { background: var(--go-bg); }
+.catlist .row .d { color: var(--go); }
+.catlist .hint button { border-color: var(--go); color: var(--go); }
+
+/* 카테고리 고르기: 아직 못 고르는 칸·버튼도 반투명 대신 또렷한 회색(고르기 화면은 흐리게 할 이유가 없음) */
+.catpick select:disabled, .catpick button:disabled, .catpick input:disabled { opacity: 1; }
+.cascade select:disabled { color: var(--dim2); background-color: var(--surface2, #f1f3f5); border-color: var(--line); }
+#catGo:disabled { background: var(--surface2, #f1f3f5); border-color: var(--line2); color: var(--dim2); filter: none; }

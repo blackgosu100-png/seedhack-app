@@ -9,9 +9,11 @@
   const IMG = "https://thumbnail6.coupangcdn.com/thumbnails/remote/230x230ex/image/";
   const imgUrl = (p) => (!p ? "" : /^https?:/.test(p) ? p : IMG + String(p).replace(/^\//, ""));
   const pct = (v) => (v == null || !Number.isFinite(v) ? "" : (v * 100).toFixed(1) + "%");
-  const AD = { go: "🟢 광고 시 여유", warn: "🟡 광고 시 빠듯", stop: "🔴 광고 시 적자", off: "광고 안 함" };
+  const AD = { go: "GO · 광고해도 남음", warn: "HOLD · 광고 시 빠듯", stop: "DROP · 광고 시 적자", off: "광고 안 함" };
 
   let rows = [], cfg = { fx: 300, fee: 0.1188, adRate: 0.1 }, saveT = null;
+  const stratBusy = new Set(); // 🧠 판매전략 AI 요청 중인 행
+  let autoSt = { cur: null, q: [], left: 0, paused: false }; // 1688 자동 조사 줄 상태(main이 알려 줌)
   let full = false; // 기본은 "간단 보기"(핵심 칸만), 전체 보기 = 대표님 양식 27열
   try { full = localStorage.getItem("luFull") === "1"; } catch {}
 
@@ -48,7 +50,12 @@
     if (cvr != null && price) maxRoas = (price * cvr * AM.conv) / AM.cpc;
     if (cfg.adRate <= 0) ad = cvr != null ? "off" : null; // 광고 안 함
     else if (cpa != null && unitM != null) ad = AM.judge(cpa, unitM);
-    return { cost, fee, margin, rate, costM, revM, marginM, adM, net, roi, allow, ad, maxRoas, cpa, unitM };
+    // 경쟁사(벤치마킹 상품)가 한 달에 남기는 돈(추정) — 같은 원가·물류비·수수료·광고비 10%로, 경쟁사 판매가 × 경쟁사 월판매량
+    const bp = n(r.benchPrice) ?? price, bm = n(r.benchMonthly);
+    const bUnit = bp != null && cost != null ? bp - cost - logi - bp * cfg.fee : null;
+    const bNet = bUnit != null && bm != null ? bUnit * bm - bp * bm * cfg.adRate : null;
+    const bRoi = bNet != null && cost ? bNet / (cost * bm) : null;
+    return { cost, fee, margin, rate, costM, revM, marginM, adM, net, roi, allow, ad, maxRoas, cpa, unitM, bp, bm, bUnit, bNet, bRoi };
   }
   function verdict(r, c) {
     if (n(r.price) == null) return ["", "판매가를 넣으세요"];
@@ -91,13 +98,13 @@
     ["name", "상품명", "txt", 180],
     ["cnUrl", "1688 찾기 · 중국URL", "url", 150], ["yuan", "위안", "num", 66], ["price", "판매가", "num", 84],
     ["cat", "카테고리", "cat", 112], ["dims", "크기 mm (가로×세로×높이)", "in", 150], ["wt", "무게 g", "num", 70], ["rgSize", "사이즈", "c", 84],
-    ["vd", "한 줄 판정", "c", 220], ["allow", "최대 위안", "c", 78],
+    ["vd", "한 줄 판정", "c", 220], ["allow", "최대 위안", "c", 78], ["bNet", "경쟁사 월 순이익", "c", 112], ["strat", "🧠 판매전략", "strat", 190],
     byF.rate, byF.margin, byF.cost, byF.fee, ["logi", "입출고비+배송비", "num", 104],
     ["monthly", "내 예상 월판매", "num", 92], byF.net, byF.roi,
     ["ad", "광고 판정 (가정)", "c", 120],
     ["keyword", "대표키워드", "in", 96], byF.benchUrl,
   ];
-  const SIMPLE_GROUPS = [["상품", 2], ["입력 — 🔍1688로 위안 찾기", 3], ["🚚 물류 — 크기를 넣으면 입출고비 자동", 4], ["결론", 2], ["개당 원가·마진", 6], ["월 손익 (가정)", 3], ["광고", 1], ["참고", 2]];
+  const SIMPLE_GROUPS = [["상품", 2], ["입력 — 🔍1688로 위안 찾기", 3], ["🚚 물류 — 크기를 넣으면 입출고비 자동", 4], ["결론", 4], ["개당 원가·마진", 6], ["월 손익 (가정)", 3], ["광고", 1], ["참고", 2]];
   const EXT = new Set(["bSales", "bViews", "bCvr", "ad", "cpa"]);
   let COLS = full ? TEMPLATE : SIMPLE, GROUPS = full ? TEMPLATE_GROUPS : SIMPLE_GROUPS;
   const PCT = new Set(["rate", "roi"]);
@@ -106,6 +113,7 @@
     cost: "위안 × 원가 계수(기본 300 — 운송·관세 포함 암산값)", size: "가로+세로+높이(cm) — 물류비 판단 참고",
     logi: "로켓그로스 입출고비+배송비 (기본 2,200원, 상품 크기에 따라 직접 수정)", fee: "판매가 × 쿠팡 수수료율",
     rate: "마진 ÷ 판매가", monthly: "내가 한 달에 팔 것으로 예상하는 개수 (벤치마킹 1등 판매량은 참고만)",
+    bNet: "경쟁사(벤치마킹 상품)가 한 달에 남기는 돈 추정 = (경쟁사 판매가 − 원가 − 물류비 − 수수료) × 경쟁사 월판매량 − 광고비. 같은 원가로 본 참고값",
     net: "월 마진 − 광고비 (가정)", roi: "월 순이익 ÷ 월 원가 (넣은 돈 대비 남는 돈)",
     ad: "내 마진율과 벤치마킹 전환율·클릭비용 가정으로 계산한 광고 여지 — 실제 광고 성과와 다를 수 있습니다",
     cpa: "광고로 1개 팔 때 드는 광고비 = 클릭비용 ÷ (전환율 × 광고 전환 비율)", vd: "개당 남는 돈 기준 한 줄 결론",
@@ -128,9 +136,14 @@
       const mark = e.total != null && (e.estimated || e.noWeight) ? " *" : "";
       return `<td class="calc rgs ${e.total != null ? (e.estimated ? "mid" : "good") : e.error && e.error !== "크기 없음" ? "bad" : ""}" data-c="rgSize" title="${esc(tip)}">${esc(t)}${mark}</td>`;
     }
+    if (k === "strat") {
+      const st = r.aiStrat, busy = stratBusy.has(r.id);
+      return `<td class="strat">${busy ? `<span class="sbusy">AI가 전략 짜는 중…</span>` : st ? `<button type="button" class="sview ${st.go ? "go" : "no"}" data-sv="${ri}" title="${esc(st.summary)}">${st.go ? "진입" : "보류"} · ${esc(st.summary.slice(0, 26))}…</button>` : ""}<button type="button" class="sbtn" data-st="${ri}" ${busy ? "disabled" : ""} title="${n(r.yuan) == null ? "위안(1688 원가)을 먼저 넣으면 더 정확합니다" : "이 행의 숫자로 AI가 판매전략을 짭니다 (1분 안팎)"}">${st ? "↻" : "🧠 전략 짜기"}</button></td>`;
+    }
     if (k === "c" && f === "vd") { const [cls, t] = verdict(r, c); return `<td class="calc vd ${cls}" data-c="vd">${t}</td>`; }
     if (k === "c" && f === "ad") return `<td class="calc adj ${c.ad || ""}" data-c="ad" title="${c.ad && c.ad !== "off" ? `1개당 광고비 약 ${won(c.cpa)}원 · 1개 마진 ${won(c.unitM)}원${c.margin == null ? "(판매가×목표 마진 가정)" : ""} · ${window.AdModel.note()}` : ""}">${c.ad ? AD[c.ad] : ""}</td>`;
     if (k === "c" && f === "cpa") return `<td class="calc num ${c.cpa != null && c.unitM != null && c.cpa > c.unitM ? "bad" : ""}" data-c="cpa">${won(c.cpa)}</td>`;
+    if (k === "c" && f === "bNet") return `<td class="calc num ${c.bNet != null && c.bNet < 0 ? "bad" : c.bRoi >= 1 ? "good" : ""}" data-c="bNet" title="${c.bNet == null ? "위안을 넣으면(🔍1688 자동 조사) 경쟁사가 한 달에 남기는 돈을 추정합니다" : esc(`경쟁사 판매가 ${won(c.bp)}원 × 월 ${won(c.bm)}개 · 개당 ${won(c.bUnit)}원 남김 − 광고비 ${Math.round(cfg.adRate * 100)}% · ROI ${pct(c.bRoi)}\n같은 원가·물류비로 계산한 추정치 — 참고용`)}">${c.bNet == null ? "" : won(c.bNet)}</td>`;
     if (k === "c" && f === "allow") return `<td class="calc num ${c.allow != null && c.allow <= 0 ? "bad" : ""}" data-c="allow">${c.allow == null ? "" : c.allow <= 0 ? "불가" : "¥" + c.allow.toFixed(1)}</td>`;
     if (k === "c") {
       const x = c[f];
@@ -155,10 +168,14 @@
       return `<td class="in"><select data-r="${ri}" data-f="${f}"><option value="">${opts ? "선택…" : "-"}</option>${opts}${v && !(r.subs || []).some((s) => s.kw === v) ? `<option selected>${esc(v)}</option>` : ""}</select></td>`;
     }
     const isNum = k === "num";
+    // 🎯 1688 자동 조사 표시: 조사 중/대기 · 끝나면 확인됨(초록)/추정(노랑)
+    const at = f !== "yuan" ? "" : autoSt.cur?.rowId === r.id ? `<span class="atag run" title="1688 자동 조사 중">조사 중</span>`
+      : autoSt.q.includes(r.id) ? `<span class="atag run" title="1688 자동 조사 대기">대기</span>`
+      : r.cnAuto ? `<span class="atag ${r.cnAuto.sure && !r.cnAuto.warn ? "" : "est"}" title="${esc(["1688 자동 조사", r.cnAuto.how, r.cnAuto.option ? "옵션: " + r.cnAuto.option : "", r.cnAuto.warn ? "⚠ " + r.cnAuto.warn : "", r.cnAuto.sure ? "" : "추정값 — 🔍1688로 옵션을 확인하세요"].filter(Boolean).join("\n"))}">${r.cnAuto.sure ? "자동" : "추정"}${r.cnAuto.warn ? "⚠" : ""}</span>` : "";
     const extra = k === "url" ? `${v ? `<a class="go" href="${esc(v)}" target="_blank" title="열기">↗</a>` : ""}<button type="button" class="cnbtn" data-cn="${ri}" title="이 상품 사진으로 1688 이미지 검색 → 상품 페이지에서 '리스트업에 넣기'를 누르면 위안·중국URL이 채워집니다">🔍1688</button>` : "";
     const ph = k === "url" ? "1688 주소" : f === "monthly" && r.benchMonthly ? `1등 ${won(r.benchMonthly)}` : f === "yuan" ? "¥" : f === "dims" ? "200x150x80" : f === "wt" ? "g" : "";
     const autoCls = f === "logi" && r.logiAuto !== false && r.rg?.total != null ? "auto" : "";
-    return `<td class="in ${isNum ? "num" : ""} ${k === "txt" ? "long" : ""}"><input class="${autoCls}" data-r="${ri}" data-f="${f}" ${isNum ? 'inputmode="decimal"' : ""} value="${esc(isNum && v != null && v !== "" ? (+v).toLocaleString("ko-KR") : v ?? "")}" placeholder="${ph}" title="${esc(f === "monthly" && r.benchMonthly ? `벤치마킹 1등 상품 월 판매 약 ${won(r.benchMonthly)}개 — 신규 진입은 보통 이보다 훨씬 적습니다` : v ?? "")}">${extra}</td>`;
+    return `<td class="in ${isNum ? "num" : ""} ${k === "txt" ? "long" : ""}"><input class="${autoCls}" data-r="${ri}" data-f="${f}" ${isNum ? 'inputmode="decimal"' : ""} value="${esc(isNum && v != null && v !== "" ? (+v).toLocaleString("ko-KR") : v ?? "")}" placeholder="${ph}" title="${esc(f === "monthly" && r.benchMonthly ? `벤치마킹 1등 상품 월 판매 약 ${won(r.benchMonthly)}개 — 신규 진입은 보통 이보다 훨씬 적습니다` : v ?? "")}">${extra}${at}</td>`;
   }
   function rowHtml(r, ri) {
     const c = calc(r);
@@ -193,7 +210,7 @@
       const tmp = document.createElement("tbody");
       tmp.innerHTML = `<tr>${cellHtml(rows[ri], ri, col, c)}</tr>`;
       const nt = tmp.querySelector("td");
-      td.className = nt.className; td.textContent = nt.textContent;
+      td.className = nt.className; td.textContent = nt.textContent; td.title = nt.title; // 설명(경쟁사 순이익 근거 등)도 같이 갱신
     });
     totals();
   }
@@ -211,6 +228,7 @@
       const p = $("luBody").querySelector(`input[data-r="${ri}"][data-f="price"]`);
       if (p) p.value = val === "" ? "" : (+val).toLocaleString("ko-KR");
     }
+    if (f === "strategy") r.strategyAuto = false; // 직접 쓴 판매전략은 AI가 덮지 않는다
     if (f === "price" && (r.myPrice === "" || r.myPrice == null || String(r.myPrice) === String(r.price))) r.myPrice = val; // 양식의 "내판매가"도 같이
     if (f === "logi") r.logiAuto = val === "" ? true : false;
     if (f === "subKw") {
@@ -265,7 +283,7 @@
     if (!b) return;
     const r = rows[+b.dataset.cn];
     if (!r.id) r.id = Date.now() + Math.random();
-    api.invoke("cn:search", { rowId: r.id, name: r.name || r.keyword || "", img: r.img || "", allow: calc(r).allow, price: r.price }); // 허용 소싱가 → 1688 추천 점수의 가격 기준
+    api.invoke("cn:search", { rowId: r.id, name: r.name || r.keyword || "", keyword: r.keyword || "", img: r.img || "", allow: calc(r).allow, price: r.price }); // 허용 소싱가 → 1688 추천 점수의 가격 기준
   });
   // 쿠팡 화면 사진 위 🔍1688 → 리스트업에 담고(이미 있으면 그 행) 바로 1688 이미지 검색
   api.on("listup:add1688", async (p) => {
@@ -285,14 +303,82 @@
       window.PanelHooks?.log("go", `☆ 리스트업에 담음 · ${esc(String(p.name).slice(0, 26))} → 1688 이미지 검색`);
       window.PanelHooks?.onListupChange();
     }
-    api.invoke("cn:search", { rowId: r.id, name: r.name || "", img: r.img || p.img || "", allow: calc(r).allow, price: r.price });
+    api.invoke("cn:search", { rowId: r.id, name: r.name || "", keyword: r.keyword || "", img: r.img || p.img || "", allow: calc(r).allow, price: r.price });
+  });
+  // 🎯 1688 자동 조사 줄 상태 · 끝 알림
+  api.on("auto:state", (st) => {
+    autoSt = { cur: st.cur, q: st.queue || [], left: st.left, paused: st.paused };
+    const el = $("luAuto");
+    const on = !!(st.cur || st.left);
+    el.hidden = !on;
+    if (on) {
+      el.innerHTML = st.paused ? `⏸ 1688 자동 조사 일시정지 · 남은 ${st.left}개 <button type="button" data-a="resume">▶ 다시 시작</button><button type="button" data-a="stop">■ 비우기</button>`
+        : `🔎 1688 자동 조사 중${st.cur ? ` · ${esc(String(st.cur.name).slice(0, 18))}` : " · 잠깐 쉬는 중"}${st.left ? ` · 대기 ${st.left}개` : ""} <button type="button" data-a="stop">■ 멈춤</button>`;
+    }
+    render();
+  });
+  // 🧠 판매전략 AI — 이 행의 사실(쿠팡·Wing 실측, 1688 원가)과 계산값만 보낸다. 가격 제안의 남는 돈은 앱이 다시 계산해서 보여 준다
+  const unitAt = (r, p, extra = 0) => { const c = calc(r); if (c.cost == null || !(p > 0)) return null; return p - c.cost - (n(r.logi) ?? 0) - p * cfg.fee - p * cfg.adRate - extra; };
+  function stratInput(r) {
+    const c = calc(r);
+    return { name: r.name || "", keyword: r.keyword || "", kwVol: r.kwVol ?? null, benchPrice: n(r.benchPrice), bSales: n(r.bSales), bViews: n(r.bViews), bCvr: n(r.bCvr),
+      bReviews: n(r.bReviews), bRating: n(r.bRating), bShip: r.bShip || "", band: r.band || null, minPrice: n(r.minPrice), maxPrice: n(r.maxPrice),
+      yuan: n(r.yuan), cnAuto: r.cnAuto || null, fx: cfg.fx, cost: c.cost, logi: n(r.logi) ?? 0, dims: r.dims || "", fee: cfg.fee, adRate: cfg.adRate,
+      bUnitAd: unitAt(r, n(r.benchPrice)), bNet: c.bNet, bRoi: c.bRoi, recPrice: n(r.recPrice) ?? n(r.price), recUnit: unitAt(r, n(r.recPrice) ?? n(r.price)), reason: r.reason || "" };
+  }
+  async function runStrat(r) {
+    if (stratBusy.has(r.id)) return;
+    stratBusy.add(r.id); render();
+    const res = await api.invoke("ai:strategy", stratInput(r)).catch((e) => ({ error: e?.message || String(e) }));
+    stratBusy.delete(r.id);
+    if (res?.ok) {
+      const st = res.result;
+      r.aiStrat = { ...st, ts: Date.now(), model: res.model };
+      // 엑셀 "판매전략" 칸에 들어갈 글(직접 쓴 내용이 있으면 덮지 않음)
+      if (!r.strategy || r.strategyAuto) { r.strategy = [st.summary, ...st.tactics.map((t) => `[${t.kind}] ${t.action}`), `초도 ${st.first_order_qty}개`].join(" / "); r.strategyAuto = true; }
+      save(); render(); showStrat(r);
+    } else { render(); window.PanelHooks?.log("stop", `✕ 판매전략 AI 실패 · ${esc(res?.error || "")}`); alert(`판매전략 AI 실패: ${res?.error || ""}`); }
+  }
+  function showStrat(r) {
+    const st = r.aiStrat; if (!st) return;
+    let m = $("stratModal");
+    if (!m) { m = document.createElement("div"); m.id = "stratModal"; document.body.appendChild(m); m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-x]")) m.hidden = true; }); }
+    const c = calc(r), inv = c.cost != null ? st.first_order_qty * c.cost : null;
+    const sp = st.tactics.find((t) => t.price_won)?.price_won || n(r.price); // 가격 제안이 있으면 사은품 등 비용도 그 가격 기준으로
+    const lis = st.tactics.map((t) => {
+      const u = t.price_won ? unitAt(r, t.price_won, t.cost_won || 0) : t.cost_won ? unitAt(r, sp, t.cost_won) : null;
+      const calcTxt = u == null ? "" : `<em class="${u > 0 ? "ok" : "bad"}">앱 계산: ${t.price_won ? `${won(t.price_won)}원에 팔면` : `${won(sp)}원에 팔고 비용 ${won(t.cost_won)}원 빼면`} 개당 ${won(u)}원</em>`;
+      return `<li><b>${esc(t.kind)}</b><div><p>${esc(t.action)}</p><small>근거: ${esc(t.why)}</small><small>효과: ${esc(t.effect)}</small>${calcTxt}</div></li>`;
+    }).join("");
+    m.innerHTML = `<div class="sm-box"><div class="sm-hd"><b>🧠 판매전략</b><span>${esc(String(r.name || "").slice(0, 40))}</span><button type="button" data-x>✕</button></div>
+      <p class="sm-sum ${st.go ? "go" : "no"}"><b>${st.go ? "진입해 볼 만함" : "보류 권장"}</b> ${esc(st.summary)}</p>
+      <ol class="sm-tac">${lis}</ol>
+      <p class="sm-qty">초도 <b>${st.first_order_qty}개</b>${inv != null ? ` · 원가 투자 약 ${won(inv)}원 (1688 원가만, 물류 별도)` : ""}</p>
+      ${st.check_first?.length ? `<div class="sm-list"><b>먼저 확인할 것</b><ul>${st.check_first.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${st.risks?.length ? `<div class="sm-list risk"><b>위험</b><ul>${st.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <p class="sm-foot">AI 제안은 앱이 모은 숫자만 근거로 합니다 · 금액은 앱이 다시 계산 · ${esc(st.model || "")} · ${new Date(st.ts).toLocaleString("ko-KR")}</p></div>`;
+    m.hidden = false;
+  }
+  $("luBody").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-st]"), v = e.target.closest("button[data-sv]");
+    if (b) runStrat(rows[+b.dataset.st]);
+    else if (v) showStrat(rows[+v.dataset.sv]);
+  });
+  $("luAuto").addEventListener("click", (e) => { const b = e.target.closest("button[data-a]"); if (b) api.invoke("cn:queueAct", b.dataset.a); });
+  api.on("auto:done", (d) => {
+    if (!d.ok) return;
+    const body = `${String(d.name).slice(0, 30)} → ¥${d.yuan}${d.sure ? "" : " (추정)"}${d.allow ? ` · 허용 ¥${(+d.allow).toFixed(1)} ${d.verdict === "ok" ? "이하 ✔" : "초과 ✕"}` : ""}${d.warn ? ` · ⚠ ${d.warn}` : ""}`;
+    try { new Notification("1688 원가 찾음", { body, silent: false }); } catch {}
   });
   // 1688 상품 페이지에서 "리스트업에 넣기" → 그 행에 위안·중국URL 채우기
-  api.on("listup:fill", ({ rowId, cnUrl, yuan, specs }) => {
+  api.on("listup:fill", ({ rowId, cnUrl, yuan, specs, auto }) => {
     const r = rows.find((x) => x.id === rowId);
     if (!r) return;
+    if (auto && r.yuan !== "" && r.yuan != null && !r.cnAuto) return; // 직접 넣은 위안은 자동 조사가 덮지 않는다
     r.cnUrl = cnUrl;
     if (yuan != null) r.yuan = String(yuan);
+    r.cnAuto = auto || null; // 사람이 1688 상품 페이지에서 넣으면 자동 표시를 지운다
+    setTimeout(() => window.PanelHooks?.onListupChange(), 0); // 검색 카드의 "경쟁사 월 순이익"도 같이 갱신
     // 1688 상세에서 읽은 크기(mm)·무게(g): 비어 있을 때만 채운다(직접 넣은 값은 유지) → 입출고비 자동 계산
     if (specs) { if (specs.dims && !r.dims) r.dims = specs.dims; if (specs.wt && !r.wt) r.wt = specs.wt; if (specs.cartonQty && !r.cartonQty) r.cartonQty = specs.cartonQty; }
     render(); save();
@@ -330,7 +416,11 @@
     clearTimeout(saveT);
     await api.invoke("listup:save", rows);
     $("luXlsx").disabled = true;
-    const r = await api.invoke("listup:export", rows.map((x) => { const c = calc(x); return { ...x, ad: c.ad, maxRoas: c.maxRoas, cpa: c.cpa }; }));
+    // 🎤 발표 모드: 엑셀 저장 해커 화면 — 저장 위치를 고르는 동안 뜨고, 저장되면 실제 행을 훑는다
+    const SIGV = { good: "go", mid: "warn", bad: "stop" };
+    const sx = window.AiScan?.sheet(rows.map((x) => { const c = calc(x), [cls, txt] = verdict(x, c); return { name: x.name || x.keyword, img: x.img, keyword: x.keyword, yuan: n(x.yuan), price: n(x.price), margin: c.margin, rate: c.rate, sig: SIGV[cls] || "", note: String(txt || "").replace(/^[🟢🟡🔴]\s*/u, "") }; }));
+    const r = await api.invoke("listup:export", rows.map((x) => { const c = calc(x); return { ...x, ad: c.ad, maxRoas: c.maxRoas, cpa: c.cpa }; })).catch((e) => ({ error: e?.message || String(e) }));
+    if (sx) { if (r?.path) sx.saved(r.path); else if (r?.cancelled) sx.cancel(); else sx.fail(r?.error || "저장하지 못했습니다"); }
     $("luXlsx").disabled = false;
     if (r?.path) window.PanelHooks?.log("go", `■ 리스트업 엑셀 저장: ${esc(r.path)}`);
   });
@@ -342,10 +432,18 @@
 
   window.Listup = {
     has: (pid) => pid != null && rows.some((r) => String(r.pid) === String(pid)),
+    // 검색 카드용: 이 상품을 리스트업에 담아 원가(위안)를 알면 경쟁사 월 순이익 추정
+    bench(pid) { const r = rows.find((x) => String(x.pid) === String(pid)); if (!r || n(r.yuan) == null) return null; const c = calc(r); return c.bNet == null ? null : { net: c.bNet, unit: c.bUnit, roi: c.bRoi, yuan: n(r.yuan), auto: r.cnAuto || null }; },
     add(row) {
-      rows.push({ id: Date.now() + Math.random(), reason: "", strategy: "", cnUrl: "", yuan: "", size: "", logi: 2200, logiAuto: true, cat: "", dims: "", wt: "",
-        ...row, myPrice: row.benchPrice ?? "", price: row.benchPrice ?? "" });
+      const nr = rows.push({ id: Date.now() + Math.random(), reason: "", strategy: "", cnUrl: "", yuan: "", size: "", logi: 2200, logiAuto: true, cat: "", dims: "", wt: "",
+        ...row, myPrice: row.recPrice ?? row.benchPrice ?? "", price: row.recPrice ?? row.benchPrice ?? "" }); // 🎯 추천 판매가(경쟁사보다 체감 할인)가 있으면 그 값
       render(); save();
+      return rows[nr - 1];
+    },
+    // 🎯 담기 → 1688 자동 조사 줄에 넣기(사진 있는 행만). 끝나면 위안 칸이 채워지고 알림
+    queue1688(r) {
+      if (!r?.img || (r.yuan !== "" && r.yuan != null)) return;
+      api.invoke("cn:queue", { rowId: r.id, name: r.name || r.keyword || "", keyword: r.keyword || "", img: r.img, allow: calc(r).allow, price: r.price }).catch(() => {});
     },
     render,
     async reloadCfg() { cfg = await api.invoke("calc:get"); render(); },

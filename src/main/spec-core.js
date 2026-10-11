@@ -1,6 +1,7 @@
 // 1688 상품 페이지의 상세 설명·속성표 글자에서 크기·무게·박스 수량을 읽는다 (순수 로직, Node로 테스트 가능)
 // 리스트업의 🚚 물류 칸(크기 mm 가로×세로×높이, 무게 g)에 넣어 로켓그로스 입출고비를 자동 계산하게 한다.
 // 상세 글에 "一层 55*15*10CM 二层 55.5*15*10cm"처럼 변형별 값이 섞여 있으면, 고른 옵션명과 겹치는 변형(一层/二层, 大/小 …)을 고른다.
+import { normKoSpecs } from "./ko-norm.js";
 
 const DIM_RE = /(\d+(?:\.\d+)?)\s*[*×xX＊]\s*(\d+(?:\.\d+)?)\s*[*×xX＊]\s*(\d+(?:\.\d+)?)\s*(mm|MM|cm|CM|厘米|毫米|m\b|M\b)?/g;
 const WT_RE = /(\d+(?:\.\d+)?)\s*(kg|KG|Kg|公斤|千克|g|G|克|斤)/g;
@@ -56,8 +57,8 @@ function pickByOption(list, optionLabel) {
 
 // text: 상세 설명 글자, attrText: 속성표 글자("重量(g) 1385 箱装数量 16 …"), optionLabel: 고른 옵션명
 export function parseSpecs({ text = "", attrText = "", optionLabel = "" } = {}) {
-  const t = String(text).replace(/\r/g, "").replace(/[ \t]+/g, " ");
-  const a = String(attrText).replace(/\s+/g, " ");
+  const t = normKoSpecs(String(text).replace(/\r/g, "").replace(/[ \t]+/g, " ")); // 1688 한국어판 라벨(포장 크기·무게 등)도 같은 규칙으로
+  const a = normKoSpecs(String(attrText).replace(/\s+/g, " "));
   const out = { pkgMm: null, productMm: null, g: null, cartonQty: null, source: [], ambiguous: false };
 
   // 1) 포장 크기(로켓그로스 입출고는 포장 기준) → 없으면 제품 크기

@@ -3,6 +3,8 @@
 // 상품 페이지에서 읽은 "진짜 옵션 가격"(sku-core)이 오면 가격 점수(30점)를 더해 최종 🟢🟡🔴를 낸다.
 // 결과 카드의 ¥는 옵션 중 최저가(낚시 가능)라 1차 점수에는 쓰지 않고 참고로만 보여준다.
 
+import { normKoCard } from "./ko-norm.js";
+
 export const DEFAULT_WEIGHTS = {
   price: 30, repeat: 25, sales: 20, years: 10, rank: 10,
   bonus: 5,                    // 랭킹 배지 / 동일상품 대비 저렴 / 7일 무조건 반품 / 1件起批 각각
@@ -16,7 +18,7 @@ const num = (s) => { const m = String(s || "").match(/\d+(?:\.\d+)?/); return m 
 // 카드 innerText 줄 목록 → 구조화. 1688은 가격을 "¥" "6" ".8" 세 줄로 쪼개 놓는다.
 export function parseCard(lines, extra = {}) {
   const t = (Array.isArray(lines) ? lines : String(lines || "").split("\n")).map((s) => s.trim()).filter(Boolean);
-  const joined = t.join(" ");
+  const joined = normKoCard(t.join(" ")); // 1688 한국어판 글자도 같은 규칙으로 읽는다
   const price = (() => { const m = joined.match(/[¥￥]\s*(\d+)(?:\s*\.\s*(\d+))?/); return m ? Number(m[1] + (m[2] ? "." + m[2] : "")) : null; })();
   const salesM = joined.match(/(\d+(?:\.\d+)?)\s*(万)?\+?\s*件(?!\s*起批)/);
   const sales = salesM ? Math.round(Number(salesM[1]) * (salesM[2] ? 10000 : 1)) : null;
@@ -76,10 +78,37 @@ export function scoreCard(c, { allow = null, realPrice = null, weights = DEFAULT
   return { score, max, parts, penalty, verdict, notes, priceKnown, priceOk };
 }
 
+// ---- 같은 상품인지: 쿠팡 상품명·대표키워드 vs 1688 카드 제목 (한글 두 글자 조각 겹침) ----
+// 1688 이미지 검색은 사진 속 물체 하나(예: 빨래건조대의 기둥)만 잘라 찾기도 해서 엉뚱한 상품(TV 거치대)이 섞인다.
+// 판매량·재구매율 점수만 보면 그런 상품이 위로 올라오므로, 제목이 한국어(1688 한국어판)일 때 겹침이 낮은 카드는 후보에서 뺀다.
+const grams = (s) => { const out = new Set(); for (const w of String(s || "").replace(/\s+/g, "").match(/[가-힣]{2,}/g) || []) for (let i = 0; i + 1 < w.length; i++) out.add(w.slice(i, i + 2)); return out; };
+export function relevance(title, { name = "", keyword = "" } = {}) {
+  const T = grams(title);
+  if (T.size < 2) return null; // 제목이 중국어 등 → 판단 못 함
+  const hit = (S) => (S.size ? [...S].filter((g) => T.has(g)).length / S.size : null);
+  const k = hit(grams(keyword)), n = hit(grams(name));
+  if (k == null && n == null) return null;
+  return k == null ? n : n == null ? k : Math.max(k, 0.6 * k + 0.4 * n);
+}
+// rel 목록 → 통과 기준. 한국어 제목이 절반 미만이거나 기준을 넘는 카드가 너무 적으면 거르지 않는다(규칙이 틀렸을 때 다 지우는 것보다 낫다)
+export function relevanceGate(rels) {
+  const known = rels.filter((r) => r != null);
+  if (known.length < Math.max(5, rels.length / 2)) return null;
+  const best = Math.max(...known);
+  if (best < 0.2) return null;
+  const cut = Math.max(0.15, Math.min(0.3, best * 0.4));
+  return known.filter((r) => r >= cut).length >= 3 ? cut : null;
+}
+
 export function rankCards(cards, opts = {}) {
   const prices = cards.map((c) => c.price).filter((p) => p > 0).sort((a, b) => a - b);
   const medianPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
-  const scored = cards.map((c) => ({ ...c, ...scoreCard(c, { ...opts, medianPrice, realPrice: c.realPrice ?? null }) }));
+  const rels = cards.map((c) => relevance(c.titleKo || c.title, opts.target || {})); // titleKo: 중국어 제목을 번역한 것
+  const cut = opts.target ? relevanceGate(rels) : null;
+  const scored = cards.map((c, i) => {
+    if (cut != null && (rels[i] == null || rels[i] < cut)) return { ...c, rel: rels[i], score: 0, parts: {}, verdict: "exclude", notes: ["다른 상품 의심 — 쿠팡 상품명과 제목이 거의 안 겹침"], excluded: true, offTarget: true };
+    return { ...c, rel: rels[i], ...scoreCard(c, { ...opts, medianPrice, realPrice: c.realPrice ?? null }) };
+  });
   // 같은 회사는 가장 점수 높은 상품 하나만
   const seen = new Set(); const out = [];
   for (const s of scored.filter((x) => !x.excluded).sort((a, b) => b.score - a.score || (a.rank ?? 99) - (b.rank ?? 99))) {
@@ -89,3 +118,23 @@ export function rankCards(cards, opts = {}) {
 }
 
 export const VERDICT_KO = { green: "🟢 샘플 후보", yellow: "🟡 비교 대상", red: "🔴 보류", candidate: "⚪ 후보 (가격 확인 전)", low: "· 낮음", exclude: "✕ 제외" };
+
+// 원가로 쓸 1688 가격 — list: 추천 순서대로 [{ price, real(상품 페이지에서 옵션가 확인), sure(옵션이 확실) }]
+//  ① 1순위 옵션가가 확실하면 그 값 ② 애매하면 확인된 후보들의 중간값(추정) ③ 확인 전이면 1순위 목록가(추정)
+//  1순위가 확인된 다른 후보들 중간값보다 30% 넘게 싸면 경고(낚시 옵션·다른 품질 의심)
+export function decideCost(list) {
+  const c = (list || []).filter((x) => x && x.price > 0);
+  if (!c.length) return null;
+  const known = c.filter((x) => x.real).map((x) => x.price).sort((a, b) => a - b);
+  const med = known.length ? (known.length % 2 ? known[(known.length - 1) / 2] : (known[known.length / 2 - 1] + known[known.length / 2]) / 2) : null;
+  const first = c[0];
+  let out;
+  if (first.real && first.sure) out = { yuan: first.price, sure: true, how: "1순위 확인된 옵션가" };
+  else if (med != null) out = { yuan: med, sure: false, how: `확인된 ${known.length}개 중간값${first.real ? " (1순위 옵션이 애매)" : " (1순위 확인 전)"}` };
+  else out = { yuan: first.price, sure: false, how: "목록 최저가 · 옵션 확인 전" };
+  const others = c.slice(1).filter((x) => x.real).map((x) => x.price).sort((a, b) => a - b);
+  const oMed = others.length ? others[Math.floor((others.length - 1) / 2)] : null;
+  if (first.real && oMed != null && first.price < oMed * 0.7) out.warn = `1순위 ¥${first.price}가 다른 후보(¥${oMed})보다 ${Math.round((1 - first.price / oMed) * 100)}% 싸요 — 옵션·품질 확인`;
+  if (known.length >= 2) out.range = [known[0], known[known.length - 1]];
+  return out;
+}

@@ -34,3 +34,13 @@ export async function lookup(keyword) {
   const longer = d.prepare("select * from k where keyword like ? and keyword <> ? and m1 >= 100 order by m1 desc limit 15").all(`%${kw}%`, kw).map(row);
   return { month, main, subs: longer };
 }
+
+// 💡 키워드 추천: keyword-pipeline이 같은 폴더에 복사해 둔 keyword_candidates_YYYY-MM.json(정제·그룹 분류 끝난 후보) 중 최신 달
+export function recommend() {
+  try {
+    const files = fs.readdirSync(DIR).filter((f) => /^keyword_candidates_\d{4}-\d{2}\.json$/.test(f)).sort();
+    if (!files.length) return { month: null, keywords: [] };
+    const j = JSON.parse(fs.readFileSync(path.join(DIR, files.at(-1)), "utf8"));
+    return { month: j.month, keywords: Array.isArray(j.keywords) ? j.keywords : [] };
+  } catch (e) { return { month: null, keywords: [], error: e.message }; }
+}
