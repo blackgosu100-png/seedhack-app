@@ -183,3 +183,41 @@ export async function importFolder(dir, { jobDir = null, log = null, kinds = "v2
   say(`폴더에서 읽음: 대표 ${by("main").length} · 옵션 ${by("sku").length} · 상세 ${by("detail").length}${fail.length ? ` · 실패 ${fail.length}` : ""}`);
   return source;
 }
+
+// ---- 🛍 타오바오 참고 사진 합치기 (BENCHMARK-TEMPLATE-PLAN 2장 2순위) ----
+// main.js tb:saveReviews 가 저장한 userData/taobao-reviews/<itemId>/review-NN.(jpg|png) 를 상세 재료로 붙인다 — 참고용·사용자 선택:
+//   · 다른 판매자·구매자 사진이라 기본은 제외(확인 화면에서 켜서 쓴다, info.included), label "타오바오 참고", refOnly:true, from:"taobao"
+//   · kind 는 detail 뿐(옵션·사이즈 섹션은 실사진만 — kind option 으로는 절대 넣지 않는다, 메모리 detail-real-image-first)
+// 폴더 찾기: info.taobaoId → source.taobaoId → (source.source 가 taobao/tmall 이면 source.offerId). 없으면 null
+export function taobaoPhotoDir(root, { source = {}, info = {} } = {}) {
+  if (!root) return null;
+  const ids = [info?.taobaoId, source?.taobaoId, /^(taobao|tmall)$/.test(String(source?.source || "")) ? source?.offerId : ""].map((x) => String(x || "").replace(/[^\w-]/g, "").slice(0, 30)).filter(Boolean);
+  for (const id of ids) { const d = path.join(root, id); try { if (fs.statSync(d).isDirectory()) return d; } catch {} }
+  return null;
+}
+export function listTaobaoPhotos(dir, { max = 12 } = {}) {
+  let names = []; try { names = fs.readdirSync(dir); } catch { return []; }
+  return names.filter((f) => /^review-\d+\.(png|jpe?g|webp)$/i.test(f)).sort((a, b) => a.localeCompare(b, "en", { numeric: true })).slice(0, max).map((f) => path.join(dir, f));
+}
+// source.images 끝에 tNN 로 붙인다(raw/ 에 복사). 이미 붙어 있으면(from taobao) 건너뛴다 → { added, dir, skipped }
+export async function mergeTaobaoPhotos(source, jobDir, { root = "", info = {}, log = null, kinds = "v2", max = 12 } = {}) {
+  const say = (t) => { try { log && log(t); } catch {} };
+  const dir = taobaoPhotoDir(root, { source, info }); if (!dir) return { added: 0, dir: null, skipped: "no-folder" };
+  const imgs = Array.isArray(source.images) ? source.images : (source.images = []);
+  if (imgs.some((im) => im?.from === "taobao")) return { added: 0, dir, skipped: "already" };
+  const files = listTaobaoPhotos(dir, { max }); if (!files.length) return { added: 0, dir, skipped: "empty" };
+  const rawDir = path.join(jobDir, "raw"); fs.mkdirSync(rawDir, { recursive: true });
+  let n = 0;
+  for (const f of files) {
+    try {
+      const buf = await fs.promises.readFile(f); const { ext, bytes, w, h } = await decode(buf);
+      if (w < 300 || h < 300) continue; // 작은 썸네일은 재료가 못 된다
+      const id = `t${String(++n).padStart(2, "0")}`, file = path.join(rawDir, `${id}.${ext}`);
+      await fs.promises.writeFile(file, bytes);
+      imgs.push({ id, kind: kinds === "v1" ? KIND_V1.detail : "detail", url: pathToFileURL(f).href, file, w, h, bytes: bytes.length, from: "taobao", refOnly: true, label_ko: "타오바오 참고", label: "타오바오 참고" });
+    } catch (e) { say(`타오바오 사진을 읽지 못함 ${path.basename(f)} (${String(e?.message || e).slice(0, 60)})`); }
+  }
+  await closeDecoder();
+  if (n) say(`🛍 타오바오 참고 사진 ${n}장 합침(기본 제외 — 확인 화면에서 켜서 씀) · ${dir}`);
+  return { added: n, dir };
+}

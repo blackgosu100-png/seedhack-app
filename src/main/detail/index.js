@@ -251,7 +251,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const exc = new Set(info.excluded || []), inc = new Set(info.included || []);
     const items = (src.images || []).map((im) => {
       const c = cleaned.find((x) => x.id === im.id), v = vision?.items?.find((x) => x.id === im.id);
-      const aiOut = !c?.photo?.file ? "사진 없음(글자만)" : v && (v.usable === false || v.role === "skip") ? (v.shows || "AI 제외") : "";
+      const aiOut = !c?.photo?.file ? "사진 없음(글자만)" : v && (v.usable === false || v.role === "skip") ? (v.shows || "AI 제외") : im.refOnly ? "타오바오 참고 사진(다른 판매자·구매자 사진, 권리 주의) — 쓰려면 눌러서 포함" : "";
       const excluded = exc.has(im.id) ? true : inc.has(im.id) ? false : !!aiOut;
       const o = ocr.images.find((x) => x.id === im.id);
       const texts = Array.isArray(info.texts?.[im.id]) ? info.texts[im.id] : uniqS((o?.boxes || []).filter((b) => !b.latin).map((b) => b.text_ko || b.text));
@@ -279,7 +279,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     if (typeof patch.theme === "string" && THEMES.some((t) => t.id === patch.theme)) { out.theme = patch.theme; delete out.templateRef; } // 기본 테마를 고르면 내 템플릿 선택은 풀린다
     if (typeof patch.theme === "string" && isMine(patch.theme)) patch = { ...patch, templateRef: patch.theme }; // 테마 자리에 내 템플릿 id 가 와도 된다
     if (typeof patch.templateRef === "string") { if (patch.templateRef && isMine(patch.templateRef)) { out.templateRef = patch.templateRef; out.theme = "custom"; delete out.reference; } else if (!patch.templateRef) { delete out.templateRef; if (out.theme === "custom" && !out.reference) out.theme = "ivory"; } }
-    if (typeof patch.refKeepExtra === "boolean") out.refKeepExtra = patch.refKeepExtra; // 레퍼런스 그대로(false) / 우리 강점 섹션 유지(true)
+    if (typeof patch.refKeepExtra === "boolean") out.refKeepExtra = patch.refKeepExtra;
+    if (typeof patch.taobaoId === "string") out.taobaoId = patch.taobaoId.replace(/[^\w-]/g, "").slice(0, 30); // 🛍 타오바오 참고 사진 폴더 id(userData/taobao-reviews/<id>) // 레퍼런스 그대로(false) / 우리 강점 섹션 유지(true)
     if (["localize", "scene", "both"].includes(patch.mode)) out.mode = patch.mode;
     if (patch.logos && typeof patch.logos === "object") out.logos = { ...(out.logos || {}), ...Object.fromEntries(Object.entries(patch.logos).map(([k, v]) => [String(k), !!v])) };
     if (patch.claims && typeof patch.claims === "object") out.claims = cleanClaims({ ...(out.claims || {}), ...Object.fromEntries(Object.entries(patch.claims).map(([k, v]) => [k, { ...(out.claims?.[k] || {}), ...(v || {}) }])) });
@@ -712,6 +713,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       if (missing.length) { const r = await downloadLite(src, dir, { session, onProgress, only: (it) => isLocal(it.url) && !got.has(it.url) }); images = [...images, ...r.images].sort((a, b) => a.id.localeCompare(b.id)); }
       src.images = images.map((im) => ({ ...im, file: path.isAbsolute(im.file) ? im.file : path.join(dir, im.file) }));
       images = src.images;
+      // 🛍 타오바오 참고 사진(userData/taobao-reviews/<id>/) 을 재료로 합친다 — 참고용·기본 제외(확인 화면에서 켜서 씀), 옵션·사이즈 섹션엔 안 들어감
+      if (mods.extract?.mergeTaobaoPhotos) { try { const r = await mods.extract.mergeTaobaoPhotos(src, dir, { root: path.join(app.getPath("userData"), "taobao-reviews"), info: readJson(path.join(dir, "info.json")) || {}, log: (t) => log("dim", `  🛍 ${t}`), kinds: "v1" }); if (r?.added) { images = src.images; emit(job, "download", `🛍 타오바오 참고 사진 ${r.added}장 합침 — 기본 제외, 확인 화면에서 켜서 씀`, null, 1); } } catch (e) { log("dim", `  🛍 타오바오 사진 합치기 실패 (${e?.message || e})`); } }
       writeJson(path.join(dir, "source.json"), src);
       if (!images.length) throw new Error("이미지를 한 장도 받지 못했습니다 — 1688 화면이 열려 있는지, 상품 페이지가 맞는지 확인해 주세요");
       emit(job, "download", `✔ 이미지 ${images.length}장 받음`, { done: images.length, total: images.length, files: files() }, 1);
