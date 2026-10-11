@@ -141,7 +141,7 @@
   const is1688 = (u) => /^https?:\/\/([\w-]+\.)*1688\.com\//.test(String(u || ""));
   async function load() {
     const [rows, jobs, tpls] = await Promise.all([api.invoke("listup:get").catch(() => []), api.invoke("detail:list").catch(() => []), api.invoke("detail:templates").catch(() => [])]);
-    st.rows = (rows || []).filter((r) => r.cnUrl); st.jobs = jobs || []; st.tpls = tpls || [];
+    st.rows = (rows || []).filter((r) => r.cnUrl); st.jobs = jobs || []; st.tpls = (tpls || []).filter((t) => t.kind !== "mine"); // 🧲 내 템플릿은 테마 목록(THEMES)에서 보인다
     renderLists(); renderTpls();
     const n = st.jobs.filter((j) => j.status === "done").length;
     const c = $("dcount"); if (c) { c.textContent = String(n); c.hidden = !n; }
@@ -184,11 +184,30 @@
   const pickTpl = (id) => { st.tpl = id; try { localStorage.setItem("detailTpl", id); } catch {} api.invoke("detail:setTemplate", id).catch(() => {}); renderTpls(); };
   $("dtTpls").addEventListener("click", (e) => { const b = e.target.closest("[data-tpl]"); if (b) pickTpl(b.dataset.tpl); });
   // v5(카드) 테마 카드 — 미니 미리보기 색 [바탕, 카드, 포인트]
-  let THEMES = [];
-  api.invoke("detail:themes").then((t) => { THEMES = Array.isArray(t) ? t : []; }).catch(() => {});
-  const themeCard = (t, on) => `<button class="dt-tpl dt-theme${on ? " on" : ""}" type="button" data-theme="${esc(t.id)}" title="${esc(t.desc || "")}"><span class="mini" style="--m-bg:${esc(t.colors?.[0] || "#fff")};--m-fg:${esc(t.colors?.[1] || "#eee")};--m-ac:${esc(t.colors?.[2] || "#16a34a")};--m-img:${esc(t.colors?.[1] || "#eee")}"><i class="hero"></i><i class="h"></i><i class="l"></i><i class="l s"></i><i class="img"></i><i class="l"></i><i class="cta"></i></span><b>${esc(t.name)}</b><small>${esc(t.desc || "")}</small></button>`;
+  let THEMES = []; // 기본 테마(kind theme) + 🧲 내 템플릿(kind mine) — detail:themes
+  const loadThemes = () => api.invoke("detail:themes").then((t) => { THEMES = Array.isArray(t) ? t : []; }).catch(() => {});
+  loadThemes();
+  const themeName = (id) => THEMES.find((t) => t.id === id)?.name || id;
+  const themeCard = (t, on) => `<button class="dt-tpl dt-theme${on ? " on" : ""}${t.kind === "mine" ? " mine" : ""}" type="button" data-theme="${esc(t.id)}" title="${esc(t.desc || "")}"><span class="mini" style="--m-bg:${esc(t.colors?.[0] || "#fff")};--m-fg:${esc(t.colors?.[1] || "#eee")};--m-ac:${esc(t.colors?.[2] || "#16a34a")};--m-img:${esc(t.colors?.[1] || "#eee")}"><i class="hero"></i><i class="h"></i><i class="l"></i><i class="l s"></i><i class="img"></i><i class="l"></i><i class="cta"></i></span><b>${esc(t.name)}</b><small>${esc(t.desc || "")}</small>${t.kind === "mine" ? `<em class="mine">🧲 내 템플릿</em>` : ""}</button>`;
+  const importCard = () => `<button class="dt-tpl dt-theme dt-tplimport" type="button" data-import title="카톡·강의 자료로 받은 템플릿 파일(.seedtpl.json)을 보관함에 넣습니다"><span class="mini imp">📥</span><b>가져오기</b><small>.seedtpl.json 파일</small></button>`;
+  // 🧲 세부 조정 칩(손잡이) — 템플릿 overrides. enum 은 칩, 색은 색 고르기(+없음), 숫자는 슬라이더
+  const chipRows = (chips, tplId) => (chips || []).map((c) => `<div class="dt-chiprow${c.changed ? " changed" : ""}"><span class="k">${esc(c.label)}</span>${c.kind === "enum"
+    ? c.values.map((v) => `<button type="button" class="chip${c.value === v ? " on" : ""}" data-ovk="${esc(c.key)}" data-ovv="${esc(v)}">${esc(c.ko?.[v] || v)}</button>`).join("")
+    : c.kind === "color" ? `<input type="color" data-ovk="${esc(c.key)}" value="${esc(c.value || "#888888")}" title="${esc(c.label)}"><code>${esc(c.value || "없음")}</code>${/brand/.test(c.key) ? `<button type="button" class="chip${c.value ? "" : " on"}" data-ovk="${esc(c.key)}" data-ovv="">없음</button>` : ""}`
+    : `<input type="range" data-ovk="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step || 1}" value="${esc(c.value ?? c.min)}"><code>${esc(c.value ?? "-")}</code>`}</div>`).join("") + `<div class="dt-chipfoot"><button type="button" class="sec" data-ovreset="${esc(tplId)}">↺ 조정 초기화</button><span class="muted">바꾼 칩은 이 템플릿에 저장돼 다음 상품에도 그대로 쓰여요</span></div>`;
+  // 순서 따르기 강도 토글: 레퍼런스 그대로(false) / 우리 강점 섹션 유지(true, applyReferenceOrder keepExtra)
+  const keepToggle = (on) => `<div class="dt-keep"><span class="k">섹션 순서</span><button type="button" class="chip${on ? "" : " on"}" data-keep="0" title="레퍼런스에 없는 우리 섹션은 뺍니다(레퍼런스처럼 짧게)">레퍼런스 그대로</button><button type="button" class="chip${on ? " on" : ""}" data-keep="1" title="레퍼런스에 없는 우리 장점 섹션(상세·활용·옵션)도 원래 자리에 남깁니다">우리 강점 섹션 유지</button></div>`;
+  const tplActions = (id) => `<div class="dt-tplacts"><input class="dt-tplname" type="text" maxlength="40" value="${esc(themeName(id))}" data-tplname="${esc(id)}" title="템플릿 이름 — 고치고 ✎ 저장"><button type="button" class="sec" data-tplact="rename" data-id="${esc(id)}">✎ 이름 저장</button><button type="button" class="sec" data-tplact="export" data-id="${esc(id)}">📤 내보내기</button><button type="button" class="sec danger" data-tplact="remove" data-id="${esc(id)}">🗑 삭제</button></div>`;
+  async function tplAction(act, id, after) {
+    if (act === "rename") { const cur = themeName(id); const name = (root.querySelector(`[data-tplname="${id}"]`)?.value || "").trim(); if (!name || name === cur) return; const r = await api.invoke("detail:template:set", { id, name }); if (r?.error) return flash(r.error); await loadThemes(); toast(`✔ 이름 바꿈 · ${name}`); }
+    else if (act === "export") { const r = await api.invoke("detail:template:export", { id }); if (r?.cancelled) return; if (r?.error) return flash(r.error); toast(`✔ 내보내기 · ${r.file.split(/[\\/]/).pop()} — 카톡·강의 자료로 주고받으세요`); return; }
+    else if (act === "remove") { if (!confirm(`「${themeName(id)}」 템플릿을 보관함에서 지울까요?`)) return; const r = await api.invoke("detail:template:remove", { id }); if (r?.error) return flash(r.error); await loadThemes(); toast("🗑 템플릿 삭제"); }
+    after?.();
+  }
+  async function tplImport(after) { const r = await api.invoke("detail:template:import", {}); if (r?.cancelled) return null; if (r?.error) { flash(r.error); return null; } await loadThemes(); toast(`✔ 템플릿 가져옴 · ${r.template?.name || ""}`); after?.(r.template); return r.template; }
   const isV5Result = (r) => !!r && ((r.renders || []).find((x) => x.id === r.current)?.templateId === "card" || r.templateId === "card");
   $("drTplPick").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-import]")) { await tplImport(() => renderThemePick()); return; }
     const th = e.target.closest("[data-theme]");
     if (th && st.lastResult) { $("drTplPick").hidden = true; const r = await api.invoke("detail:theme", { jobId: st.lastResult.jobId, theme: th.dataset.theme }); if (r?.error) flash(r.error); return; }
   });
@@ -420,7 +439,7 @@
     // 렌더 탭(템플릿별 보관) — 누르면 그 렌더, 각 탭에 폴더·피그마·HTML·삭제(두 번 눌러 확인)
     const tplName = (id) => (st.tpls.find((t) => t.id === id)?.name || id);
     $("drTabs").innerHTML = (r.renders || []).slice().reverse().map((x) => `<div class="dt-rtab${x.id === r.current ? " on" : ""}" data-rid="${esc(x.id)}">
-      <span class="tt" data-tip="${esc(x.id)} · ${x.sliceCount || x.slices?.length || 0}장${x.qa != null ? ` · 검수 ${x.qa}/5` : ""}"><b>${esc(x.label && /한글화/.test(x.label) ? "원본 한글화" : x.theme ? `카드 · ${(THEMES.find((t) => t.id === x.theme)?.name) || x.theme}` : tplName(x.templateId))}</b><small>${x.createdAt ? new Date(x.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "이전"}</small></span>
+      <span class="tt" data-tip="${esc(x.id)} · ${x.sliceCount || x.slices?.length || 0}장${x.qa != null ? ` · 검수 ${x.qa}/5` : ""}"><b>${esc(x.label && /한글화/.test(x.label) ? "원본 한글화" : x.theme ? `카드 · ${x.templateRef ? `🧲 ${themeName(x.templateRef)}` : themeName(x.theme)}` : tplName(x.templateId))}</b><small>${x.createdAt ? new Date(x.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "이전"}</small></span>
       <span class="acts"><button type="button" data-act="folder" data-tip="📂 이 렌더 폴더 열기">📂</button><button type="button" data-act="figma" data-tip="🎨 이 렌더 피그마 묶음 저장">🎨</button><button type="button" data-act="html" data-tip="🌐 이 렌더 HTML로 보기">🌐</button><button type="button" data-act="del" data-tip="🗑 이 렌더 삭제 — 두 번 눌러 확인">🗑</button></span></div>`).join("");
     $("drMeta").textContent = `템플릿 ${r.templateId} · 이미지 ${r.slices?.length || 0}장(세로 ${tall.toLocaleString("ko-KR")}px) · 원본 ${r.counts?.images ?? "-"}장 · ${((r.durationMs || 0) / 1000).toFixed(0)}초${r.costUsd != null ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`;
     const how = r.how || {};
@@ -539,11 +558,11 @@
   $("drSrcOpen").onclick = () => st.lastResult && openSrc(st.lastResult.url, st.lastResult.jobId);
   $("drSrcUrl").onclick = (e) => { e.preventDefault(); st.lastResult && openSrc(st.lastResult.url, st.lastResult.jobId); };
   $("drSrcCopy").onclick = async () => { try { await navigator.clipboard.writeText(st.lastResult?.url || ""); $("drSrcCopy").textContent = "✔"; setTimeout(() => ($("drSrcCopy").textContent = "⧉"), 1500); } catch { flash("복사하지 못했습니다"); } };
-  $("drTpl").onclick = () => {
-    if (isV5Result(st.lastResult)) { const curTheme = (st.lastResult.renders || []).find((x) => x.id === st.lastResult.current)?.theme || "ivory"; $("drTplPick").innerHTML = THEMES.map((t) => themeCard(t, t.id === curTheme)).join(""); } // v5: 테마만(구성·장면·카피 그대로, AI 0)
+  const renderThemePick = () => {
+    if (isV5Result(st.lastResult)) { const cur = (st.lastResult.renders || []).find((x) => x.id === st.lastResult.current); const curTheme = cur?.templateRef || cur?.theme || "ivory"; $("drTplPick").innerHTML = THEMES.map((t) => themeCard(t, t.id === curTheme)).join("") + importCard() + `<p class="dt-ivnote">기본 테마는 색·질감만 바꿔 다시 그립니다(AI 0). 🧲 내 템플릿은 섹션 순서·카피 각도까지 따라가서 섹션·카피를 새로 씁니다.</p>`; } // v5: 테마만(구성·장면·카피 그대로, AI 0)
     else renderTpls();
-    $("drTplPick").hidden = !$("drTplPick").hidden;
   };
+  $("drTpl").onclick = () => { renderThemePick(); $("drTplPick").hidden = !$("drTplPick").hidden; };
   $("drClose").onclick = () => { setMode("setup"); load(); };
   // 결과 화면: 왼쪽 작업 목록은 접혀 있고 ☰ 로 덮어서 연다(바깥 클릭·Esc·다시 누르면 닫힘)
   const listOpen = (on) => { window.SeedTip?.hide(); root.classList.toggle("dt-listopen", !!on); const b = $("drList"); b.dataset.tip = on ? "☰ 작업 목록 닫기" : "☰ 작업 목록 열기"; b.setAttribute("aria-label", b.dataset.tip.slice(2)); b.setAttribute("aria-expanded", String(!!on)); b.classList.toggle("on", !!on); if (on) load(); };
@@ -556,6 +575,7 @@
   // ---------- 메인 프로세스 이벤트 ----------
   api.on("detail:progress", onProgress);
   api.on("detail:changed", (p) => { if (p?.qa && st.mode === "result" && st.lastResult?.jobId === p.qa.jobId) { toast(`🤖 AI 검수 ${p.qa.score}/5 · 제안 ${p.qa.n}건`); showResult(p.qa.jobId, st.lastResult.current); } });
+  api.on("detail:changed", (p) => { if (p?.templates) loadThemes(); });
   api.on("detail:changed", () => { if (st.mode !== "work") load(); else { const c = $("dcount"); api.invoke("detail:list").then((jobs) => { const n = (jobs || []).filter((j) => j.status === "done").length; if (c) { c.textContent = String(n); c.hidden = !n; } }).catch(() => {}); } });
   async function show() {
     await load();
@@ -599,7 +619,14 @@
     $("ivBrief").value = r.brief_text || "";
     const tpls = st.tpls.length ? st.tpls : [];
     if ((r.mode || "both") === "localize") $("ivTpls").innerHTML = `<p class="dt-ivnote">원본 한글화는 원본 이미지 그대로 — 테마 선택이 필요 없어요.</p>`;
-    else if (r.templateId === "card" && (r.themes || THEMES).length) { $("ivTpls").innerHTML = (r.themes || THEMES).map((t) => themeCard(t, (r.theme || "ivory") === t.id)).join("") + `<p class="dt-ivnote">섹션마다 장면 사진 + 짧은 글(카드형 v5) — 테마만 고르세요. 생성 뒤에도 AI 없이 테마를 바꿀 수 있어요.</p>`; }
+    else if (r.templateId === "card" && (r.themes || THEMES).length) { // 기본은 고른 한 장만(자동 추천) — "다른 디자인 고르기"를 펼치면 기본 테마 + 🧲 내 템플릿 + 가져오기, 내 템플릿이면 세부 조정·순서 토글
+      const list = r.themes || THEMES, selId = r.templateRef || (r.theme === "custom" ? "" : r.theme) || "ivory", sel = list.find((t) => t.id === selId) || (r.theme === "custom" ? { id: "custom", name: "레퍼런스 자동 템플릿", desc: "폴더 레퍼런스에서 뽑은 손잡이", colors: ["#fff", "#eee", "#1c1f26"] } : list[0]);
+      const mine = list.filter((t) => t.kind === "mine");
+      $("ivTpls").innerHTML = themeCard(sel, true) + `<button type="button" class="dt-tpl dt-tplmore" data-showall aria-expanded="${iv.showAll ? "true" : "false"}"><b>${iv.showAll ? "접기 ▴" : "다른 디자인 고르기 ▾"}</b><small>기본 테마 ${list.length - mine.length}개${mine.length ? ` · 🧲 내 템플릿 ${mine.length}개` : ""} · 가져오기</small></button>`
+        + (iv.showAll ? list.filter((t) => t.id !== sel.id).map((t) => themeCard(t, false)).join("") + importCard() : "")
+        + `<p class="dt-ivnote">${sel.kind === "mine" ? "🧲 내 템플릿: 이 상세의 섹션 순서·색·정렬·설득 각도를 따라가고, 문장은 우리 상품으로 새로 씁니다." : "섹션마다 장면 사진 + 짧은 글(카드형 v5) — 테마만 고르세요. 생성 뒤에도 AI 없이 테마를 바꿀 수 있어요."}</p>`
+        + (sel.kind === "mine" ? keepToggle(!!r.refKeepExtra) + tplActions(sel.id) + `<details class="dt-tpladj" id="ivTplAdj"${iv.adjOpen ? " open" : ""}><summary>세부 조정 <small>색·정렬·여백·키커·띠·사진·강조·정보 판 손잡이 — 바꾼 것만 저장</small></summary>${chipRows(r.templateChips || [], sel.id)}</details>` : "");
+    }
     else $("ivTpls").innerHTML = tpls.map((t) => `<button class="dt-tpl${r.templateId === t.id ? " on" : ""}" type="button" data-tpl="${esc(t.id)}" title="${esc(t.desc || "")}"><span class="mini ${esc(t.id)}"><i class="hero"></i><i class="h"></i><i class="l"></i><i class="l s"></i><i class="img"></i><i class="l"></i><i class="cta"></i></span><b>${esc(t.name)}</b>${r.recommend?.templateId === t.id ? `<em class="rec">AI 추천</em><small>${esc(r.recommend.reason || "")}</small>` : `<small>${esc(t.desc || "")}</small>`}</button>`).join("");
     const sg0 = r.styleGuide || {};
     const sg = { ...sg0, backgroundColor: sg0.background || sg0.backgroundColor, colorPalette: sg0.palette || sg0.colorPalette || [], accentColors: sg0.accents || sg0.accentColors || [], sectionConsistencyRules: sg0.consistencyRules || sg0.sectionConsistencyRules || [], forbiddenProductUsageNote: sg0.forbiddenProductUsage || sg0.forbiddenProductUsageNote || "" };
@@ -649,7 +676,22 @@
   $("ivTexts").addEventListener("change", (e) => { const t = e.target.closest("textarea[data-id]"); if (!t) return; ivSave({ texts: { [t.dataset.id]: t.value.split("\n").map((x) => x.trim()).filter(Boolean) } }); });
   $("ivName").addEventListener("change", () => ivSave({ product_name_ko: $("ivName").value }));
   $("ivBrief").addEventListener("change", () => ivSave({ brief_text: $("ivBrief").value }));
-  $("ivTpls").addEventListener("click", (e) => { const th = e.target.closest("[data-theme]"); if (th) { iv.info.theme = th.dataset.theme; renderInfo(); ivSave({ theme: th.dataset.theme }); return; } const b = e.target.closest("[data-tpl]"); if (!b) return; iv.info.templateId = b.dataset.tpl; renderInfo(); ivSave({ templateId: b.dataset.tpl }); });
+  const ivReload = async () => { const r = await api.invoke("detail:info:get", { jobId: iv.jobId }); if (r && !r.error) { iv.info = r; renderInfo(); } };
+  $("ivTpls").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-showall]")) { iv.showAll = !iv.showAll; renderInfo(); return; }
+    if (e.target.closest("[data-import]")) { await tplImport(async (t) => { if (t?.id) { await ivSave({ templateRef: t.id }); iv.showAll = false; } await ivReload(); }); return; }
+    const k = e.target.closest("[data-keep]"); if (k) { iv.info.refKeepExtra = k.dataset.keep === "1"; renderInfo(); ivSave({ refKeepExtra: iv.info.refKeepExtra }); return; }
+    const a = e.target.closest("[data-tplact]"); if (a) { await tplAction(a.dataset.tplact, a.dataset.id, async () => { if (a.dataset.tplact === "remove") await ivSave({ templateRef: "" }); await ivReload(); }); return; }
+    const rs = e.target.closest("[data-ovreset]"); if (rs) { const r = await api.invoke("detail:template:set", { id: rs.dataset.ovreset, overrides: {}, merge: false }); if (r?.error) return flash(r.error); iv.info.templateChips = r.template?.chips || []; iv.adjOpen = true; renderInfo(); loadThemes(); return; }
+    const ch = e.target.closest("[data-ovk][data-ovv]"); if (ch) { const v = ch.dataset.ovv === "" ? null : ch.dataset.ovv; const r = await api.invoke("detail:template:set", { id: iv.info.templateRef, overrides: { [ch.dataset.ovk]: v } }); if (r?.error) return flash(r.error); iv.info.templateChips = r.template?.chips || []; iv.adjOpen = true; renderInfo(); loadThemes(); return; }
+    const th = e.target.closest("[data-theme]");
+    if (th) { const id = th.dataset.theme; const mine = THEMES.find((t) => t.id === id)?.kind === "mine"; iv.showAll = false; if (mine) { await ivSave({ templateRef: id }); await ivReload(); } else { iv.info.theme = id; iv.info.templateRef = ""; iv.info.templateChips = null; renderInfo(); ivSave({ theme: id }); } return; }
+    const b = e.target.closest("[data-tpl]"); if (!b) return; iv.info.templateId = b.dataset.tpl; renderInfo(); ivSave({ templateId: b.dataset.tpl });
+  });
+  // 색·숫자 손잡이는 change 로 저장(드래그 중엔 숫자만 보여 줌)
+  $("ivTpls").addEventListener("input", (e) => { const i = e.target.closest("input[type=range][data-ovk]"); if (i) { const c = i.nextElementSibling; if (c) c.textContent = i.value; } });
+  $("ivTpls").addEventListener("change", async (e) => { const i = e.target.closest("input[data-ovk]"); if (!i || !iv.info?.templateRef) return; const v = i.type === "range" ? Number(i.value) : i.value; const r = await api.invoke("detail:template:set", { id: iv.info.templateRef, overrides: { [i.dataset.ovk]: v } }); if (r?.error) return flash(r.error); iv.info.templateChips = r.template?.chips || []; iv.adjOpen = true; renderInfo(); loadThemes(); });
+  $("ivTpls").addEventListener("toggle", (e) => { if (e.target.id === "ivTplAdj") iv.adjOpen = e.target.open; }, true);
   $("ivSrc").onclick = (e) => { e.preventDefault(); if (iv.info?.url) api.invoke("detail:openSource", { url: iv.info.url }).then((r) => r?.error && flash(r.error)); };
   $("ivAiRe").onclick = async () => { await ivSave({ product_name_ko: $("ivName").value }); const r = await api.invoke("detail:prepare", { jobId: iv.jobId, fresh: ["brief"] }); if (r?.error) flash(r.error); };
   $("ivRefetch").onclick = async () => { const r = await api.invoke("detail:prepare", { jobId: iv.jobId, fresh: ["vision", "cutout", "brief"] }); if (r?.error) flash(r.error); };
