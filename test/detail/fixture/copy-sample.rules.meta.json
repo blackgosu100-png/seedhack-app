@@ -1,0 +1,33 @@
+{
+  "how": "rules",
+  "tried": null,
+  "model": null,
+  "costUsd": null,
+  "usage": null,
+  "elapsedMs": 2,
+  "error": null,
+  "rawValid": null,
+  "rawLint": null,
+  "fixes": [],
+  "finalValid": {
+    "ok": true,
+    "errors": []
+  },
+  "finalLint": {
+    "ok": true,
+    "issues": []
+  },
+  "raw": null,
+  "estimatedHeight": 17543,
+  "dropped": [
+    {
+      "id": "d07",
+      "why": "spec-table"
+    },
+    {
+      "id": "g03",
+      "why": "kept"
+    }
+  ],
+  "createdAt": "2026-10-09T05:41:53.620Z"
+}

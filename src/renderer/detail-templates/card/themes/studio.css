@@ -1,0 +1,21 @@
+/* studio — 제품 팔레트 그라데이션 배경 · 부드러운 그림자 · 라인 아이콘 강조 */
+:root {
+  --s-grad-a: #eef1f5; --s-grad-b: #d9dee5;
+  --c-bg: #f2f4f7; --c-ink: #14161a; --c-ink2: #4b5158; --c-brown: #2f5f8f; --c-brown-line: #9fb6cf; --c-yellow: #2f5f8f; --c-on-yellow: #ffffff; --c-on-brown: #ffffff;
+  --c-card: rgba(255, 255, 255, .9); --c-band: rgba(255, 255, 255, .7); --c-band2: rgba(255, 255, 255, .6); --c-panel: transparent; --c-line: #d6dce4; --c-soft: #e3e8ee; --c-photo-bg: #eef1f5;
+  --c-tag-bg: #e8eef6; --c-strong: #234a70; --c-mark: #2f5f8f; --c-icon-ink: #2f5f8f; --c-band-line: #d6dce4; --c-line-ink: #14161a; --c-label-ink: #14161a;
+  --c-label-bg: rgba(255, 255, 255, .9); --c-pill-before: #4b5158; --c-th-bg: #f4f6f9;
+  --c-shadow: 0 20px 50px rgba(20, 30, 50, .12); --c-shadow-s: 0 8px 22px rgba(20, 30, 50, .10); --c-card-bd: 1px solid rgba(255, 255, 255, .8);
+  --r-card: 32px; --r-photo: 22px; --r-table: 26px;
+}
+body { background: linear-gradient(180deg, var(--s-grad-a) 0%, #ffffff 40%, var(--s-grad-b) 100%); }
+.sec { background: transparent; }
+.checkpoint, .detail .dt-sub { background: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,0)); }
+.ba-photo::after { background: linear-gradient(to bottom, transparent, rgba(242,244,247,1)); }
+/* 라인 아이콘 강조: 둥근 칩 안에 강조색 아이콘 */
+.ib-ic { width: 64px; height: 64px; border-radius: 20px; background: #ffffff; box-shadow: var(--c-shadow-s); color: #2f5f8f; }
+.ib-ic svg { width: 34px; height: 34px; stroke-width: 1.6; }
+.icon-band { background: rgba(255, 255, 255, .55); backdrop-filter: blur(6px); }
+.deco-line::before, .deco-line i { background: #2f5f8f; }
+.deco-line { width: 64px; } .deco-line i { display: none; }
+.vs-title { color: #234a70; }

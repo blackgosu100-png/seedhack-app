@@ -1,0 +1,38 @@
+/* editorial — 연회색 · 영문 세리프 키커 · 카드 없이 꽉 찬 사진 · 키워드 표 */
+:root {
+  --c-bg: #f4f4f4; --c-ink: #111111; --c-ink2: #3a3a3a; --c-brown: #111111; --c-brown-line: #111111; --c-yellow: #111111; --c-on-yellow: #ffffff; --c-on-brown: #ffffff;
+  --c-card: transparent; --c-band: #ececec; --c-band2: #ececec; --c-panel: #f4f4f4; --c-line: #cfcfcf; --c-soft: #d8d8d8; --c-photo-bg: transparent;
+  --c-tag-bg: transparent; --c-strong: #111111; --c-mark: #111111; --c-icon-ink: #111111; --c-band-line: #cfcfcf; --c-line-ink: #111111; --c-label-ink: #111111;
+  --c-label-bg: rgba(244, 244, 244, .9); --c-pill-before: #6b6b6b; --c-th-bg: transparent;
+  --c-shadow: none; --c-shadow-s: none; --c-card-bd: 0 solid transparent;
+  --r-card: 0px; --r-photo: 0px; --r-table: 0px; --r-pill: 999px;
+  --f-kicker: "Bodoni 72", "Didot", "Playfair Display", "Bodoni MT", Georgia, serif;
+}
+/* 영문 세리프 키커 */
+.en-kicker { display: block; font-family: var(--f-kicker); font-size: 22px; font-weight: 700; letter-spacing: .14em; text-align: center; color: #111; padding: 72px 0 0; }
+.sec.checkpoint .en-kicker { display: none; } /* CHECK POINT 은 아래 kicker 를 세리프로 */
+.kicker { font-family: var(--f-kicker); font-size: 44px; letter-spacing: 0; color: #111; }
+.sec { padding-left: 0; padding-right: 0; }
+.sec + .sec { padding-top: 0; }
+/* 카드 없이 꽉 찬 사진 */
+.card { background: transparent; box-shadow: none; border-radius: 0; padding: 32px 0 40px; }
+.card-ph { border-radius: 0; }
+.card-text { padding: 44px 64px 0; }
+.deco-line { width: 26px; height: 26px; margin-bottom: 8px; }
+.deco-line::before { content: "*"; position: static; background: none; height: auto; font-size: 44px; font-weight: 300; line-height: 1; color: #111; }
+.deco-line i { display: none; }
+.card-title { font-weight: 500; font-size: 42px; }
+.detail .card.card2 { margin: 0; }
+/* 키워드 표: 아이콘 띠를 줄 표로 */
+.icon-band { grid-template-columns: 1fr 1fr !important; column-gap: 48px; background: #ececec; padding: 22px 56px 30px; }
+.ib-item { display: flex; align-items: center; justify-content: space-between; border-left: 0; border-bottom: 1px solid #cfcfcf; padding: 18px 0; text-align: right; }
+.ib-ic { margin: 0; width: 44px; height: 44px; }
+.ib-text { font-size: 24px; font-weight: 700; }
+.vs-title { color: #111; font-weight: 600; }
+.vs-grid { gap: 10px; }
+.vs-ph, .vs-one { border-radius: 0; }
+.notice .checks, table.spec, .faq-card { border-top: 1px solid #111; }
+.checks .chk { background: #111; }
+.versatility, .options, .notice, .spec, .faq { padding-left: 56px; padding-right: 56px; }
+.options .card-ph, .feature .card-ph, .feature2 .card-ph { margin: 0 -0px; }
+.options { padding-left: 0; padding-right: 0; }

@@ -1,0 +1,30 @@
+/* 원본 한글화(v6): 원본 이미지를 폭에 맞춰 그대로 깔고 한글 레이어를 얹는다. 카드 섹션(notice·spec…)은 card 스타일·테마 공유 */
+.sec.image { padding: 0 !important; background: transparent; }
+.sec.image + .sec.image { padding-top: 0 !important; }
+.loc-wrap { position: relative; width: 100%; overflow: hidden; }
+.loc-img { width: 100%; height: auto; max-width: none !important; }
+.loc-layer { position: absolute; display: flex; align-items: center; line-height: 1.18; font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; box-sizing: border-box; padding: 0 .12em; word-break: keep-all; overflow-wrap: normal; }
+.loc-layer.role-pill, .loc-layer.role-badge { padding: 0 .5em; }
+.loc-text { display: block; max-width: 100%; }
+/* 메인컷 */
+.sec.hero { padding: 0 !important; }
+.lh-wrap { position: relative; width: 100%; overflow: hidden; }
+.lh-img { width: 100%; height: auto; max-width: none !important; display: block; }
+.lh-text { position: absolute; left: 40px; right: 40px; top: 30px; text-align: center; --lh-accent: #f08a24; --lh-accent-ink: #8f4507; }
+.lh-label { display: block; font-size: 22px; font-weight: 600; color: #4a403a; letter-spacing: .3em; }
+.lh-name { font-family: var(--display); --em-color: var(--lh-accent-ink); display: table; margin-left: auto; margin-right: auto; font-size: 56px; font-weight: 800; line-height: 1.18; letter-spacing: -0.04em; color: var(--lh-accent-ink); margin-top: 10px; }
+.lh-sub { font-size: 24px; font-weight: 500; color: #3d3632; margin-top: 12px; }
+.lh-points { display: inline-flex; align-items: center; gap: 14px; margin-top: 16px; padding: 8px 24px; border: 2px solid var(--lh-accent); border-radius: 999px; background: rgba(255, 255, 255, .78); }
+.lh-points span { font-size: 24px; font-weight: 600; color: var(--lh-accent-ink); }
+.lh-sep { width: 2px; height: 20px; background: var(--lh-accent); display: inline-block; }
+.lh-fill { position: absolute; left: 0; right: 0; -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 78%, transparent 100%), linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%); -webkit-mask-composite: source-in; }
+.lh-wrap.band { height: auto !important; }
+.lh-wrap.band .lh-text { position: relative; left: auto; right: auto; top: auto !important; padding: 56px 40px 44px; }
+.lh-wrap.band .lh-img { width: 100%; }
+/* v7 타이포 블록(rewrite_ok 레이어) */
+.loc-block { position: absolute; box-sizing: border-box; padding: 0 .1em; word-break: keep-all; overflow-wrap: normal; }
+.lb-title { font-family: var(--display); font-weight: 800; line-height: 1.2; letter-spacing: -0.03em; }
+.lb-sub { font-weight: 400; line-height: 1.4; margin-top: .35em; letter-spacing: -0.02em; opacity: 1; }
+.lb-title + .lb-sub { margin-top: .45em; }
+.lh-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.lh-badge { font-size: 22px; font-weight: 800; padding: 6px 16px; border-radius: 999px; background: var(--lh-accent-ink); color: #ffffff; }

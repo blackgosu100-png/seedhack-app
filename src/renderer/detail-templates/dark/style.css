@@ -1,0 +1,40 @@
+/* 다크: 검정·차콜 바탕 · 금색 포인트 · 얇은 금색 선 · 프리미엄 */
+:root {
+  --page-bg: #0f1114; --fg: #f3efe6; --dim: #c9c2b4; --title: #fbf7ee;
+  --accent: #d4af37; --on-accent: #1a1406;
+  --card-bg: #1a1d22; --card-bd: #2c3038; --line: #2c3038; --stripe: #15181c; --pic-bg: #15181c;
+  --badge-bg: #1a1d22; --badge-fg: #e9cf7a; --badge-bd: #8c7430;
+  --ov-bg: rgba(10, 10, 12, .8); --ov-fg: #f3e6b8;
+  --r: 12px;
+}
+body { background: #0f1114; }
+.hero { background: radial-gradient(120% 80% at 50% 0%, #2a2410 0%, #0f1114 65%); }
+.hero .eyebrow { color: #d4af37; }
+.hero .eyebrow::before { content: ""; display: inline-block; width: 28px; height: 2px; background: #d4af37; vertical-align: middle; margin-right: 12px; }
+.hero .headline { color: #fbf7ee; }
+.hero .sub { color: #c9c2b4; }
+.hero-pic { background: #15181c; border: 1px solid #8c7430; box-shadow: 0 0 0 6px #0f1114, 0 0 0 7px #3b3216; }
+.sec-title { color: #fbf7ee; }
+.sec-title::after { content: ""; display: block; width: 64px; height: 2px; background: linear-gradient(90deg, #d4af37, transparent); margin-top: 16px; }
+.pain { background: #131619; }
+.pain-card { background: #1a1d22; border-color: #2c3038; }
+.usp-item { background: #15181c; border-color: #2c3038; }
+.usp-item .num { color: #d4af37; font-size: 30px; letter-spacing: .08em; }
+.usp-item h3 { color: #fbf7ee; }
+.feature { background: #0f1114; }
+.feature .cap-box { background: #15181c; border-color: #2c3038; }
+.feature .cap-box h3 { color: #e9cf7a; }
+.gallery { background: #131619; }
+.gal-pic { border: 1px solid #2c3038; }
+table.spec th { color: #e9cf7a; }
+table.spec tr:nth-child(odd) { background: #15181c; }
+.size { background: #131619; }
+.note { background: #1a1d22; }
+.chip { background: #1a1d22; border-color: #8c7430; color: #f3efe6; }
+.notice .tag { background: #2a2410; color: #e9cf7a; }
+.checks .chk { color: #1a1406; }
+.faq-card { background: #15181c; }
+.faq-card .a .qa { background: #2c3038; color: #f3efe6; }
+.cta { background: radial-gradient(120% 90% at 50% 100%, #2a2410 0%, #0f1114 65%); }
+.cta .cta-head { color: #fbf7ee; }
+.cta .sub { color: #e9cf7a; }

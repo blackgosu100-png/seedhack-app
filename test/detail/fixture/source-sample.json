@@ -1,0 +1,1262 @@
+{
+  "_note": "A3 샘플 입력 — 1688 빨래바구니(脏衣篮) 상품을 흉내 냄. source=DetailSource+images(CONTRACTS 1·2절), ocr=OCR 결과(3절), cleaned=cleanImage 결과 모양(4절, 파일 없음), translations=zh→ko(직접 작성). copy.js buildCopyInput({source, ocr, ko: translations, keyword}) 로 CopyInput 을 만든다.",
+  "keyword": "빨래바구니",
+  "coupangName": "접이식 빨래바구니 대용량 가정용",
+  "category": "생활용품>세탁용품",
+  "source": {
+    "source": "1688",
+    "url": "https://detail.1688.com/offer/712345678901.html",
+    "offerId": "712345678901",
+    "title_zh": "加厚脏衣篮折叠收纳筐 家用大容量脏衣篓 卫生间防水洗衣篮 带手提",
+    "price": {
+      "min": 12.8,
+      "max": 15.5,
+      "currency": "CNY"
+    },
+    "attrs": [
+      {
+        "k_zh": "材质",
+        "v_zh": "PP"
+      },
+      {
+        "k_zh": "产品类别",
+        "v_zh": "脏衣篮"
+      },
+      {
+        "k_zh": "规格",
+        "v_zh": "40*30*60cm"
+      },
+      {
+        "k_zh": "颜色",
+        "v_zh": "灰色/米白色/蓝色"
+      },
+      {
+        "k_zh": "风格",
+        "v_zh": "简约北欧"
+      },
+      {
+        "k_zh": "是否可折叠",
+        "v_zh": "是"
+      },
+      {
+        "k_zh": "容量",
+        "v_zh": "大容量 约60L"
+      },
+      {
+        "k_zh": "适用场景",
+        "v_zh": "卧室 卫生间 阳台"
+      },
+      {
+        "k_zh": "货号",
+        "v_zh": "ZYL-2024"
+      },
+      {
+        "k_zh": "起订量",
+        "v_zh": "2件"
+      },
+      {
+        "k_zh": "产地",
+        "v_zh": "浙江台州"
+      }
+    ],
+    "options": [
+      {
+        "label_zh": "灰色",
+        "img": "https://cbu01.alicdn.com/img/ibank/o01.jpg"
+      },
+      {
+        "label_zh": "米白色",
+        "img": "https://cbu01.alicdn.com/img/ibank/o02.jpg"
+      },
+      {
+        "label_zh": "蓝色",
+        "img": "https://cbu01.alicdn.com/img/ibank/o03.jpg"
+      }
+    ],
+    "gallery": [
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g01.jpg"
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g02.jpg"
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g03.jpg"
+      }
+    ],
+    "detailImages": [
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d01.jpg",
+        "w": 790,
+        "h": 900
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d02.jpg",
+        "w": 790,
+        "h": 1000
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d03.jpg",
+        "w": 790,
+        "h": 1100
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d04.jpg",
+        "w": 790,
+        "h": 950
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d05.jpg",
+        "w": 790,
+        "h": 2600
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d06.jpg",
+        "w": 790,
+        "h": 1000
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d07.jpg",
+        "w": 790,
+        "h": 900
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d08.jpg",
+        "w": 790,
+        "h": 800
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d09.jpg",
+        "w": 790,
+        "h": 800
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d10.jpg",
+        "w": 790,
+        "h": 1000
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d11.jpg",
+        "w": 790,
+        "h": 900
+      },
+      {
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d12.jpg",
+        "w": 790,
+        "h": 700
+      }
+    ],
+    "detailText_zh": "加厚PP材质，结实耐用不易变形。可折叠设计，不用时收起不占空间。大容量约60L，一家人的换洗衣物轻松装下。",
+    "shop": {
+      "name": "台州某某塑业有限公司",
+      "years": 6,
+      "repeat": 31
+    },
+    "readAt": 1760000000000,
+    "images": [
+      {
+        "id": "g01",
+        "kind": "gallery",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g01.jpg",
+        "file": "raw/g01.jpg",
+        "w": 800,
+        "h": 800,
+        "bytes": 92000
+      },
+      {
+        "id": "g02",
+        "kind": "gallery",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g02.jpg",
+        "file": "raw/g02.jpg",
+        "w": 800,
+        "h": 800,
+        "bytes": 92000
+      },
+      {
+        "id": "g03",
+        "kind": "gallery",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/g03.jpg",
+        "file": "raw/g03.jpg",
+        "w": 800,
+        "h": 800,
+        "bytes": 92000
+      },
+      {
+        "id": "d01",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d01.jpg",
+        "file": "raw/d01.png",
+        "w": 790,
+        "h": 900,
+        "bytes": 95550
+      },
+      {
+        "id": "d02",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d02.jpg",
+        "file": "raw/d02.png",
+        "w": 790,
+        "h": 1000,
+        "bytes": 99500
+      },
+      {
+        "id": "d03",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d03.jpg",
+        "file": "raw/d03.png",
+        "w": 790,
+        "h": 1100,
+        "bytes": 103450
+      },
+      {
+        "id": "d04",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d04.jpg",
+        "file": "raw/d04.png",
+        "w": 790,
+        "h": 950,
+        "bytes": 97525
+      },
+      {
+        "id": "d05",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d05.jpg",
+        "file": "raw/d05.png",
+        "w": 790,
+        "h": 2600,
+        "bytes": 162700
+      },
+      {
+        "id": "d06",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d06.jpg",
+        "file": "raw/d06.png",
+        "w": 790,
+        "h": 1000,
+        "bytes": 99500
+      },
+      {
+        "id": "d07",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d07.jpg",
+        "file": "raw/d07.png",
+        "w": 790,
+        "h": 900,
+        "bytes": 95550
+      },
+      {
+        "id": "d08",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d08.jpg",
+        "file": "raw/d08.png",
+        "w": 790,
+        "h": 800,
+        "bytes": 91600
+      },
+      {
+        "id": "d09",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d09.jpg",
+        "file": "raw/d09.png",
+        "w": 790,
+        "h": 800,
+        "bytes": 91600
+      },
+      {
+        "id": "d10",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d10.jpg",
+        "file": "raw/d10.png",
+        "w": 790,
+        "h": 1000,
+        "bytes": 99500
+      },
+      {
+        "id": "d11",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d11.jpg",
+        "file": "raw/d11.png",
+        "w": 790,
+        "h": 900,
+        "bytes": 95550
+      },
+      {
+        "id": "d12",
+        "kind": "detail",
+        "url": "https://cbu01.alicdn.com/img/ibank/2024/d12.jpg",
+        "file": "raw/d12.png",
+        "w": 790,
+        "h": 700,
+        "bytes": 87650
+      }
+    ]
+  },
+  "ocr": {
+    "provider": "vision",
+    "images": [
+      {
+        "id": "g01",
+        "w": 800,
+        "h": 800,
+        "boxes": []
+      },
+      {
+        "id": "g02",
+        "w": 800,
+        "h": 800,
+        "boxes": []
+      },
+      {
+        "id": "g03",
+        "w": 800,
+        "h": 800,
+        "boxes": [
+          {
+            "x": 40,
+            "y": 720,
+            "w": 300,
+            "h": 40,
+            "text": "简约北欧风",
+            "conf": 0.9400000000000001
+          }
+        ]
+      },
+      {
+        "id": "d01",
+        "w": 790,
+        "h": 900,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 420,
+            "h": 64,
+            "text": "加厚材质 耐用不变形",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 160,
+            "w": 520,
+            "h": 40,
+            "text": "优质PP材质 结实耐用 承重力强",
+            "conf": 0.9400000000000001
+          }
+        ]
+      },
+      {
+        "id": "d02",
+        "w": 790,
+        "h": 1000,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "可折叠设计",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 160,
+            "w": 560,
+            "h": 40,
+            "text": "不用时轻松折叠收起 节省空间",
+            "conf": 0.9400000000000001
+          }
+        ]
+      },
+      {
+        "id": "d03",
+        "w": 790,
+        "h": 1100,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "大容量 约60L",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 160,
+            "w": 560,
+            "h": 40,
+            "text": "一家人换洗衣物轻松装下",
+            "conf": 0.9400000000000001
+          },
+          {
+            "x": 60,
+            "y": 980,
+            "w": 200,
+            "h": 36,
+            "text": "60L",
+            "conf": 0.9500000000000001,
+            "latin": true
+          }
+        ]
+      },
+      {
+        "id": "d04",
+        "w": 790,
+        "h": 950,
+        "boxes": [
+          {
+            "x": 400,
+            "y": 700,
+            "w": 320,
+            "h": 48,
+            "text": "加固手提 轻松搬运",
+            "conf": 0.92
+          }
+        ]
+      },
+      {
+        "id": "d05",
+        "w": 790,
+        "h": 2600,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "透气网眼设计",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 160,
+            "w": 560,
+            "h": 40,
+            "text": "衣物不闷不潮 减少异味",
+            "conf": 0.9400000000000001
+          },
+          {
+            "x": 60,
+            "y": 1600,
+            "w": 360,
+            "h": 64,
+            "text": "防水防潮 易清洗",
+            "conf": 0.9400000000000001
+          },
+          {
+            "x": 60,
+            "y": 1680,
+            "w": 560,
+            "h": 40,
+            "text": "脏了用水一冲即可",
+            "conf": 0.93
+          }
+        ]
+      },
+      {
+        "id": "d06",
+        "w": 790,
+        "h": 1000,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 60,
+            "w": 300,
+            "h": 60,
+            "text": "产品尺寸",
+            "conf": 0.93
+          },
+          {
+            "x": 100,
+            "y": 400,
+            "w": 200,
+            "h": 36,
+            "text": "长40cm",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 400,
+            "y": 400,
+            "w": 200,
+            "h": 36,
+            "text": "宽30cm",
+            "conf": 0.98
+          },
+          {
+            "x": 600,
+            "y": 200,
+            "w": 160,
+            "h": 36,
+            "text": "高60cm",
+            "conf": 0.98
+          },
+          {
+            "x": 60,
+            "y": 900,
+            "w": 600,
+            "h": 36,
+            "text": "手工测量 误差1-2cm 属正常",
+            "conf": 0.96
+          }
+        ]
+      },
+      {
+        "id": "d07",
+        "w": 790,
+        "h": 900,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 60,
+            "w": 300,
+            "h": 60,
+            "text": "产品参数",
+            "conf": 0.93
+          },
+          {
+            "x": 60,
+            "y": 200,
+            "w": 400,
+            "h": 36,
+            "text": "材质：加厚PP",
+            "conf": 0.98
+          },
+          {
+            "x": 60,
+            "y": 260,
+            "w": 400,
+            "h": 36,
+            "text": "规格：40*30*60cm",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 320,
+            "w": 400,
+            "h": 36,
+            "text": "颜色：灰色 米白色 蓝色",
+            "conf": 0.92
+          },
+          {
+            "x": 60,
+            "y": 380,
+            "w": 400,
+            "h": 36,
+            "text": "重量：约1.2kg",
+            "conf": 0.98
+          }
+        ]
+      },
+      {
+        "id": "d08",
+        "w": 790,
+        "h": 800,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 60,
+            "w": 300,
+            "h": 60,
+            "text": "包装清单",
+            "conf": 0.93
+          },
+          {
+            "x": 60,
+            "y": 200,
+            "w": 400,
+            "h": 36,
+            "text": "脏衣篮 x1",
+            "conf": 0.98
+          },
+          {
+            "x": 60,
+            "y": 260,
+            "w": 400,
+            "h": 36,
+            "text": "说明书 x1",
+            "conf": 0.9500000000000001
+          }
+        ]
+      },
+      {
+        "id": "d09",
+        "w": 790,
+        "h": 800,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 60,
+            "w": 300,
+            "h": 60,
+            "text": "温馨提示",
+            "conf": 0.93
+          },
+          {
+            "x": 60,
+            "y": 200,
+            "w": 600,
+            "h": 36,
+            "text": "因显示器不同 颜色略有色差",
+            "conf": 0.98
+          },
+          {
+            "x": 60,
+            "y": 260,
+            "w": 600,
+            "h": 36,
+            "text": "请勿放置重物 避免变形",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 320,
+            "w": 600,
+            "h": 36,
+            "text": "请远离火源",
+            "conf": 0.92
+          }
+        ]
+      },
+      {
+        "id": "d10",
+        "w": 790,
+        "h": 1000,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "多场景适用",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 860,
+            "w": 560,
+            "h": 40,
+            "text": "卧室 卫生间 阳台 都合适",
+            "conf": 0.92
+          }
+        ]
+      },
+      {
+        "id": "d11",
+        "w": 790,
+        "h": 900,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "细节展示",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 760,
+            "w": 500,
+            "h": 40,
+            "text": "加固提手 不易断裂",
+            "conf": 0.91
+          }
+        ]
+      },
+      {
+        "id": "d12",
+        "w": 790,
+        "h": 700,
+        "boxes": [
+          {
+            "x": 60,
+            "y": 80,
+            "w": 360,
+            "h": 64,
+            "text": "品质承诺",
+            "conf": 0.9500000000000001
+          },
+          {
+            "x": 60,
+            "y": 160,
+            "w": 560,
+            "h": 40,
+            "text": "7天无理由退换",
+            "conf": 0.9400000000000001
+          },
+          {
+            "x": 60,
+            "y": 220,
+            "w": 560,
+            "h": 40,
+            "text": "工厂直供 质量有保障",
+            "conf": 0.91
+          }
+        ]
+      }
+    ]
+  },
+  "cleaned": [
+    {
+      "id": "g01",
+      "out": "clean/g01.png",
+      "boxesOut": []
+    },
+    {
+      "id": "g02",
+      "out": "clean/g02.png",
+      "boxesOut": []
+    },
+    {
+      "id": "g03",
+      "out": "clean/g03.png",
+      "boxesOut": [
+        {
+          "x": 40,
+          "y": 720,
+          "w": 300,
+          "h": 40,
+          "text": "简约北欧风",
+          "conf": 0.9400000000000001,
+          "action": "kept",
+          "bg": "#888888",
+          "onPhoto": true
+        }
+      ]
+    },
+    {
+      "id": "d01",
+      "out": "clean/d01.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 420,
+          "h": 64,
+          "text": "加厚材质 耐用不变形",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 160,
+          "w": 520,
+          "h": 40,
+          "text": "优质PP材质 结实耐用 承重力强",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d02",
+      "out": "clean/d02.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "可折叠设计",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 160,
+          "w": 560,
+          "h": 40,
+          "text": "不用时轻松折叠收起 节省空间",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d03",
+      "out": "clean/d03.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "大容量 约60L",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 160,
+          "w": 560,
+          "h": 40,
+          "text": "一家人换洗衣物轻松装下",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 980,
+          "w": 200,
+          "h": 36,
+          "text": "60L",
+          "conf": 0.9500000000000001,
+          "latin": true,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d04",
+      "out": "clean/d04.png",
+      "boxesOut": [
+        {
+          "x": 400,
+          "y": 700,
+          "w": 320,
+          "h": 48,
+          "text": "加固手提 轻松搬运",
+          "conf": 0.92,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d05",
+      "out": "clean/d05.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "透气网眼设计",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 160,
+          "w": 560,
+          "h": 40,
+          "text": "衣物不闷不潮 减少异味",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 1600,
+          "w": 360,
+          "h": 64,
+          "text": "防水防潮 易清洗",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 1680,
+          "w": 560,
+          "h": 40,
+          "text": "脏了用水一冲即可",
+          "conf": 0.93,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d06",
+      "out": "clean/d06.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 60,
+          "w": 300,
+          "h": 60,
+          "text": "产品尺寸",
+          "conf": 0.93,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 100,
+          "y": 400,
+          "w": 200,
+          "h": 36,
+          "text": "长40cm",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 400,
+          "y": 400,
+          "w": 200,
+          "h": 36,
+          "text": "宽30cm",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 600,
+          "y": 200,
+          "w": 160,
+          "h": 36,
+          "text": "高60cm",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 900,
+          "w": 600,
+          "h": 36,
+          "text": "手工测量 误差1-2cm 属正常",
+          "conf": 0.96,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d07",
+      "out": "clean/d07.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 60,
+          "w": 300,
+          "h": 60,
+          "text": "产品参数",
+          "conf": 0.93,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 200,
+          "w": 400,
+          "h": 36,
+          "text": "材质：加厚PP",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 260,
+          "w": 400,
+          "h": 36,
+          "text": "规格：40*30*60cm",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 320,
+          "w": 400,
+          "h": 36,
+          "text": "颜色：灰色 米白色 蓝色",
+          "conf": 0.92,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 380,
+          "w": 400,
+          "h": 36,
+          "text": "重量：约1.2kg",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d08",
+      "out": "clean/d08.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 60,
+          "w": 300,
+          "h": 60,
+          "text": "包装清单",
+          "conf": 0.93,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 200,
+          "w": 400,
+          "h": 36,
+          "text": "脏衣篮 x1",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 260,
+          "w": 400,
+          "h": 36,
+          "text": "说明书 x1",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d09",
+      "out": "clean/d09.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 60,
+          "w": 300,
+          "h": 60,
+          "text": "温馨提示",
+          "conf": 0.93,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 200,
+          "w": 600,
+          "h": 36,
+          "text": "因显示器不同 颜色略有色差",
+          "conf": 0.98,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 260,
+          "w": 600,
+          "h": 36,
+          "text": "请勿放置重物 避免变形",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 320,
+          "w": 600,
+          "h": 36,
+          "text": "请远离火源",
+          "conf": 0.92,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d10",
+      "out": "clean/d10.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "多场景适用",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 860,
+          "w": 560,
+          "h": 40,
+          "text": "卧室 卫生间 阳台 都合适",
+          "conf": 0.92,
+          "action": "kept",
+          "bg": "#888888",
+          "onPhoto": true
+        }
+      ]
+    },
+    {
+      "id": "d11",
+      "out": "clean/d11.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "细节展示",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 760,
+          "w": 500,
+          "h": 40,
+          "text": "加固提手 不易断裂",
+          "conf": 0.91,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    },
+    {
+      "id": "d12",
+      "out": "clean/d12.png",
+      "boxesOut": [
+        {
+          "x": 60,
+          "y": 80,
+          "w": 360,
+          "h": 64,
+          "text": "品质承诺",
+          "conf": 0.9500000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 160,
+          "w": 560,
+          "h": 40,
+          "text": "7天无理由退换",
+          "conf": 0.9400000000000001,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        },
+        {
+          "x": 60,
+          "y": 220,
+          "w": 560,
+          "h": 40,
+          "text": "工厂直供 质量有保障",
+          "conf": 0.91,
+          "action": "erased",
+          "bg": "#ffffff",
+          "onPhoto": false
+        }
+      ]
+    }
+  ],
+  "translations": {
+    "加厚脏衣篮折叠收纳筐 家用大容量脏衣篓 卫生间防水洗衣篮 带手提": "두꺼운 빨래바구니 접이식 수납 바구니 가정용 대용량 빨래 바스켓 욕실 방수 세탁 바구니 손잡이 포함",
+    "材质": "재질",
+    "PP": "PP",
+    "产品类别": "제품 종류",
+    "脏衣篮": "빨래바구니",
+    "规格": "규격",
+    "40*30*60cm": "40*30*60cm",
+    "颜色": "색상",
+    "灰色/米白色/蓝色": "회색/아이보리/파란색",
+    "风格": "스타일",
+    "简约北欧": "심플 북유럽풍",
+    "是否可折叠": "접이식 여부",
+    "是": "예",
+    "容量": "용량",
+    "大容量 约60L": "대용량 약 60L",
+    "适用场景": "사용 장소",
+    "卧室 卫生间 阳台": "침실 욕실 베란다",
+    "货号": "품번",
+    "ZYL-2024": "ZYL-2024",
+    "起订量": "최소 주문량",
+    "2件": "2개",
+    "产地": "원산지",
+    "浙江台州": "저장성 타이저우",
+    "灰色": "회색",
+    "米白色": "아이보리",
+    "蓝色": "파란색",
+    "加厚PP材质，结实耐用不易变形。可折叠设计，不用时收起不占空间。大容量约60L，一家人的换洗衣物轻松装下。": "두꺼운 PP 재질로 튼튼하고 오래 써도 모양이 잘 변하지 않습니다. 접이식 설계라 쓰지 않을 때는 접어 두면 자리를 차지하지 않습니다. 대용량 약 60L로 온 가족의 빨랫감을 넉넉히 담을 수 있습니다.",
+    "简约北欧风": "심플 북유럽 스타일",
+    "加厚材质 耐用不变形": "두꺼운 재질, 오래 써도 변형 없음",
+    "优质PP材质 结实耐用 承重力强": "고품질 PP 재질, 튼튼하고 하중에 강함",
+    "可折叠设计": "접이식 설계",
+    "不用时轻松折叠收起 节省空间": "쓰지 않을 때는 간단히 접어 보관, 공간 절약",
+    "一家人换洗衣物轻松装下": "온 가족 빨랫감도 넉넉하게",
+    "60L": "60L",
+    "加固手提 轻松搬运": "튼튼한 손잡이, 가볍게 옮기기",
+    "透气网眼设计": "통기성 메쉬 설계",
+    "衣物不闷不潮 减少异味": "옷이 눅눅해지지 않고 냄새도 덜 남",
+    "防水防潮 易清洗": "방수·방습, 쉬운 세척",
+    "脏了用水一冲即可": "더러워지면 물로 한 번 헹구면 끝",
+    "产品尺寸": "제품 치수",
+    "长40cm": "가로 40cm",
+    "宽30cm": "세로 30cm",
+    "高60cm": "높이 60cm",
+    "手工测量 误差1-2cm 属正常": "수작업 측정, 1-2cm 오차는 정상",
+    "产品参数": "제품 정보",
+    "材质：加厚PP": "재질: 두꺼운 PP",
+    "规格：40*30*60cm": "규격: 40*30*60cm",
+    "颜色：灰色 米白色 蓝色": "색상: 회색 아이보리 파란색",
+    "重量：约1.2kg": "무게: 약 1.2kg",
+    "包装清单": "포장 구성",
+    "脏衣篮 x1": "빨래바구니 x1",
+    "说明书 x1": "설명서 x1",
+    "温馨提示": "안내 말씀",
+    "因显示器不同 颜色略有色差": "모니터에 따라 색상이 조금 다를 수 있음",
+    "请勿放置重物 避免变形": "무거운 물건을 올려 두지 마세요, 변형될 수 있음",
+    "请远离火源": "불 가까이 두지 마세요",
+    "多场景适用": "다양한 장소에 사용",
+    "卧室 卫生间 阳台 都合适": "침실, 욕실, 베란다 어디든 어울림",
+    "细节展示": "디테일 보기",
+    "加固提手 不易断裂": "보강 손잡이, 쉽게 끊어지지 않음",
+    "品质承诺": "품질 약속",
+    "7天无理由退换": "7일 무조건 교환·반품",
+    "工厂直供 质量有保障": "공장 직공급, 품질 보장"
+  }
+}

@@ -2,3 +2,7 @@ node_modules/
 dist/
 .DS_Store
 *.log
+
+# 📄 상세페이지 테스트 산출물
+test/detail/out/
+test/detail/img/out/

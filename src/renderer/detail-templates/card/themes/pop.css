@@ -1,0 +1,31 @@
+/* pop — 밝은 컬러 블록 교대 · 큰 숫자 라벨 · 둥근 알약 */
+:root {
+  --c-bg: #fffbea; --c-ink: #1b1430; --c-ink2: #3f3660; --c-brown: #c2255c; --c-brown-line: #c2255c; --c-yellow: #ffd43b; --c-on-yellow: #1b1430; --c-on-brown: #ffffff;
+  --c-card: #ffffff; --c-band: #1b1430; --c-band2: #ffe066; --c-panel: #e7f5ff; --c-line: #d9d3ea; --c-soft: #eee8f6; --c-photo-bg: #ffffff;
+  --c-tag-bg: #fff3c4; --c-strong: #c2255c; --c-mark: #c2255c; --c-icon-ink: #ffe066; --c-band-line: #3b3060; --c-line-ink: #1b1430; --c-label-ink: #1b1430;
+  --c-label-bg: #ffffff; --c-pill-before: #1b1430; --c-th-bg: #fff3c4;
+  --c-shadow: 8px 8px 0 #1b1430; --c-shadow-s: 4px 4px 0 #1b1430; --c-card-bd: 3px solid #1b1430;
+  --r-card: 28px; --r-photo: 20px; --r-table: 24px; --r-pill: 999px;
+}
+body { counter-reset: feat; }
+/* 섹션 배경 블록 교대 */
+.sec:nth-of-type(4n+1):not(.hero) { background: #fffbea; }
+.sec:nth-of-type(4n+2) { background: #e7f5ff; }
+.sec:nth-of-type(4n+3) { background: #ffd8e4; }
+.sec:nth-of-type(4n) { background: #fff3c4; }
+.ba-photo::after { display: none; }
+.icon-band { background: #1b1430; }
+.ib-text { color: #ffffff; }
+.ib-ic { color: #ffe066; }
+.kicker { display: inline-block; background: #1b1430; color: #ffe066; padding: 6px 18px; border-radius: 999px; }
+.cp-label { border: 2px solid #1b1430; }
+/* 큰 숫자 라벨 */
+.feature, .feature2 { counter-increment: feat; }
+.feature .deco-line, .feature2 .card-text:first-child .deco-line { width: auto; height: auto; margin-bottom: 10px; }
+.feature .deco-line::before, .feature .deco-line i { display: none; }
+.feature .deco-line::after { content: counter(feat, decimal-leading-zero); display: block; font-size: 76px; font-weight: 900; line-height: 1; color: #c2255c; letter-spacing: -0.04em; }
+.vs-title { color: #c2255c; }
+.vs-chip, .chip { border: 2px solid #1b1430; }
+.pill.before { color: #ffffff; }
+.zoom { border-color: #1b1430; border-width: 4px; }
+.dt-sub { color: #1b1430; }

@@ -1,0 +1,16 @@
+/* dark — 차콜 배경 · 흰 글자 · 금색 포인트 · 짙은 회색 카드 */
+:root {
+  --c-bg: #17181b; --c-ink: #f4f1ea; --c-ink2: #cfc9bd; --c-brown: #d9b45a; --c-brown-line: #a7883f; --c-yellow: #d9b45a; --c-on-yellow: #1a1406; --c-on-brown: #1a1406;
+  --c-card: #24262b; --c-band: #202227; --c-band2: #202227; --c-panel: #1d1f23; --c-line: #3a3d44; --c-soft: #34373e; --c-photo-bg: #2b2e34;
+  --c-tag-bg: #2f2a1d; --c-strong: #e8c873; --c-mark: #d9b45a; --c-icon-ink: #e8c873; --c-band-line: #3a3d44; --c-line-ink: #f4f1ea; --c-label-ink: #f4f1ea;
+  --c-label-bg: rgba(20, 21, 24, .82); --c-pill-before: #55585f; --c-th-bg: #202227;
+  --c-shadow: 0 10px 30px rgba(0, 0, 0, .35); --c-shadow-s: 0 4px 14px rgba(0, 0, 0, .3); --c-card-bd: 1px solid #33363c;
+  --r-card: 24px; --r-photo: 14px; --r-table: 20px;
+}
+body { color: var(--c-ink); }
+.icon-band { border-top: 1px solid #2c2e33; }
+.ib-text { color: var(--c-ink); }
+.cp-dot { fill: #d9b45a; } .cp-line { stroke: #d9b45a; }
+.zoom { border-color: #2b2e34; }
+.ba-photo::after { background: linear-gradient(to bottom, transparent, #17181b); }
+.vs-chip, .chip { color: var(--c-ink); }

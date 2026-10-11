@@ -1,0 +1,288 @@
+{
+  "meta": {
+    "jobId": "20261009-050000-v3editorial",
+    "templateId": "editorial",
+    "width": 780,
+    "createdAt": 1760000000000,
+    "palette": {
+      "dominant": [
+        "#111111",
+        "#e9e9e9"
+      ],
+      "accent": "#111111",
+      "bg": "#f4f4f4",
+      "dark": true
+    },
+    "tone": "light"
+  },
+  "product": {
+    "name_ko": "미드센추리 블랙 철제 접이식 계단식 화분선반",
+    "keyword": "화분선반"
+  },
+  "sections": [
+    {
+      "type": "hero",
+      "image": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image May 20, 2026 - 10_01AM.jpg",
+      "script": "Midcentury",
+      "title_en": [
+        "BLACK",
+        "PLANT",
+        "SHELF"
+      ],
+      "headline": "공간은 더욱 넓게,\n분위기는 더욱 특별하게",
+      "bg": "#ebebeb"
+    },
+    {
+      "type": "options",
+      "label": "[미드센추리 블랙 철제 화분선반]",
+      "headline": "식물은 보기 좋게\n공간은 더 여유롭게",
+      "options_table": [
+        {
+          "name": "소형 80cm",
+          "size": "80cm *24cm *17cm"
+        },
+        {
+          "name": "소형 100cm",
+          "size": "100cm *24cm *17cm"
+        },
+        {
+          "name": "중형 80cm",
+          "size": "80cm *24cm *27cm"
+        },
+        {
+          "name": "중형 100cm",
+          "size": "100cm *24cm *27cm"
+        }
+      ],
+      "notes": [
+        "계단식 사용을 원하실 경우, 소형과 중형을 같이 주문해주세요.",
+        "단품 기준으로 1건씩 출고됩니다."
+      ],
+      "cutout": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/업체 사진 자료/썸넬 - 5.jpg",
+      "cutout_bbox": [
+        0.04,
+        0.2,
+        0.96,
+        0.87
+      ]
+    },
+    {
+      "type": "keywords",
+      "items": [
+        {
+          "en": "FLOW",
+          "en_sub": "OPTIMIZED WATER FLOW",
+          "ko": "물빠짐 구조"
+        },
+        {
+          "en": "EASY",
+          "en_sub": "SIMPLE INSTALLATION",
+          "ko": "쉬운 설치"
+        },
+        {
+          "en": "FOLDING",
+          "en_sub": "FOLDABLE DESIGN",
+          "ko": "접이식 구조"
+        },
+        {
+          "en": "STABLE",
+          "en_sub": "STEEL FRAME",
+          "ko": "견고한 프레임"
+        },
+        {
+          "en": "MINIMAL",
+          "en_sub": "ALL-BLACK DESIGN",
+          "ko": "올블랙 디자인"
+        }
+      ]
+    },
+    {
+      "type": "reviews",
+      "rating": "4.8",
+      "count_label": "판매채널 리뷰 통합 300+",
+      "title": "압도적인 리뷰.",
+      "photos": [
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1000017744.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1000023680.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1000037626.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1000197699.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1778387817639.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1780399954373.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1782028503283.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/1783688490164.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/20260604_161704.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/20260706_181125.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0559.jpeg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0898.jpeg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0907.jpeg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0910.jpeg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0925.jpeg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0927.jpeg"
+      ],
+      "cards": [
+        {
+          "text": "철제라서 무거운 다육이 화분을 30개 이상 올려도 튼튼하고 화분 그대로 샤워기로 물 뿌리면 되서 완전 편해요!",
+          "highlight": [
+            "화분 그대로 샤워기로 물 뿌리면 되서"
+          ],
+          "user": "rkat********",
+          "date": "26.07.22"
+        },
+        {
+          "text": "물 주고 나서 떨어진 흙과 잎을 정리할때 청소가 너무 쉽고 편해졌어요. 묵직하고 튼튼해서 너무 좋아요",
+          "highlight": [
+            "청소가 너무 쉽고 편해졌어요."
+          ],
+          "user": "kaor*****",
+          "date": "26.06.26"
+        },
+        {
+          "text": "접이식이라 다리만 펼치면 완성이더라구요! 베란다가 정돈된 느낌이고 튼튼해요~ 검정색이라 고급스러워 보입니다!",
+          "highlight": [
+            "베란다가 정돈된 느낌이고"
+          ],
+          "user": "최*숙",
+          "date": "2026.05.06"
+        },
+        {
+          "text": "군더더기 없는 디자인이 방 인테리어를 해치지 않고, 제가 앉아봤는데도 엄청 튼튼하고 좋아요! 만족합니다~",
+          "highlight": [
+            "제가 앉아봤는데도 엄청 튼튼하고 좋아요!"
+          ],
+          "user": "츄**슈",
+          "date": "2025.11.21"
+        },
+        {
+          "text": "바닥에 늘어져있던 작은 화분들을 한번에 올리니 관리도 편해지고, 공간도 넓어져서 베란다가 훨씬 보기 좋아졌어요~",
+          "highlight": [
+            "화분들을 한번에 올리니 관리도 편해지고, 공간도 넓어져서"
+          ],
+          "user": "flaw****",
+          "date": "26.06.04"
+        },
+        {
+          "text": "화분 정리하기 깔끔하고 접이식이라 설치 부담도 없고 보관하기도 좋아요 앞으로 잘 쓸게요~~",
+          "highlight": [
+            "접이식이라 설치 부담도 없고"
+          ],
+          "user": "carr******",
+          "date": "26.05.10"
+        }
+      ]
+    },
+    {
+      "type": "checkpoint",
+      "title": "CHECK POINT",
+      "cutout": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/업체 사진 자료/썸넬 - 5.jpg",
+      "cutout_bbox": [
+        0.04,
+        0.2,
+        0.96,
+        0.87
+      ],
+      "callouts": [
+        {
+          "label": "효율적인\n물빠짐 구조",
+          "x": 0.34,
+          "y": 0.225
+        },
+        {
+          "label": "모던한\n올블랙 디자인",
+          "x": 0.74,
+          "y": 0.4
+        },
+        {
+          "label": "견고한\n스틸 프레임",
+          "x": 0.2,
+          "y": 0.52,
+          "side": "bottom"
+        },
+        {
+          "label": "간편한\n접이식 구조",
+          "x": 0.58,
+          "y": 0.69
+        },
+        {
+          "label": "공구 없이\n간편한 설치",
+          "x": 0.885,
+          "y": 0.61
+        }
+      ]
+    },
+    {
+      "type": "foryou",
+      "title": "FOR\nYOU.",
+      "items": [
+        "화분을 깔끔하게 정리하고 싶은 분",
+        "베란다 공간을 효율적으로 활용하고 싶은 분",
+        "튼튼한 철제 선반을 찾고 계신 분",
+        "접이식 선반이 필요한 분"
+      ]
+    },
+    {
+      "type": "point",
+      "no": 1,
+      "label": "물빠짐 구조",
+      "image": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 02_05_34.png",
+      "title": "물이 머무르지 않는 설계",
+      "desc": "물을 준 뒤에도 물이 쉽게 고이지 않아\n깔끔하게 관리할 수 있습니다.",
+      "photos": [
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 01_59_49.png",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image July 31, 2026 - 10_59AM.jpg"
+      ],
+      "image2": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 02_11_31.png"
+    },
+    {
+      "type": "point",
+      "no": 2,
+      "label": "간편한 설치",
+      "image": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 03_07_32.png",
+      "title": "공구 없이 완성",
+      "desc": "박스에서 꺼내자마자 다리만 펼치면 완성.\n간편하게 사용 가능한 선반",
+      "photos": [
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 02_19_17.png",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image May 20, 2026 - 9_44AM.jpg"
+      ]
+    },
+    {
+      "type": "point",
+      "no": 3,
+      "label": "견고한 스틸",
+      "image": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오후 03_37_07.png",
+      "title": "견고한 스틸 소재",
+      "desc": "두껍고 견고한 탄소강 소재를 사용해\n무거운 화분도 안정적으로 지지합니다.",
+      "text_first": true,
+      "image2": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/ChatGPT Image 2026년 7월 31일 오전 11_45_55.png"
+    },
+    {
+      "type": "point",
+      "no": 4,
+      "label": "접이식 보관",
+      "image": "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image July 31, 2026 - 12_06PM.jpg",
+      "title": "공간을 더욱 효율적으로",
+      "desc": "필요에 따라 간편하게 펼쳐 사용하고,\n사용하지 않을 때는 접어서 보관하세요.",
+      "photos": [
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image May 20, 2026 - 10_33AM.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image July 31, 2026 - 3_14PM.jpg"
+      ]
+    },
+    {
+      "type": "gallery",
+      "no": 5,
+      "label": "갤러리",
+      "images": [
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image July 31, 2026 - 11_38AM.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/나노바나나/Generated Image July 31, 2026 - 11_07AM.jpg",
+        "/Users/noah-mac/Library/CloudStorage/OneDrive-케이엠인터트레이드/문서 - bubu/040_디자인팀/01 _ 친절한마이쮸/02 _ 상세페이지/59 _ 블랙 계단식 화분선반/01 _ 자료/고객 후기 사진/IMG_0925.jpeg"
+      ]
+    },
+    {
+      "type": "notice",
+      "items": [
+        "주문 후 영업일 기준 1~3일 안에 출고됩니다.",
+        "받으신 날부터 7일 안에 초기 불량은 교환해 드립니다.",
+        "모니터에 따라 실제 색상과 조금 다를 수 있습니다."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,795 @@
+{
+  "meta": {
+    "jobId": "v6-localize-sample",
+    "templateId": "localize",
+    "mode": "localize",
+    "version": 6,
+    "width": 780,
+    "createdAt": 1791554804782,
+    "translate": {
+      "how": "cli",
+      "costUsd": 0.084165
+    }
+  },
+  "product": {
+    "name_ko": "데스크 2단 풀아웃 수납함",
+    "keyword": "커피머신 수납선반"
+  },
+  "sections": [
+    {
+      "type": "hero",
+      "id": "detail-01",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-01-after.png",
+      "w": 790,
+      "h": 1222,
+      "label": "데스크 수납",
+      "name": "2단 풀아웃 수납함",
+      "sub": "슬라이딩 2단으로 깔끔하게 정리",
+      "points": [
+        "슬라이딩 레일",
+        "방진방습",
+        "층별 수납"
+      ],
+      "text_zone": {
+        "y0": 0,
+        "y1": 209
+      },
+      "accent": "#f7b552",
+      "accent_ink": "#8f4507",
+      "bg": "#e0d8cd"
+    },
+    {
+      "type": "image",
+      "id": "detail-02",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-02-after.png",
+      "w": 790,
+      "h": 602,
+      "layers": [
+        {
+          "x": 75,
+          "y": 231,
+          "w": 149,
+          "h": 37,
+          "ko": "탄소강 도장",
+          "role": "title",
+          "zh": "碳钢烤漆",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 33,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 312,
+          "y": 231,
+          "w": 183,
+          "h": 36,
+          "ko": "대용량 서랍",
+          "role": "title",
+          "zh": "大容量抽屉",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 33,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 578,
+          "y": 231,
+          "w": 144,
+          "h": 37,
+          "ko": "방진방습",
+          "role": "title",
+          "zh": "防尘防潮",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 33,
+            "align": "right",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 309,
+          "y": 473,
+          "w": 187,
+          "h": 41,
+          "ko": "튼튼한 하중력",
+          "role": "title",
+          "zh": "承重能力强",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 37,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 77,
+          "y": 475,
+          "w": 149,
+          "h": 39,
+          "ko": "설치 불필요",
+          "role": "title",
+          "zh": "无需安装",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 35,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 559,
+          "y": 475,
+          "w": 181,
+          "h": 38,
+          "ko": "다양한 활용",
+          "role": "title",
+          "zh": "多场景适用",
+          "drop": false,
+          "style": {
+            "color": "#656565",
+            "weight": 700,
+            "size": 35,
+            "align": "right",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-03",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-03-after.png",
+      "w": 790,
+      "h": 1080,
+      "layers": [
+        {
+          "x": 17,
+          "y": 24,
+          "w": 342,
+          "h": 44,
+          "ko": "설치 없이 바로 사용",
+          "role": "title",
+          "zh": "无需安装 收到即用",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 22,
+          "y": 92,
+          "w": 616,
+          "h": 44,
+          "ko": "슬라이드 레일로 부드럽게, 꺼내기 편하게",
+          "role": "title",
+          "zh": "自带滑轨顺滑抽拉 存取物品更省力",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-04",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-04-after.png",
+      "w": 790,
+      "h": 864,
+      "layers": [
+        {
+          "x": 18,
+          "y": 19,
+          "w": 505,
+          "h": 44,
+          "ko": "튼튼한 상단, 소형 가전도 거뜬",
+          "role": "title",
+          "zh": "承重能力强上层可放小家电",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 18,
+          "y": 85,
+          "w": 622,
+          "h": 44,
+          "ko": "흔들림 없이 안정적, 책상 공간 확보",
+          "role": "title",
+          "zh": "稳固放置不摇晃 释放更多台面空间",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 19,
+          "y": 416,
+          "w": 143,
+          "h": 35,
+          "ko": "하중 25kg",
+          "role": "label",
+          "zh": "承重25kg",
+          "drop": false,
+          "style": {
+            "color": "#f6b44d",
+            "weight": 400,
+            "size": 31,
+            "align": "left",
+            "under": "#fffffe"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-05",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-05-after.png",
+      "w": 790,
+      "h": 854,
+      "layers": [
+        {
+          "x": 18,
+          "y": 11,
+          "w": 504,
+          "h": 44,
+          "ko": "두 가지 사이즈, 쌓아서 조합",
+          "role": "title",
+          "zh": "两种规格可选 还能叠加组合",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 18,
+          "y": 77,
+          "w": 584,
+          "h": 45,
+          "ko": "층별 분류 수납, 깔끔한 정리",
+          "role": "title",
+          "zh": "分层分类收纳 物品摆放井井有条",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-06",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-06-after.png",
+      "w": 790,
+      "h": 880,
+      "layers": [
+        {
+          "x": 17,
+          "y": 16,
+          "w": 462,
+          "h": 44,
+          "ko": "대용량 내부 수납, 방진방습",
+          "role": "title",
+          "zh": "大容量内盒收纳 防尘防潮",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 18,
+          "y": 81,
+          "w": 660,
+          "h": 44,
+          "ko": "심플한 디자인, 다양한 책상에 어울림",
+          "role": "title",
+          "zh": "简约风高颜值 适配不同场景桌面使用",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-07",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-07-after.png",
+      "w": 790,
+      "h": 1051,
+      "layers": [
+        {
+          "x": 39,
+          "y": 12,
+          "w": 415,
+          "h": 74,
+          "ko": "다층 보호 공정",
+          "role": "title",
+          "zh": "多层保护工艺",
+          "drop": false,
+          "style": {
+            "color": "#0d0d0d",
+            "weight": 700,
+            "size": 64,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 37,
+          "y": 139,
+          "w": 628,
+          "h": 36,
+          "ko": "탄소강 특수 가공, 소성 도장으로 매끈한 질감",
+          "role": "body",
+          "zh": "『碳钢板材特加工 表面烤漆处理质感细腻",
+          "drop": false,
+          "style": {
+            "color": "#0d0d0d",
+            "weight": 500,
+            "size": 33,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 57,
+          "y": 189,
+          "w": 638,
+          "h": 38,
+          "ko": "수분·기름에도 강하고 오염 방지, 세척 쉽고 녹 방지",
+          "role": "body",
+          "zh": "无惧水汽油烟 有效抗油污易清洁 不易生锈』",
+          "drop": false,
+          "style": {
+            "color": "#0d0d0d",
+            "weight": 500,
+            "size": 35,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 391,
+          "y": 510,
+          "w": 248,
+          "h": 129,
+          "ko": "고온 도장층",
+          "role": "label",
+          "zh": "高温烤漆层",
+          "drop": false,
+          "style": {
+            "color": "#494745",
+            "weight": 400,
+            "size": 50,
+            "align": "right",
+            "rotate": -20,
+            "under": "#dbd4c8"
+          }
+        },
+        {
+          "x": 395,
+          "y": 617,
+          "w": 244,
+          "h": 127,
+          "ko": "방청 보호층",
+          "role": "label",
+          "zh": "防锈保护层",
+          "drop": false,
+          "style": {
+            "color": "#533821",
+            "weight": 400,
+            "size": 48,
+            "align": "right",
+            "rotate": -20.3,
+            "under": "#d7b78d"
+          }
+        },
+        {
+          "x": 392,
+          "y": 733,
+          "w": 247,
+          "h": 129,
+          "ko": "방유 내마모층",
+          "role": "label",
+          "zh": "防油耐磨层",
+          "drop": false,
+          "style": {
+            "color": "#5e472a",
+            "weight": 400,
+            "size": 50,
+            "align": "right",
+            "rotate": -20,
+            "under": "#e7b27b"
+          }
+        },
+        {
+          "x": 394,
+          "y": 847,
+          "w": 244,
+          "h": 125,
+          "ko": "밀폐 방수층",
+          "role": "label",
+          "zh": "密封防水层",
+          "drop": false,
+          "style": {
+            "color": "#886541",
+            "weight": 400,
+            "size": 47,
+            "align": "right",
+            "rotate": -20.2,
+            "under": "#efbb7a"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-08",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-08-after.png",
+      "w": 790,
+      "h": 1101,
+      "layers": [
+        {
+          "x": 289,
+          "y": 49,
+          "w": 225,
+          "h": 58,
+          "ko": "제품 디테일",
+          "role": "title",
+          "zh": "产品细节",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 53,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 81,
+          "y": 1013,
+          "w": 640,
+          "h": 54,
+          "ko": "둥근 손잡이, 매끄러워 손이 편안",
+          "role": "title",
+          "zh": "圆润把手 表面无毛刺不伤手",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 50,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-09",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-09-after.png",
+      "w": 790,
+      "h": 946,
+      "layers": [
+        {
+          "x": 78,
+          "y": 875,
+          "w": 646,
+          "h": 57,
+          "ko": "높인 가드레일, 여닫을 때도 안심",
+          "role": "title",
+          "zh": "加高护栏 抽拉过程不怕掉落",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 52,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-10",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-10-after.png",
+      "w": 790,
+      "h": 1013,
+      "layers": [
+        {
+          "x": 81,
+          "y": 911,
+          "w": 638,
+          "h": 56,
+          "ko": "미끄럼 방지 패드 내장",
+          "role": "title",
+          "zh": "自带防滑垫 放置桌面不打滑",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 52,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-11",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-11-after.png",
+      "w": 790,
+      "h": 712,
+      "layers": [
+        {
+          "x": 291,
+          "y": 67,
+          "w": 225,
+          "h": 61,
+          "ko": "제품 사양",
+          "role": "title",
+          "zh": "产品规格",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 55,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 166,
+          "y": 211,
+          "w": 472,
+          "h": 43,
+          "ko": "제품명: 데스크 풀아웃 수납함",
+          "role": "body",
+          "zh": "产品名称：桌面可抽拉收纳盒",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 400,
+            "size": 39,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 166,
+          "y": 279,
+          "w": 338,
+          "h": 44,
+          "ko": "소재: 탄소강",
+          "role": "body",
+          "zh": "产品材质：碳钢材质",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 400,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 168,
+          "y": 346,
+          "w": 334,
+          "h": 44,
+          "ko": "표면처리: 고온 소성 도장",
+          "role": "body",
+          "zh": "表面处理：高温烤漆",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 500,
+            "size": 40,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 166,
+          "y": 416,
+          "w": 444,
+          "h": 45,
+          "ko": "무게: 4.17kg / 5.15kg",
+          "role": "body",
+          "zh": "产品重量：4.17kg/5.15kg",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 500,
+            "size": 40,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 168,
+          "y": 481,
+          "w": 296,
+          "h": 41,
+          "ko": "설치: 불필요",
+          "role": "body",
+          "zh": "安装方法：免安装",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 500,
+            "size": 37,
+            "align": "left",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "id": "detail-12",
+      "image": "/Users/noah-mac/projects/140_coupang-signal-app/test/detail/img/out/localize/detail-12-after.png",
+      "w": 790,
+      "h": 1454,
+      "layers": [
+        {
+          "x": 323,
+          "y": 530,
+          "w": 162,
+          "h": 73,
+          "ko": "낮은 형",
+          "role": "title",
+          "zh": "矮款",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 66,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 327,
+          "y": 1261,
+          "w": 158,
+          "h": 70,
+          "ko": "높은 형",
+          "role": "title",
+          "zh": "高款",
+          "drop": false,
+          "style": {
+            "color": "#000000",
+            "weight": 700,
+            "size": 63,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        },
+        {
+          "x": 171,
+          "y": 1418,
+          "w": 456,
+          "h": 28,
+          "ko": "실측 치수로 약간의 오차가 있을 수 있습니다",
+          "role": "caption",
+          "zh": "*以上数据为人工测量存在些许误差，请以实物为准",
+          "drop": false,
+          "style": {
+            "color": "#050505",
+            "weight": 400,
+            "size": 26,
+            "align": "center",
+            "under": "#ffffff"
+          }
+        }
+      ]
+    },
+    {
+      "type": "spec",
+      "rows": [
+        {
+          "k": "제품명",
+          "v": "데스크 2단 풀아웃 수납함"
+        },
+        {
+          "k": "재질",
+          "v": "탄소강"
+        },
+        {
+          "k": "표면 처리",
+          "v": "고온 베이킹 도장"
+        },
+        {
+          "k": "무게",
+          "v": "4.17kg / 5.15kg"
+        },
+        {
+          "k": "설치",
+          "v": "설치 필요 없음"
+        }
+      ]
+    },
+    {
+      "type": "notice",
+      "items": [
+        "사진 속 커피머신·소품은 구성품이 아닙니다.",
+        "측정 방법에 따라 1~2cm 오차가 있을 수 있어요.",
+        "모니터 환경에 따라 색상이 다르게 보일 수 있어요."
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "id": "detail-13",
+      "why": "promo(A2 판정)"
+    },
+    {
+      "id": "detail-14",
+      "why": "promo(A2 판정)"
+    },
+    {
+      "id": "detail-15",
+      "why": "promo(A2 판정)"
+    },
+    {
+      "id": "detail-16",
+      "why": "promo(A2 판정)"
+    },
+    {
+      "id": "detail-17",
+      "why": "promo(A2 판정)"
+    }
+  ]
+}

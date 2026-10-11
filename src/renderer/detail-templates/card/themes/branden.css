@@ -1,0 +1,186 @@
+/* branden — 국내 브랜드 미니멀 상세(브랜든 여행 압축 파우치 레퍼런스, docs/detail/REFERENCE-branden.md)
+   흰 바탕 · 검정 제목 + 회색 본문 · 글 → 사진 → 글 → 사진 · 왼쪽 정렬(왼쪽 여백 8.5%) · 넓은 위아래 여백
+   색 강조·키커 알약·어두운 띠·그림자·둥근 카드 없음 · 강조는 굵기로만 · 스펙·주의·FAQ 는 연회색 판 */
+:root {
+  --bd-x: 66px; --bd-gap: 136px; --bd-ink: #111111; --bd-body: #4a4a4a; --bd-dim: #666666; --bd-line: #d9d9d9; --bd-panel: #f2f2f2;
+  --c-bg: #ffffff; --c-ink: #111111; --c-ink2: #4a4a4a; --c-brown: #111111; --c-brown-line: #111111; --c-yellow: #111111; --c-on-yellow: #ffffff; --c-on-brown: #ffffff;
+  --c-card: transparent; --c-band: #ffffff; --c-band2: #ffffff; --c-panel: #ffffff; --c-line: #d9d9d9; --c-soft: #d9d9d9; --c-photo-bg: transparent;
+  --c-tag-bg: transparent; --c-strong: #111111; --c-mark: #111111; --c-icon-ink: #111111; --c-band-line: #d9d9d9; --c-line-ink: #111111; --c-label-ink: #111111;
+  --c-label-bg: rgba(255, 255, 255, .86); --c-pill-before: #ffffff; --c-th-bg: transparent;
+  --c-shadow: none; --c-shadow-s: none; --c-card-bd: 0 solid transparent;
+  --r-card: 0px; --r-photo: 0px; --r-table: 0px; --r-pill: 0px;
+  --f-title: var(--sans); --em-color: #111111; --w-title: 700;
+}
+body { background: #ffffff; color: var(--bd-ink); letter-spacing: -0.02em; }
+.sec, .sec + .sec { padding: 0; background: #ffffff; text-align: left; }
+.en-kicker, .kicker, .deco-line { display: none !important; }
+
+/* 강조는 굵기로만(색·밑줄 띠·기울기·알약·점 없음) */
+.em, .em-color, .em-line, .em-underline, .em-slant, .em-pill, .em-grad, .em-bold { font-family: inherit; color: inherit !important; -webkit-text-fill-color: currentColor; background: none !important; transform: none; text-shadow: none; padding: 0; margin: 0; border-radius: 0; display: inline; font-weight: 800 !important; }
+.em-dot::before, .vlines::before, .vlines::after { display: none; }
+.has-em-bold { font-weight: 600 !important; }
+.has-em-dot { padding-top: 0; line-height: inherit !important; }
+.vlines { padding: 0; }
+
+/* 공통 글 블록: 짧은 제목(검정 700) + 2줄 설명(회색) — 왼쪽 여백 8.5% */
+.card-title, .ba-title, .cp-title, .vs-title, .sec-title, .pb-q { font-family: var(--sans); font-weight: 700; font-size: 40px; line-height: 1.34; letter-spacing: -0.035em; color: var(--bd-ink); text-align: left; }
+.card-desc, .ba-sub, .vs-sub, .pb-sub, .dt-sub { font-family: var(--sans); font-size: 25px; font-weight: 400; line-height: 1.68; letter-spacing: -0.03em; color: var(--bd-body); text-align: left; margin-top: 26px; }
+
+/* ---------- 히어로: 왼쪽 정렬 3줄 제목(마지막 줄 제품명) + 회색 한 줄 → 꽉 찬 사진(글 없음) ---------- */
+.hero { padding: 0 !important; }
+.hero .hero-text { position: static; padding: 112px var(--bd-x) 0; text-align: left; --hero-ink: #111111; color: #111111; }
+.hero-label { display: none; }
+.hero .hero-sub, .hero .hero-cat, .hero .hero-name { display: block; font-family: var(--sans); font-size: 44px; font-weight: 600; line-height: 1.32; letter-spacing: -0.04em; color: #111111 !important; margin: 0; }
+.hero .hero-name { font-weight: 700; }
+.hero .icon-band { display: flex; flex-wrap: wrap; align-items: baseline; background: transparent; padding: 30px var(--bd-x) 76px; grid-template-columns: none; }
+.hero .ib-item { border: 0; padding: 0; text-align: left; display: flex; align-items: baseline; }
+.hero .ib-item + .ib-item::before { content: "|"; color: #b5b5b5; margin: 0 14px; font-size: 22px; }
+.hero .ib-ic { display: none; }
+.hero .ib-text { font-size: 24px; font-weight: 400; color: var(--bd-dim); letter-spacing: -0.03em; }
+.hero .ib-item.bd-wrap::before, .vs-chip.bd-wrap::before { display: none; }
+.hero-scene { background: #ffffff; }
+.hero-scene.extend .hero-img { -webkit-mask-image: none; mask-image: none; }
+
+/* ---------- 문제 제기: 어두운 띠 없이 왼쪽 정렬 질문 + 회색 한 줄 ---------- */
+.sec.problem { background: #ffffff; padding: var(--bd-gap) var(--bd-x) 0; }
+.pb-box { display: flex; flex-direction: column; text-align: left; }
+.pb-box .pb-q { order: -1; margin: 0; }
+.sec.problem + .sec.before_after .ba-text { padding-top: 56px; }
+
+/* ---------- 비포/애프터: 글(제목 → 설명) → 꽉 찬 사진, 작은 흰 사각 라벨 ---------- */
+.before_after { display: flex; flex-direction: column; padding: 0 !important; }
+.before_after .ba-text { order: -1; display: flex; flex-direction: column; padding: var(--bd-gap) var(--bd-x) 64px; text-align: left; }
+.before_after .ba-title { order: -1; margin: 0; }
+.ba-photo::after, .ba-photo::before { display: none; }
+.pill { bottom: 28px; min-width: 0; padding: 7px 14px; border-radius: 0; font-size: 22px; font-weight: 600; letter-spacing: .08em; background: #ffffff !important; color: #111111 !important; }
+
+/* ---------- 체크포인트: 글 → 사진 + 가는 검정 선과 작은 검정 라벨 ---------- */
+.checkpoint { background: #ffffff !important; }
+.cp-head { padding: var(--bd-gap) var(--bd-x) 56px; text-align: left; }
+.cp-title { margin: 0; }
+.cp-img { -webkit-mask-image: none; mask-image: none; }
+.cp-label { border-radius: 0; box-shadow: none; backdrop-filter: none; background: rgba(255, 255, 255, .86); padding: 4px 8px; line-height: 1.32; }
+.cl-small { font-size: 22px; color: #444444; }
+.cl-bold { font-size: 24px; font-weight: 700; color: #111111; }
+.cp-line { stroke: #111111; stroke-width: 1; }
+.cp-dot { fill: #111111; r: 3.5px; }
+
+/* ---------- 기능: 카드 없이 글(제목 + 2줄) → 꽉 찬 사진 ---------- */
+.feature, .feature2 { padding: 0 !important; }
+.feature .card, .feature2 .card, .options .card, .detail .card { display: flex; flex-direction: column; background: transparent; box-shadow: none; border: 0; border-radius: 0; padding: 0; }
+.feature .card-text, .options .card-text { order: -1; padding: var(--bd-gap) var(--bd-x) 64px; text-align: left; }
+.card-photos { gap: 8px; }
+.card-ph { border-radius: 0; background: transparent; }
+.card-ph img { max-height: 900px; }
+.card2 .c2-item { display: flex; flex-direction: column; }
+.card2 .card-text { order: -1; padding: var(--bd-gap) var(--bd-x) 56px; }
+.card2 .card-title { font-size: 40px; }
+.c2-item + .c2-item { margin-top: 0; }
+
+/* ---------- 디테일: 글 → 사진(꽉 차게 또는 2×2) + 작은 굵은 라벨 + 회색 2줄 ---------- */
+.detail { padding: 0 !important; }
+.dt-head { padding: var(--bd-gap) var(--bd-x) 64px; margin: 0; text-align: left; }
+.dt-head .vs-title { margin: 0; }
+.detail > .card-ph img { width: 100%; height: auto; max-height: 900px; object-fit: cover; }
+.detail .card.card2 { margin: 0; }
+.detail .card2.bd-texts { display: grid; grid-template-columns: 1fr 1fr; column-gap: 36px; padding: 40px var(--bd-x) 0; }
+.detail .card2.bd-texts .card-text { padding: 0; }
+.detail .card2.bd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px 10px; padding: 0 var(--bd-x); }
+.detail .card2.bd-grid .card-text { order: 0; padding: 18px 0 0; }
+.detail .card2.bd-grid .card-ph img { height: 300px; }
+.detail .card2 .card-title { font-size: 26px; font-weight: 700; line-height: 1.4; letter-spacing: -0.03em; }
+.detail .card2 .card-desc { font-size: 24px; line-height: 1.6; margin-top: 8px; color: var(--bd-dim); }
+.dt-sub { background: transparent; padding: var(--bd-gap) var(--bd-x) 56px; }
+.zoom { box-shadow: none; border: 1px solid #d0d0d0; }
+.zoom .ring { border: 1px solid #111111; }
+.dt-line { stroke: #111111; stroke-width: 1; stroke-dasharray: none; }
+.dt-dot { fill: #111111; }
+.dt-note-title { font-size: 28px; font-weight: 700; }
+
+/* ---------- 활용: 글 → 사진(꽉 차게 또는 2×2 격자) + 작은 라벨 ---------- */
+.versatility { padding: 0 !important; }
+.vs-head { padding: var(--bd-gap) var(--bd-x) 64px; text-align: left; }
+.vs-title { color: var(--bd-ink); }
+.vs-one { border-radius: 0; margin: 0; }
+.vs-one img { max-height: 900px; }
+.vs-chips { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 0; margin: 0; padding: 28px var(--bd-x) 0; }
+.vs-chip { padding: 0; background: transparent; box-shadow: none; border-radius: 0; font-size: 24px; font-weight: 600; color: #111111; }
+.vs-chip + .vs-chip::before { content: "|"; color: #b5b5b5; margin: 0 14px; font-weight: 400; }
+.vs-grid { gap: 40px 10px; margin: 0; padding: 0 var(--bd-x); }
+.vs-ph { border-radius: 0; }
+.vs-label { text-align: left; font-size: 24px; font-weight: 700; margin-top: 14px; color: #111111; }
+
+/* ---------- 옵션 ---------- */
+.options { padding: 0 !important; }
+table.opt-rows th { color: #111111; font-weight: 700; }
+.opt-notes p { color: var(--bd-dim); }
+
+/* ---------- 정보 판(주의·스펙·FAQ·사이즈·구성): 연회색 판 · 왼쪽 키 / 오른쪽 값 · 번호 목록 ---------- */
+.sec.notice, .sec.spec, .sec.faq, .sec.size, .sec.package { background: var(--bd-panel); padding: 72px var(--bd-x) 8px; text-align: left; }
+.sec:not(.notice):not(.spec):not(.faq):not(.size):not(.package) + .sec:is(.notice, .spec, .faq, .size, .package) { margin-top: 150px; padding-top: 88px; }
+.sec:is(.notice, .spec, .faq, .size, .package):last-child { padding-bottom: 104px; }
+.sec:is(.notice, .spec, .faq, .size, .package) .sec-title { font-size: 26px; font-weight: 700; line-height: 1.4; letter-spacing: -0.03em; margin: 0 0 18px; text-align: left; display: block; border: 0; padding: 0; }
+table.spec { margin-top: 0; background: transparent; border-radius: 0; box-shadow: none; border: 0; }
+table.spec tr:nth-child(odd) { background: transparent; }
+table.spec th, table.spec td { font-size: 24px; padding: 18px 0; border-bottom: 1px solid var(--bd-line); border-top: 0; vertical-align: top; }
+table.spec tr:first-child th, table.spec tr:first-child td { border-top: 1px solid var(--bd-line); }
+table.spec th { width: 32%; color: #111111; background: transparent; font-weight: 600; }
+table.spec td { color: var(--bd-body); text-align: right; }
+.notice .checks { background: transparent; box-shadow: none; border: 0; border-radius: 0; padding: 0; counter-reset: bd; }
+.notice .checks li { counter-increment: bd; border: 0; padding: 4px 0; gap: 0; color: var(--bd-body); line-height: 1.6; }
+.notice .checks li::before { content: counter(bd) "."; flex: none; width: 34px; font-size: 24px; color: var(--bd-body); }
+.notice .checks .chk, .notice .checks .tag { display: none; }
+.notice .checks .txt { font-size: 24px; letter-spacing: -0.03em; }
+.faq-wrap { background: transparent; box-shadow: none; border: 0; padding: 0; }
+.faq .faq-card { background: transparent; border: 0; border-top: 1px solid var(--bd-line); border-radius: 0; box-shadow: none; padding: 20px 0; margin: 0; }
+.faq .faq-card:last-child { border-bottom: 1px solid var(--bd-line); }
+.faq-card .q, .faq-card .a { gap: 10px; }
+.faq-card .q { font-weight: 600; color: #111111; }
+.faq-card .a { margin-top: 8px; padding-top: 0; border-top: 0; color: var(--bd-body); }
+.faq-card .qa, .faq-card .a .qa { width: auto; height: auto; background: transparent; color: #111111; border-radius: 0; font-size: 24px; font-weight: 700; font-family: var(--sans); display: inline; }
+.faq-card .qa::after { content: "."; }
+.chip { background: transparent; box-shadow: none; border: 1px solid var(--bd-line); border-radius: 0; color: #111111; }
+.note { background: transparent; border-left: 2px solid #111111; color: var(--bd-body); }
+.cta { background: #ffffff; text-align: left; padding: var(--bd-gap) var(--bd-x) 120px !important; }
+.cta .cta-head { color: #111111; } .cta .sub { color: var(--bd-body); }
+
+/* ---------- 신뢰·판매 실적 블록: 어두운 띠·원형 배지 없이 글 위주 ---------- */
+.sec:is(.trust_badges, .sold_out_banner, .rank_badge, .rnd_cost, .cert, .official_store, .review_stat) { background: #ffffff !important; color: #111111; text-align: left; padding: var(--bd-gap) var(--bd-x) 0 !important; }
+.tb-row { gap: 0; border-top: 1px solid var(--bd-line); }
+.tb-item { background: transparent; box-shadow: none; border: 0; border-radius: 0; padding: 22px 8px; text-align: left; }
+.tb-item + .tb-item { border-left: 1px solid var(--bd-line); padding-left: 18px; }
+.tb-ic { width: auto; height: auto; margin: 0 0 10px; border-radius: 0; background: transparent; color: #111111; justify-content: flex-start; }
+.tb-ic svg { width: 30px; height: 30px; }
+.tb-title { font-family: var(--sans); font-weight: 700; }
+.so-head { justify-content: flex-start; align-items: baseline; }
+.so-big, .so-word { font-family: var(--sans); font-size: 64px; font-weight: 700; color: #111111; background: transparent; padding: 0; transform: none; }
+.so-sub { color: var(--bd-body); margin-top: 20px; }
+.so-lines { font-family: var(--sans); font-weight: 700; font-size: 40px; color: #111111; }
+.so-photo, .rc-photo, .rs-photo { border-radius: 0; }
+.so-photo, .rc-photo { margin-left: calc(-1 * var(--bd-x)); margin-right: calc(-1 * var(--bd-x)); }
+.so-badge, .rs-badge { width: auto; height: auto; border-radius: 0; background: #ffffff; color: #111111; box-shadow: none; padding: 12px 18px; align-items: flex-start; }
+.so-badge span, .rs-badge span { color: var(--bd-body); }
+.rk-box { align-items: flex-start; }
+.rk-circle { width: auto; height: auto; border-radius: 0; background: transparent; color: #111111; align-items: flex-start; }
+.rk-label { color: var(--bd-body); max-width: none; }
+.rk-rank { font-family: var(--sans); font-size: 64px; font-weight: 700; }
+.rc-q { background: transparent; padding: 0; }
+.rc-q::after { display: none; }
+.rc-qt { font-family: var(--sans); font-weight: 700; font-size: 40px; color: #111111; }
+.rc-body { padding: 26px 0 0; }
+.rc-lines { color: var(--bd-body); }
+.rc-pill { font-family: var(--sans); font-weight: 700; color: #111111; background: transparent; border: 1px solid #111111; border-radius: 0; font-size: 32px; padding: 10px 22px; }
+.ct-card { background: transparent; box-shadow: none; border: 0; border-top: 1px solid var(--bd-line); border-radius: 0; }
+.ct-text b { font-family: var(--sans); }
+.os-card { background: var(--bd-panel); border-radius: 0; }
+.os-mark { background: #ffffff; box-shadow: none; border: 1px solid var(--bd-line); border-radius: 0; }
+.os-text h3 { font-family: var(--sans); }
+.rs-stage { display: flex; flex-direction: column; }
+.rs-photo { width: 100%; }
+.rs-badge { position: static; margin: 0 0 24px; order: -1; padding: 0; }
+.rs-badge b { font-family: var(--sans); font-size: 56px; font-weight: 700; }
+
+/* 원본 한글화(localize)에서도 같은 테마: 메인컷 글자 검정 · 강조 굵기만 */
+.lh-text { --lh-accent: #111111 !important; --lh-accent-ink: #111111 !important; }
+.lh-name { color: #111111 !important; }
+.loc-layer, .loc-block { --em-color: #111111 !important; }

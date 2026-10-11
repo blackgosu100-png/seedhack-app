@@ -1,0 +1,16 @@
+/* clean — 흰 배경 · 초록 포인트 · 얇은 선 · 그림자 없는 카드 */
+:root {
+  --c-bg: #ffffff; --c-ink: #1d2433; --c-ink2: #475467; --c-brown: #15803d; --c-brown-line: #86c79a; --c-yellow: #15803d; --c-on-yellow: #ffffff;
+  --c-card: #ffffff; --c-band: #f3f7f4; --c-band2: #f3f7f4; --c-panel: #f8faf9; --c-line: #e4e7ec; --c-soft: #e9ecef; --c-photo-bg: #f2f4f7;
+  --c-tag-bg: #ecfdf3; --c-strong: #166534; --c-mark: #15803d; --c-icon-ink: #166534; --c-band-line: #d0d5dd; --c-line-ink: #1d2433; --c-label-ink: #1d2433;
+  --c-label-bg: rgba(255, 255, 255, .92); --c-pill-before: #475467; --c-th-bg: #f8faf9;
+  --c-shadow: none; --c-shadow-s: none; --c-card-bd: 1px solid #e4e7ec;
+  --r-card: 20px; --r-photo: 12px; --r-table: 16px; --r-pill: 8px; --w-title: 800;
+}
+.sec + .sec { border-top: 1px solid #eef1f4; }
+.hero + .sec, .before_after + .sec { border-top: 0; }
+.deco-line::before, .deco-line i { background: #15803d; }
+.deco-line { width: 48px; } .deco-line i { display: none; }
+.vs-title { color: #14532d; }
+.icon-band { background: #f3f7f4; border-top: 1px solid #e4e7ec; border-bottom: 1px solid #e4e7ec; }
+.zoom { border-color: #ffffff; box-shadow: 0 0 0 1px #d0d5dd; }

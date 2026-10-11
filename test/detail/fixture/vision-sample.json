@@ -1,0 +1,15 @@
+{
+  "_note": "source-sample.json(빨래바구니) 이미지에 대한 비전 검수 결과 흉내 — vision.js reviewPhotos 가 돌려주는 모양 그대로(실제 CLI 결과는 vision-real-sample.json)",
+  "items": [
+    { "id": "g01", "usable": true, "score": 4, "has_text": false, "has_logo": false, "shows": "회색 빨래바구니 정면", "caption_title": "", "caption_desc": "", "role": "feature" },
+    { "id": "g02", "usable": true, "score": 5, "has_text": false, "has_logo": false, "shows": "빨래바구니 전체, 흰 배경", "caption_title": "깔끔한 디자인", "caption_desc": "어디에 두어도 잘 어울리는 심플한 모양이에요.", "role": "hero" },
+    { "id": "g03", "usable": true, "score": 2, "has_text": true, "has_logo": false, "shows": "g02 와 같은 구도", "caption_title": "", "caption_desc": "", "role": "detail" },
+    { "id": "d01", "usable": true, "score": 4, "has_text": false, "has_logo": false, "shows": "두꺼운 PP 벽면 클로즈업", "caption_title": "두툼한 벽면", "caption_desc": "두꺼운 PP 벽면이라 눌러도 쉽게 찌그러지지 않아요.", "role": "detail" },
+    { "id": "d02", "usable": true, "score": 4, "has_text": false, "has_logo": false, "shows": "접힌 상태와 펼친 상태", "caption_title": "접으면 납작하게", "caption_desc": "쓰지 않을 때는 접어 틈새에 세워 둘 수 있어요.", "role": "feature" },
+    { "id": "d03", "usable": false, "score": 1, "has_text": true, "has_logo": false, "shows": "숫자 60L 글자만 남은 띠", "caption_title": "", "caption_desc": "", "role": "skip" },
+    { "id": "d04", "usable": true, "score": 3, "has_text": false, "has_logo": false, "shows": "손잡이를 잡은 손", "caption_title": "", "caption_desc": "", "role": "feature" },
+    { "id": "d10", "usable": false, "score": 1, "has_text": false, "has_logo": true, "shows": "사람 다리와 바구니 일부", "caption_title": "", "caption_desc": "", "role": "skip" },
+    { "id": "d11", "usable": true, "score": 3, "has_text": false, "has_logo": false, "shows": "손잡이 이음새 확대", "caption_title": "보강된 손잡이", "caption_desc": "이음새를 보강해 들어 올려도 든든해요.", "role": "detail" },
+    { "id": "d12", "usable": false, "score": 1, "has_text": true, "has_logo": true, "shows": "브랜드 로고와 글자", "caption_title": "", "caption_desc": "", "role": "skip" }
+  ]
+}

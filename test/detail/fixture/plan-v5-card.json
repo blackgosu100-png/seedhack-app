@@ -1,0 +1,243 @@
+{
+  "meta": {
+    "jobId": "20261009-132404-841080065939-card",
+    "templateId": "card",
+    "createdAt": 1760000000000,
+    "styleGuide": {
+      "background": "#F7F6F2",
+      "text": "#3B3735",
+      "accent": "#8C5A3C",
+      "highlight": "#E9B234"
+    },
+    "palette": {
+      "dominant": [
+        "#f2efe9",
+        "#3b3735"
+      ],
+      "accent": "#8c5a3c",
+      "bg": "#f7f6f2",
+      "dark": false
+    }
+  },
+  "product": {
+    "name_ko": "홈카페 슬라이딩 수납선반 올화이트 데스크 수납장",
+    "keyword": "커피머신 수납선반"
+  },
+  "sections": [
+    {
+      "type": "hero",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g03.png",
+      "label": "미니멀 홈카페",
+      "sub": "커피머신 아래 빈 공간, 넉넉한 수납공간으로 바꾸다",
+      "category": "홈카페 슬라이딩 수납선반",
+      "name": "올화이트 데스크 수납장",
+      "icons": [
+        {
+          "icon": "slide",
+          "text": "부드러운\n슬라이드 서랍"
+        },
+        {
+          "icon": "noassembly",
+          "text": "조립 없는\n완제품 배송"
+        },
+        {
+          "icon": "sizes",
+          "text": "낮은형·높은형\n맞춤 선택"
+        },
+        {
+          "icon": "layers",
+          "text": "견고한\n탄소강 소재"
+        }
+      ]
+    },
+    {
+      "type": "before_after",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g02_full.png",
+      "sub": "여기저기 흩어져 있던 캡슐과 티백, 이제 한곳에 모으세요",
+      "title": "화이트 수납장으로 완성하는 미니멀 주방"
+    },
+    {
+      "type": "checkpoint",
+      "title": "복잡한 주방을 위한\n스마트 수납 선반 5",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g04_full.png",
+      "callouts": [
+        {
+          "label_small": "소형가전을 위한",
+          "label_bold": "견고한 거치 선반",
+          "x": 0.07,
+          "y": 0.44
+        },
+        {
+          "label_small": "고온 베이킹 도장",
+          "label_bold": "튼튼한 탄소강",
+          "x": 0.3,
+          "y": 0.6
+        },
+        {
+          "label_small": "흔들림을 줄여주는",
+          "label_bold": "미끄럼 방지 패드",
+          "x": 0.06,
+          "y": 0.68
+        },
+        {
+          "label_small": "낙하 방지를 위한",
+          "label_bold": "서랍 보호 난간",
+          "x": 0.77,
+          "y": 0.71
+        },
+        {
+          "label_small": "부드럽게 당기는",
+          "label_bold": "슬라이딩 서랍",
+          "x": 0.56,
+          "y": 0.8
+        }
+      ]
+    },
+    {
+      "type": "feature",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/d01_full.png",
+      "title": "가전 아래 숨은\n10cm의 기적",
+      "desc": "무거운 커피머신도 안정적으로 받쳐주니까\n죽어있던 바닥 공간이 새로운 수납장이 됩니다."
+    },
+    {
+      "type": "feature",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g05.png",
+      "title": "숙이지 말고\n부드럽게 당기세요",
+      "desc": "일체형 손잡이를 살짝 당기면\n끝까지 흔들림 없이 매끄럽게 열립니다."
+    },
+    {
+      "type": "feature",
+      "images": [
+        "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/d01.png",
+        "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g01.png"
+      ],
+      "title": "공간 높이에 맞춰 고르는\n낮은형·높은형 2가지 규격",
+      "desc": "커피 캡슐은 낮은형에, 텀블러나 식재료는 높은형에.\n필요에 따라 자유롭게 쌓아 구성할 수 있습니다."
+    },
+    {
+      "type": "feature2",
+      "items": [
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/d09_full.png",
+          "title": "변형 걱정 없는 탄소강 프레임과\n매끄러운 고온 베이킹 도장 처리",
+          "desc": "습기와 오염에 강한 특수 도장으로 주방에서도 안심.\n묵직한 철제 소재가 흔들림 없이 가전을 지탱합니다."
+        },
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/d10_full.png",
+          "title": "조리대 위 밀림을 방지하는\n바닥면 미끄럼 방지 패드",
+          "desc": "서랍을 당길 때나 가전 작동 시에도 밀리지 않도록\n하단 모서리에 논슬립 패드를 적용했습니다."
+        }
+      ]
+    },
+    {
+      "type": "versatility",
+      "title": "홈카페부터 데스크테리어까지",
+      "sub": "가전 아래 수납은 물론, 사무실 탕비실과 화장대 위에서도 빛을 발합니다",
+      "items": [
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g01.png",
+          "label": "홈카페"
+        },
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g04_full.png",
+          "label": "오피스 탕비실"
+        },
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g02_full.png",
+          "label": "데스크 위"
+        },
+        {
+          "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/d01_full.png",
+          "label": "바 카운터"
+        }
+      ]
+    },
+    {
+      "type": "detail",
+      "sub": "서랍과 상단 평면 양측에는 높은 가드가 설계되어\n수납물이 옆으로 떨어지거나 이탈하는 것을 줄여줍니다.",
+      "image": "/Users/noah-mac/Library/Application Support/씨드핵/detail/20261009-132404-841080065939/clean/g05_cut.png",
+      "zooms": [
+        {
+          "x": 0.78,
+          "y": 0.18,
+          "zoom": 3,
+          "label": ""
+        },
+        {
+          "x": 0.38,
+          "y": 0.58,
+          "zoom": 3
+        },
+        {
+          "x": 0.9,
+          "y": 0.5,
+          "zoom": 3
+        }
+      ],
+      "notes": [
+        {
+          "title": "과도한 하중 주의",
+          "desc": "무게가 한쪽으로 쏠리지 않도록\n균형 있게 배치해 주세요"
+        },
+        {
+          "title": "보호가드 적용",
+          "desc": "측면가드가 수납물을\n안정적으로 보호합니다"
+        }
+      ]
+    },
+    {
+      "type": "spec",
+      "rows": [
+        {
+          "k": "재질",
+          "v": "탄소강"
+        },
+        {
+          "k": "표면 처리",
+          "v": "고온 베이킹 페인트"
+        },
+        {
+          "k": "구조",
+          "v": "2단(레이어 2개)"
+        },
+        {
+          "k": "설치 방법",
+          "v": "설치 불필요"
+        },
+        {
+          "k": "제품 무게",
+          "v": "4.17kg / 5.15kg (사양별)"
+        },
+        {
+          "k": "활용 공간",
+          "v": "주방, 책상, 침실, 욕실, 거실"
+        }
+      ]
+    },
+    {
+      "type": "notice",
+      "items": [
+        "측정 방법에 따라 실제 치수와 약간의 오차가 있을 수 있어요.",
+        "모니터 환경에 따라 색상이 실제와 다르게 보일 수 있어요.",
+        "교환·반품은 쿠팡 정책을 따릅니다."
+      ]
+    },
+    {
+      "type": "faq",
+      "items": [
+        {
+          "q": "설치가 필요한가요?",
+          "a": "설치가 필요 없어 받으시면 바로 사용할 수 있어요."
+        },
+        {
+          "q": "최대 하중은 얼마나 되나요?",
+          "a": "제조사 제공 기준 25kg까지 견디도록 설계됐어요."
+        },
+        {
+          "q": "두 가지 사양을 같이 쓸 수 있나요?",
+          "a": "네, 두 가지 사양을 결합해서 함께 사용할 수 있어요."
+        }
+      ]
+    }
+  ]
+}

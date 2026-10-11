@@ -1,0 +1,2395 @@
+[
+ {
+  "id": "g01",
+  "kind": "gallery",
+  "file": "clean/g01.png",
+  "out": "clean/g01.png",
+  "w": 800,
+  "h": 800,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "g02",
+  "kind": "gallery",
+  "file": "clean/g02.png",
+  "out": "clean/g02.png",
+  "w": 800,
+  "h": 800,
+  "erased": 12,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 67,
+    "y": 553,
+    "w": 476,
+    "h": 64,
+    "text": "全家衣物 一次晾晒",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#cbcfd0",
+    "onPhoto": false
+   },
+   {
+    "x": 24,
+    "y": 563,
+    "w": 38,
+    "h": 17,
+    "text": "Uowny",
+    "conf": 0.3,
+    "latin": true,
+    "action": "erased",
+    "bg": "#cbcfd0",
+    "onPhoto": false
+   },
+   {
+    "x": 83,
+    "y": 664,
+    "w": 100,
+    "h": 67,
+    "text": "50^",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#e1e2e1",
+    "onPhoto": false
+   },
+   {
+    "x": 250,
+    "y": 665,
+    "w": 84,
+    "h": 63,
+    "text": "14^",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#dadad9",
+    "onPhoto": false
+   },
+   {
+    "x": 444,
+    "y": 670,
+    "w": 43,
+    "h": 57,
+    "text": "2",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#cccecf",
+    "onPhoto": false
+   },
+   {
+    "x": 475,
+    "y": 670,
+    "w": 34,
+    "h": 26,
+    "text": "扇",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#cccecf",
+    "onPhoto": false
+   },
+   {
+    "x": 600,
+    "y": 669,
+    "w": 38,
+    "h": 56,
+    "text": "5",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#dad6d0",
+    "onPhoto": false
+   },
+   {
+    "x": 640,
+    "y": 669,
+    "w": 26,
+    "h": 25,
+    "text": "个",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dad6d0",
+    "onPhoto": false
+   },
+   {
+    "x": 57,
+    "y": 739,
+    "w": 120,
+    "h": 29,
+    "text": "可收纳衣架",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#ededec",
+    "onPhoto": false
+   },
+   {
+    "x": 234,
+    "y": 741,
+    "w": 118,
+    "h": 24,
+    "text": "防风挂衣孔",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#d7d8d6",
+    "onPhoto": false
+   },
+   {
+    "x": 413,
+    "y": 739,
+    "w": 97,
+    "h": 27,
+    "text": "折叠网格",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#cacccc",
+    "onPhoto": false
+   },
+   {
+    "x": 593,
+    "y": 739,
+    "w": 75,
+    "h": 27,
+    "text": "衣袜夹",
+    "conf": 0.3,
+    "action": "erased",
+    "bg": "#d8d2ca",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.7977
+  }
+ },
+ {
+  "id": "g03",
+  "kind": "gallery",
+  "file": "clean/g03.png",
+  "out": "clean/g03.png",
+  "w": 800,
+  "h": 800,
+  "erased": 4,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 68,
+    "y": 63,
+    "w": 246,
+    "h": 64,
+    "text": "闲置折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#a7b2af",
+    "onPhoto": false
+   },
+   {
+    "x": 68,
+    "y": 143,
+    "w": 244,
+    "h": 65,
+    "text": "不占空间",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#a7b0ad",
+    "onPhoto": false
+   },
+   {
+    "x": 554,
+    "y": 135,
+    "w": 184,
+    "h": 29,
+    "text": "小空间从容应对",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#acb2b2",
+    "onPhoto": false
+   },
+   {
+    "x": 512,
+    "y": 173,
+    "w": 226,
+    "h": 29,
+    "text": "折叠宽度仅占60cm",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#afb4b5",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.565
+  }
+ },
+ {
+  "id": "g04",
+  "kind": "gallery",
+  "file": "clean/g04.png",
+  "out": "clean/g04.png",
+  "w": 800,
+  "h": 800,
+  "erased": 3,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 66,
+    "y": 607,
+    "w": 671,
+    "h": 79,
+    "text": "强力承重 晾晒无压力",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#2c2c2c",
+    "onPhoto": false
+   },
+   {
+    "x": 480,
+    "y": 763,
+    "w": 125,
+    "h": 21,
+    "text": "*TDYU真实测重，",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#cac7c5",
+    "onPhoto": false
+   },
+   {
+    "x": 599,
+    "y": 764,
+    "w": 140,
+    "h": 19,
+    "text": "危险动作请勿模仿.",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#cac7c5",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.7113
+  }
+ },
+ {
+  "id": "g05",
+  "kind": "gallery",
+  "file": "clean/g05.png",
+  "out": "clean/g05.png",
+  "w": 800,
+  "h": 800,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "g06",
+  "kind": "gallery",
+  "file": "clean/g06.png",
+  "out": "clean/g06.png",
+  "w": 800,
+  "h": 800,
+  "erased": 6,
+  "kept": 2,
+  "boxesOut": [
+   {
+    "x": 423,
+    "y": 80,
+    "w": 78,
+    "h": 26,
+    "text": "164cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f2f6f8",
+    "onPhoto": false
+   },
+   {
+    "x": 207,
+    "y": 121,
+    "w": 84,
+    "h": 28,
+    "text": "64.5cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#929996",
+    "onPhoto": true
+   },
+   {
+    "x": 419,
+    "y": 170,
+    "w": 68,
+    "h": 33,
+    "text": "51cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#eff3f4",
+    "onPhoto": false
+   },
+   {
+    "x": 640,
+    "y": 223,
+    "w": 65,
+    "h": 27,
+    "text": "49cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "kept",
+    "bg": "#f1f6f8",
+    "onPhoto": true
+   },
+   {
+    "x": 68,
+    "y": 661,
+    "w": 410,
+    "h": 37,
+    "text": "幻夜黑 可挂棉被/分区晾晒",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dcc494",
+    "onPhoto": false
+   },
+   {
+    "x": 551,
+    "y": 661,
+    "w": 216,
+    "h": 79,
+    "text": "可折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   },
+   {
+    "x": 8,
+    "y": 734,
+    "w": 422,
+    "h": 50,
+    "text": "标配三段式［加强承重",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#2f2f2f",
+    "onPhoto": false
+   },
+   {
+    "x": 539,
+    "y": 744,
+    "w": 230,
+    "h": 36,
+    "text": "（无惧日晒雨淋）",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9748
+  }
+ },
+ {
+  "id": "g07",
+  "kind": "gallery",
+  "file": "clean/g07.png",
+  "out": "clean/g07.png",
+  "w": 800,
+  "h": 800,
+  "erased": 6,
+  "kept": 2,
+  "boxesOut": [
+   {
+    "x": 424,
+    "y": 80,
+    "w": 79,
+    "h": 27,
+    "text": "164cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f1f5f7",
+    "onPhoto": false
+   },
+   {
+    "x": 207,
+    "y": 121,
+    "w": 84,
+    "h": 28,
+    "text": "64.5cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#949b98",
+    "onPhoto": true
+   },
+   {
+    "x": 419,
+    "y": 170,
+    "w": 68,
+    "h": 33,
+    "text": "51cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#eff3f4",
+    "onPhoto": false
+   },
+   {
+    "x": 640,
+    "y": 223,
+    "w": 65,
+    "h": 27,
+    "text": "49cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "kept",
+    "bg": "#f1f6f8",
+    "onPhoto": true
+   },
+   {
+    "x": 68,
+    "y": 661,
+    "w": 410,
+    "h": 36,
+    "text": "铂光银 可挂棉被/分区晾晒",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#dcc494",
+    "onPhoto": false
+   },
+   {
+    "x": 551,
+    "y": 661,
+    "w": 216,
+    "h": 79,
+    "text": "可折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   },
+   {
+    "x": 5,
+    "y": 738,
+    "w": 445,
+    "h": 42,
+    "text": "旗舰三段式I防风夹+衣架杆",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#352d2f",
+    "onPhoto": false
+   },
+   {
+    "x": 539,
+    "y": 744,
+    "w": 230,
+    "h": 36,
+    "text": "（无惧日晒雨淋）",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.973
+  }
+ },
+ {
+  "id": "g08",
+  "kind": "gallery",
+  "file": "clean/g08.png",
+  "out": "clean/g08.png",
+  "w": 800,
+  "h": 800,
+  "erased": 6,
+  "kept": 2,
+  "boxesOut": [
+   {
+    "x": 423,
+    "y": 80,
+    "w": 78,
+    "h": 26,
+    "text": "164cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f2f6f8",
+    "onPhoto": false
+   },
+   {
+    "x": 207,
+    "y": 121,
+    "w": 84,
+    "h": 28,
+    "text": "64.5cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#949b98",
+    "onPhoto": true
+   },
+   {
+    "x": 419,
+    "y": 170,
+    "w": 68,
+    "h": 33,
+    "text": "51cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#eff3f4",
+    "onPhoto": false
+   },
+   {
+    "x": 640,
+    "y": 223,
+    "w": 65,
+    "h": 27,
+    "text": "49cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "kept",
+    "bg": "#f1f6f8",
+    "onPhoto": true
+   },
+   {
+    "x": 68,
+    "y": 661,
+    "w": 410,
+    "h": 36,
+    "text": "珍珠灰 可挂棉被/分区晾晒",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dcc494",
+    "onPhoto": false
+   },
+   {
+    "x": 551,
+    "y": 661,
+    "w": 216,
+    "h": 79,
+    "text": "可折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   },
+   {
+    "x": 5,
+    "y": 738,
+    "w": 445,
+    "h": 42,
+    "text": "旗舰三段式I防风夹+衣架杆",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#352d2f",
+    "onPhoto": false
+   },
+   {
+    "x": 539,
+    "y": 744,
+    "w": 230,
+    "h": 36,
+    "text": "（无惧日晒雨淋）",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0830",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9743
+  }
+ },
+ {
+  "id": "g09",
+  "kind": "gallery",
+  "file": "clean/g09.png",
+  "out": "clean/g09.png",
+  "w": 800,
+  "h": 800,
+  "erased": 6,
+  "kept": 4,
+  "boxesOut": [
+   {
+    "x": 186,
+    "y": 136,
+    "w": 80,
+    "h": 44,
+    "text": "38.5cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#8e9696",
+    "onPhoto": true
+   },
+   {
+    "x": 46,
+    "y": 151,
+    "w": 58,
+    "h": 29,
+    "text": "50C0",
+    "conf": 0.3,
+    "latin": true,
+    "action": "kept",
+    "bg": "#abb4ad",
+    "onPhoto": true
+   },
+   {
+    "x": 438,
+    "y": 169,
+    "w": 57,
+    "h": 21,
+    "text": "51cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#eef3f7",
+    "onPhoto": false
+   },
+   {
+    "x": 649,
+    "y": 177,
+    "w": 72,
+    "h": 25,
+    "text": "45.6cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f3f7fa",
+    "onPhoto": false
+   },
+   {
+    "x": 190,
+    "y": 305,
+    "w": 38,
+    "h": 23,
+    "text": "51",
+    "conf": 0.3,
+    "latin": true,
+    "action": "kept",
+    "bg": "#9d9083",
+    "onPhoto": true
+   },
+   {
+    "x": 20,
+    "y": 584,
+    "w": 38,
+    "h": 20,
+    "text": "Doumy",
+    "conf": 0.3,
+    "latin": true,
+    "action": "kept",
+    "bg": "#8396b1",
+    "onPhoto": true
+   },
+   {
+    "x": 68,
+    "y": 661,
+    "w": 416,
+    "h": 36,
+    "text": "幻夜黑 可挂棉被/分区晾晒",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dbc393",
+    "onPhoto": false
+   },
+   {
+    "x": 551,
+    "y": 661,
+    "w": 216,
+    "h": 77,
+    "text": "可折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0931",
+    "onPhoto": false
+   },
+   {
+    "x": 12,
+    "y": 737,
+    "w": 426,
+    "h": 38,
+    "text": "奢享|升级大容量晾衣网*2",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#2f2f2f",
+    "onPhoto": false
+   },
+   {
+    "x": 539,
+    "y": 744,
+    "w": 230,
+    "h": 36,
+    "text": "（无惧日晒雨淋）",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0931",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9371
+  }
+ },
+ {
+  "id": "g10",
+  "kind": "gallery",
+  "file": "clean/g10.png",
+  "out": "clean/g10.png",
+  "w": 800,
+  "h": 800,
+  "erased": 6,
+  "kept": 4,
+  "boxesOut": [
+   {
+    "x": 186,
+    "y": 136,
+    "w": 80,
+    "h": 44,
+    "text": "38.5cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#7d8686",
+    "onPhoto": true
+   },
+   {
+    "x": 42,
+    "y": 147,
+    "w": 65,
+    "h": 35,
+    "text": "50cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#a8b0a9",
+    "onPhoto": true
+   },
+   {
+    "x": 438,
+    "y": 169,
+    "w": 57,
+    "h": 21,
+    "text": "51cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#ebf0f4",
+    "onPhoto": false
+   },
+   {
+    "x": 649,
+    "y": 177,
+    "w": 72,
+    "h": 25,
+    "text": "45.6cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f2f7fa",
+    "onPhoto": false
+   },
+   {
+    "x": 183,
+    "y": 304,
+    "w": 44,
+    "h": 24,
+    "text": "519",
+    "conf": 0.5,
+    "latin": true,
+    "action": "kept",
+    "bg": "#998d82",
+    "onPhoto": true
+   },
+   {
+    "x": 20,
+    "y": 584,
+    "w": 38,
+    "h": 20,
+    "text": "Dowm",
+    "conf": 0.3,
+    "latin": true,
+    "action": "kept",
+    "bg": "#7b8ca6",
+    "onPhoto": true
+   },
+   {
+    "x": 68,
+    "y": 661,
+    "w": 410,
+    "h": 36,
+    "text": "铂光银 可挂棉被/分区晾晒",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#dcc494",
+    "onPhoto": false
+   },
+   {
+    "x": 551,
+    "y": 661,
+    "w": 216,
+    "h": 77,
+    "text": "可折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0931",
+    "onPhoto": false
+   },
+   {
+    "x": 12,
+    "y": 737,
+    "w": 426,
+    "h": 38,
+    "text": "奢享|升级大容量晾衣网*2",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#2f2f2f",
+    "onPhoto": false
+   },
+   {
+    "x": 539,
+    "y": 744,
+    "w": 230,
+    "h": 36,
+    "text": "（无惧日晒雨淋）",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dc0931",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 800
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9392
+  }
+ },
+ {
+  "id": "d01",
+  "kind": "detail",
+  "file": "clean/d01.png",
+  "out": "clean/d01.png",
+  "w": 776,
+  "h": 639,
+  "erased": 8,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 69,
+    "y": 86,
+    "w": 205,
+    "h": 46,
+    "text": "Silicone",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#e1e2e5",
+    "onPhoto": false
+   },
+   {
+    "x": 603,
+    "y": 87,
+    "w": 116,
+    "h": 25,
+    "text": "Rock space",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#edf2f6",
+    "onPhoto": false
+   },
+   {
+    "x": 641,
+    "y": 117,
+    "w": 75,
+    "h": 19,
+    "text": "Custom",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#edf2f6",
+    "onPhoto": false
+   },
+   {
+    "x": 70,
+    "y": 151,
+    "w": 248,
+    "h": 46,
+    "text": "Protective",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#dde0e5",
+    "onPhoto": false
+   },
+   {
+    "x": 563,
+    "y": 240,
+    "w": 155,
+    "h": 32,
+    "text": "升级网格晾晒",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#edf2f7",
+    "onPhoto": false
+   },
+   {
+    "x": 615,
+    "y": 270,
+    "w": 105,
+    "h": 30,
+    "text": "分区收纳",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#edf2f7",
+    "onPhoto": false
+   },
+   {
+    "x": 71,
+    "y": 321,
+    "w": 388,
+    "h": 56,
+    "text": "重新定义晾衣架",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dae1e6",
+    "onPhoto": false
+   },
+   {
+    "x": 455,
+    "y": 479,
+    "w": 66,
+    "h": 28,
+    "text": "360°",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#dfe9ef",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 776,
+    "h": 639
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.5391752577319587
+  }
+ },
+ {
+  "id": "d02",
+  "kind": "detail",
+  "file": "clean/d02.png",
+  "out": "clean/d02.png",
+  "w": 790,
+  "h": 661,
+  "erased": 3,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 170,
+    "y": 7,
+    "w": 65,
+    "h": 32,
+    "text": "180°",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#e0e0e3",
+    "onPhoto": false
+   },
+   {
+    "x": 68,
+    "y": 107,
+    "w": 75,
+    "h": 26,
+    "text": "可旋转",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#d5d6d9",
+    "onPhoto": false
+   },
+   {
+    "x": 64,
+    "y": 127,
+    "w": 142,
+    "h": 68,
+    "text": "540°",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#d5d6d9",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 661
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.838505537300718
+  }
+ },
+ {
+  "id": "d03",
+  "kind": "detail",
+  "file": "clean/d03.png",
+  "out": "clean/d03.png",
+  "w": 790,
+  "h": 567,
+  "erased": 4,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 483,
+    "y": 0,
+    "w": 244,
+    "h": 7,
+    "text": "一次晾晒",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#61819e",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 217,
+    "w": 790,
+    "h": 567
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9408166168729549
+  }
+ },
+ {
+  "id": "d04",
+  "kind": "detail",
+  "file": "clean/d04.png",
+  "out": "clean/d04.png",
+  "w": 790,
+  "h": 652,
+  "erased": 3,
+  "kept": 5,
+  "boxesOut": [
+   {
+    "x": 106,
+    "y": 437,
+    "w": 107,
+    "h": 64,
+    "text": "50^",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#40586a",
+    "onPhoto": false
+   },
+   {
+    "x": 288,
+    "y": 437,
+    "w": 96,
+    "h": 66,
+    "text": "14^",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#3e5567",
+    "onPhoto": false
+   },
+   {
+    "x": 470,
+    "y": 439,
+    "w": 73,
+    "h": 59,
+    "text": "2扇",
+    "conf": 0.3,
+    "action": "erased",
+    "bg": "#425b6f",
+    "onPhoto": false
+   },
+   {
+    "x": 659,
+    "y": 439,
+    "w": 31,
+    "h": 31,
+    "text": "个",
+    "conf": 0.5,
+    "action": "kept",
+    "bg": "#687c8c",
+    "onPhoto": true
+   },
+   {
+    "x": 97,
+    "y": 517,
+    "w": 109,
+    "h": 25,
+    "text": "可收纳衣架",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#697b89",
+    "onPhoto": true
+   },
+   {
+    "x": 278,
+    "y": 517,
+    "w": 108,
+    "h": 25,
+    "text": "防风挂衣孔",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#6a7c8a",
+    "onPhoto": true
+   },
+   {
+    "x": 456,
+    "y": 515,
+    "w": 87,
+    "h": 27,
+    "text": "折叠网格",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#677b8a",
+    "onPhoto": true
+   },
+   {
+    "x": 620,
+    "y": 517,
+    "w": 66,
+    "h": 25,
+    "text": "衣袜夹",
+    "conf": 0.3,
+    "action": "kept",
+    "bg": "#7e8f9d",
+    "onPhoto": true
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 652
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.961690071446169
+  }
+ },
+ {
+  "id": "d05",
+  "kind": "detail",
+  "file": "clean/d05.png",
+  "out": "clean/d05.png",
+  "w": 754,
+  "h": 726,
+  "erased": 7,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 21,
+    "y": 117,
+    "w": 123,
+    "h": 24,
+    "text": "Rock space",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#ffffff",
+    "onPhoto": false
+   },
+   {
+    "x": 461,
+    "y": 111,
+    "w": 241,
+    "h": 64,
+    "text": "承重百斤",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#d2d2d2",
+    "onPhoto": false
+   },
+   {
+    "x": 23,
+    "y": 145,
+    "w": 81,
+    "h": 21,
+    "text": "Custom",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#ffffff",
+    "onPhoto": false
+   },
+   {
+    "x": 467,
+    "y": 185,
+    "w": 231,
+    "h": 60,
+    "text": "坚固耐用",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#d2d2d2",
+    "onPhoto": false
+   },
+   {
+    "x": 26,
+    "y": 337,
+    "w": 253,
+    "h": 30,
+    "text": "轻松承受2个人的重压",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f9f9f9",
+    "onPhoto": false
+   },
+   {
+    "x": 680,
+    "y": 356,
+    "w": 19,
+    "h": 44,
+    "text": "：",
+    "conf": 0.3,
+    "action": "erased",
+    "bg": "#dbdbdb",
+    "onPhoto": false
+   },
+   {
+    "x": 25,
+    "y": 369,
+    "w": 159,
+    "h": 30,
+    "text": "就是这么可靠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f9f9f9",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 36,
+    "y": 0,
+    "w": 754,
+    "h": 726
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.5479467900520532
+  }
+ },
+ {
+  "id": "d06",
+  "kind": "detail",
+  "file": "clean/d06.png",
+  "out": "clean/d06.png",
+  "w": 790,
+  "h": 671,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 671
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "d07",
+  "kind": "detail",
+  "file": "clean/d07.png",
+  "out": "clean/d07.png",
+  "w": 790,
+  "h": 614,
+  "erased": 4,
+  "kept": 2,
+  "boxesOut": [
+   {
+    "x": 57,
+    "y": 113,
+    "w": 125,
+    "h": 23,
+    "text": "Rock space",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#80918e",
+    "onPhoto": false
+   },
+   {
+    "x": 495,
+    "y": 109,
+    "w": 251,
+    "h": 65,
+    "text": "全新升级",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#bec8cb",
+    "onPhoto": true
+   },
+   {
+    "x": 57,
+    "y": 143,
+    "w": 81,
+    "h": 21,
+    "text": "Custom",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#7d8d8a",
+    "onPhoto": false
+   },
+   {
+    "x": 494,
+    "y": 183,
+    "w": 241,
+    "h": 65,
+    "text": "护衣防褶",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#c8d1d3",
+    "onPhoto": true
+   },
+   {
+    "x": 61,
+    "y": 360,
+    "w": 131,
+    "h": 29,
+    "text": "平铺式晾衣",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#818987",
+    "onPhoto": false
+   },
+   {
+    "x": 61,
+    "y": 389,
+    "w": 211,
+    "h": 30,
+    "text": "告别衣物晾晒变形",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#818987",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 614
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.7936507936507936
+  }
+ },
+ {
+  "id": "d08",
+  "kind": "detail",
+  "file": "clean/d08.png",
+  "out": "clean/d08.png",
+  "w": 790,
+  "h": 652,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 652
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "d09",
+  "kind": "detail",
+  "file": "clean/d09.png",
+  "out": "clean/d09.png",
+  "w": 790,
+  "h": 536,
+  "erased": 6,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 57,
+    "y": 129,
+    "w": 125,
+    "h": 23,
+    "text": "RocK space",
+    "conf": 0.3,
+    "latin": true,
+    "action": "erased",
+    "bg": "#bbc3c3",
+    "onPhoto": false
+   },
+   {
+    "x": 493,
+    "y": 124,
+    "w": 237,
+    "h": 65,
+    "text": "升级挂杆",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#e1e4e6",
+    "onPhoto": false
+   },
+   {
+    "x": 57,
+    "y": 157,
+    "w": 83,
+    "h": 22,
+    "text": "Custom",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#bbc3c3",
+    "onPhoto": false
+   },
+   {
+    "x": 495,
+    "y": 202,
+    "w": 235,
+    "h": 65,
+    "text": "强化收纳",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#dfe3e4",
+    "onPhoto": false
+   },
+   {
+    "x": 60,
+    "y": 375,
+    "w": 218,
+    "h": 28,
+    "text": "41cm加长 大容量",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#c4caca",
+    "onPhoto": false
+   },
+   {
+    "x": 60,
+    "y": 405,
+    "w": 216,
+    "h": 28,
+    "text": "蕞多可挂50个衣架",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#c4caca",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 536
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9381878486356098
+  }
+ },
+ {
+  "id": "d10",
+  "kind": "detail",
+  "file": "clean/d10.png",
+  "out": "clean/d10.png",
+  "w": 790,
+  "h": 588,
+  "erased": 1,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 71,
+    "y": 147,
+    "w": 181,
+    "h": 91,
+    "text": "约可挂50个衣架",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#bec3c4",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 588
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.8913458913458914
+  }
+ },
+ {
+  "id": "d11",
+  "kind": "detail",
+  "file": "clean/d11.png",
+  "out": "clean/d11.png",
+  "w": 790,
+  "h": 600,
+  "erased": 7,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 58,
+    "y": 0,
+    "w": 239,
+    "h": 13,
+    "text": "摆脱局限",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#45607d",
+    "onPhoto": false
+   },
+   {
+    "x": 520,
+    "y": 123,
+    "w": 210,
+    "h": 29,
+    "text": "隐形折叠晾晒神器",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#45607d",
+    "onPhoto": false
+   },
+   {
+    "x": 546,
+    "y": 157,
+    "w": 185,
+    "h": 31,
+    "text": "摆脱小户型局限",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#45607d",
+    "onPhoto": false
+   },
+   {
+    "x": 57,
+    "y": 171,
+    "w": 15,
+    "h": 15,
+    "text": "•",
+    "conf": 0.3,
+    "latin": true,
+    "action": "erased",
+    "bg": "#516b86",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 242,
+    "w": 790,
+    "h": 600
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9527272727272728
+  }
+ },
+ {
+  "id": "d12",
+  "kind": "detail",
+  "file": "clean/d12.png",
+  "out": "clean/d12.png",
+  "w": 790,
+  "h": 687,
+  "erased": 0,
+  "kept": 1,
+  "boxesOut": [
+   {
+    "x": 26,
+    "y": 268,
+    "w": 38,
+    "h": 19,
+    "text": "Dowmg）",
+    "conf": 0.3,
+    "action": "kept",
+    "bg": "#7f92ac",
+    "onPhoto": true
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 687
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.8891237961005403
+  }
+ },
+ {
+  "id": "d13",
+  "kind": "detail",
+  "file": "clean/d13.png",
+  "out": "clean/d13.png",
+  "w": 758,
+  "h": 371,
+  "erased": 4,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 218,
+    "y": 93,
+    "w": 324,
+    "h": 26,
+    "text": "9mm增厚底板+47mm加厚晾杆",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f8f9f8",
+    "onPhoto": false
+   },
+   {
+    "x": 235,
+    "y": 127,
+    "w": 286,
+    "h": 26,
+    "text": "加厚铝合金 承重强坚固耐用",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#f8f9f8",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 16,
+    "y": 316,
+    "w": 758,
+    "h": 371
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9137737961926092
+  }
+ },
+ {
+  "id": "d14",
+  "kind": "detail",
+  "file": "clean/d14.png",
+  "out": "clean/d14.png",
+  "w": 758,
+  "h": 734,
+  "erased": 0,
+  "kept": 1,
+  "boxesOut": [
+   {
+    "x": 529,
+    "y": 372,
+    "w": 134,
+    "h": 26,
+    "text": "8MM膨胀栓",
+    "conf": 1,
+    "action": "kept",
+    "bg": "#61768e",
+    "onPhoto": true
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 16,
+    "y": 0,
+    "w": 758,
+    "h": 734
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.9712814645308925
+  }
+ },
+ {
+  "id": "d15",
+  "kind": "detail",
+  "file": "clean/d15.png",
+  "out": "clean/d15.png",
+  "w": 790,
+  "h": 1074,
+  "erased": 6,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 57,
+    "y": 159,
+    "w": 125,
+    "h": 23,
+    "text": "RocK space",
+    "conf": 0.3,
+    "latin": true,
+    "action": "erased",
+    "bg": "#9aa6a2",
+    "onPhoto": false
+   },
+   {
+    "x": 500,
+    "y": 154,
+    "w": 235,
+    "h": 65,
+    "text": "闲置折叠",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#97a0a1",
+    "onPhoto": false
+   },
+   {
+    "x": 57,
+    "y": 187,
+    "w": 82,
+    "h": 21,
+    "text": "Custom",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#9aa6a2",
+    "onPhoto": false
+   },
+   {
+    "x": 497,
+    "y": 232,
+    "w": 235,
+    "h": 62,
+    "text": "不占空间",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#99a1a3",
+    "onPhoto": false
+   },
+   {
+    "x": 62,
+    "y": 381,
+    "w": 182,
+    "h": 26,
+    "text": "小空间从容应对",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#b3bebb",
+    "onPhoto": false
+   },
+   {
+    "x": 62,
+    "y": 415,
+    "w": 200,
+    "h": 28,
+    "text": "折叠宽度仅60cm",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#b5c0bc",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 1074
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.8203516647961092
+  }
+ },
+ {
+  "id": "d16",
+  "kind": "detail",
+  "file": "clean/d16.png",
+  "out": "clean/d16.png",
+  "w": 790,
+  "h": 497,
+  "erased": 1,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 213,
+    "y": 62,
+    "w": 364,
+    "h": 50,
+    "text": "轻松驾驭更多场所",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#465d71",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 497
+   },
+   "bandCut": true,
+   "blank": false,
+   "contentRatio": 0.9544652877986212
+  }
+ },
+ {
+  "id": "d17",
+  "kind": "detail",
+  "file": "clean/d17.png",
+  "out": "clean/d17.png",
+  "w": 299,
+  "h": 50,
+  "erased": 7,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 41,
+    "y": 241,
+    "w": 299,
+    "h": 50
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.02631578947368421
+  }
+ },
+ {
+  "id": "d18",
+  "kind": "detail",
+  "file": "clean/d18.png",
+  "out": "clean/d18.png",
+  "w": 790,
+  "h": 533,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 533
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "d19",
+  "kind": "detail",
+  "file": "clean/d19.png",
+  "out": "clean/d19.png",
+  "w": 790,
+  "h": 521,
+  "erased": 0,
+  "kept": 0,
+  "boxesOut": [],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 521
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": null
+  }
+ },
+ {
+  "id": "d20",
+  "kind": "detail",
+  "file": "clean/d20.png",
+  "out": "clean/d20.png",
+  "w": 774,
+  "h": 862,
+  "erased": 4,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 181,
+    "y": 211,
+    "w": 426,
+    "h": 60,
+    "text": "Think you need originality",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#597996",
+    "onPhoto": false
+   },
+   {
+    "x": 341,
+    "y": 289,
+    "w": 107,
+    "h": 29,
+    "text": "想你所需",
+    "conf": 0.3,
+    "action": "erased",
+    "bg": "#597a98",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 774,
+    "h": 862
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.36951126384116073
+  }
+ },
+ {
+  "id": "d21",
+  "kind": "detail",
+  "file": "clean/d21.png",
+  "out": "clean/d21.png",
+  "w": 790,
+  "h": 707,
+  "erased": 11,
+  "kept": 0,
+  "boxesOut": [
+   {
+    "x": 338,
+    "y": 101,
+    "w": 114,
+    "h": 18,
+    "text": "2020/12 New",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#f1f1f1",
+    "onPhoto": false
+   },
+   {
+    "x": 279,
+    "y": 151,
+    "w": 231,
+    "h": 36,
+    "text": "PARAMETER",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#efefef",
+    "onPhoto": false
+   },
+   {
+    "x": 334,
+    "y": 217,
+    "w": 122,
+    "h": 34,
+    "text": "产品参数",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f0",
+    "onPhoto": false
+   },
+   {
+    "x": 87,
+    "y": 373,
+    "w": 58,
+    "h": 32,
+    "text": "品牌",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f1",
+    "onPhoto": false
+   },
+   {
+    "x": 400,
+    "y": 373,
+    "w": 56,
+    "h": 32,
+    "text": "品名",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f1",
+    "onPhoto": false
+   },
+   {
+    "x": 86,
+    "y": 419,
+    "w": 94,
+    "h": 34,
+    "text": "八多马",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f0",
+    "onPhoto": false
+   },
+   {
+    "x": 398,
+    "y": 419,
+    "w": 230,
+    "h": 32,
+    "text": "壁挂式折叠晾衣架",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#eff0f0",
+    "onPhoto": false
+   },
+   {
+    "x": 87,
+    "y": 567,
+    "w": 60,
+    "h": 34,
+    "text": "材质",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#efefef",
+    "onPhoto": false
+   },
+   {
+    "x": 397,
+    "y": 566,
+    "w": 117,
+    "h": 37,
+    "text": "商品特点",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#eeeff0",
+    "onPhoto": false
+   },
+   {
+    "x": 88,
+    "y": 615,
+    "w": 88,
+    "h": 32,
+    "text": "铝合金",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f0",
+    "onPhoto": false
+   },
+   {
+    "x": 397,
+    "y": 610,
+    "w": 263,
+    "h": 43,
+    "text": "540°折叠、分区晾晒",
+    "conf": 0.5,
+    "action": "erased",
+    "bg": "#eeeff1",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 790,
+    "h": 707
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 1
+  }
+ },
+ {
+  "id": "d22",
+  "kind": "detail",
+  "file": "clean/d22.png",
+  "out": "clean/d22.png",
+  "w": 770,
+  "h": 796,
+  "erased": 9,
+  "kept": 6,
+  "boxesOut": [
+   {
+    "x": 67,
+    "y": 0,
+    "w": 115,
+    "h": 31,
+    "text": "适用范围",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#efeff0",
+    "onPhoto": false
+   },
+   {
+    "x": 377,
+    "y": 0,
+    "w": 117,
+    "h": 31,
+    "text": "安装方法",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#edeef0",
+    "onPhoto": false
+   },
+   {
+    "x": 69,
+    "y": 46,
+    "w": 171,
+    "h": 36,
+    "text": "阳台、卧室等",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#f0f0f0",
+    "onPhoto": false
+   },
+   {
+    "x": 378,
+    "y": 44,
+    "w": 200,
+    "h": 33,
+    "text": "详见纸质说明书",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#edeeef",
+    "onPhoto": false
+   },
+   {
+    "x": 293,
+    "y": 198,
+    "w": 69,
+    "h": 23,
+    "text": "157cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#e5e5e6",
+    "onPhoto": true
+   },
+   {
+    "x": 565,
+    "y": 318,
+    "w": 75,
+    "h": 25,
+    "text": "45.6cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#ebebeb",
+    "onPhoto": true
+   },
+   {
+    "x": 45,
+    "y": 350,
+    "w": 59,
+    "h": 21,
+    "text": "41cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#e3e3e3",
+    "onPhoto": true
+   },
+   {
+    "x": 345,
+    "y": 355,
+    "w": 60,
+    "h": 20,
+    "text": "51cm",
+    "conf": 1,
+    "latin": true,
+    "action": "erased",
+    "bg": "#ebebeb",
+    "onPhoto": false
+   },
+   {
+    "x": 137,
+    "y": 379,
+    "w": 56,
+    "h": 23,
+    "text": "51cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#e6e6e6",
+    "onPhoto": true
+   },
+   {
+    "x": 140,
+    "y": 485,
+    "w": 78,
+    "h": 32,
+    "text": "7.：5cm_",
+    "conf": 0.3,
+    "action": "erased",
+    "bg": "#eeeeee",
+    "onPhoto": false
+   },
+   {
+    "x": 508,
+    "y": 484,
+    "w": 57,
+    "h": 20,
+    "text": "50cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#dadbdc",
+    "onPhoto": true
+   },
+   {
+    "x": 91,
+    "y": 590,
+    "w": 21,
+    "h": 57,
+    "text": "15cm",
+    "conf": 1,
+    "latin": true,
+    "action": "kept",
+    "bg": "#dadada",
+    "onPhoto": true
+   },
+   {
+    "x": 628,
+    "y": 602,
+    "w": 25,
+    "h": 58,
+    "text": "81cm",
+    "conf": 0.5,
+    "latin": true,
+    "action": "erased",
+    "bg": "#eaebed",
+    "onPhoto": false
+   },
+   {
+    "x": 222,
+    "y": 692,
+    "w": 111,
+    "h": 20,
+    "text": "两孔间距7cm",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#e5e5e6",
+    "onPhoto": false
+   },
+   {
+    "x": 119,
+    "y": 732,
+    "w": 125,
+    "h": 20,
+    "text": "两孔间距4.5cm",
+    "conf": 1,
+    "action": "erased",
+    "bg": "#ededed",
+    "onPhoto": false
+   }
+  ],
+  "trim": {
+   "rect": {
+    "x": 20,
+    "y": 59,
+    "w": 770,
+    "h": 796
+   },
+   "bandCut": false,
+   "blank": false,
+   "contentRatio": 0.1438144329896907
+  }
+ }
+]

@@ -1,0 +1,65 @@
+/* 스튜디오: 전문 디자이너 톤 — 8pt 여백 체계 · 타이포 위계(헤드라인 50 / 소제목 30 / 본문 24) · 팔레트(--p-*) 기반 색 · 섹션 톤 교대 · 사진은 같은 라운드·그림자 */
+:root {
+  --page-bg: #ffffff; --fg: #14161a; --dim: #4b5158; --title: #14161a;
+  --accent: var(--p-accent, #2f5f8f); --on-accent: var(--p-on-accent, #ffffff);
+  --card-bg: var(--p-tint, #f3f5f8); --card-bd: transparent; --line: var(--p-line, #d9dee5); --stripe: var(--p-tint, #f3f5f8); --pic-bg: var(--p-tint, #f3f5f8);
+  --badge-bg: #ffffff; --badge-fg: #14161a; --badge-bd: var(--p-line, #d9dee5);
+  --ov-bg: rgba(20, 22, 26, .78); --ov-fg: #ffffff;
+  --r: 24px; --pad: 48px; --fs-h1: 50px; --fs-h2: 38px;
+  --ic-bg: var(--p-tint, #f3f5f8); --ic-fg: var(--p-accent, #2f5f8f);
+}
+body { background: #ffffff; }
+.sec { padding: 64px var(--pad); }
+.sec[data-tone="a"] { background: #ffffff; --card-bg: var(--p-tint, #f3f5f8); --card-bd: transparent; }
+.sec[data-tone="b"] { background: var(--p-tint, #f3f5f8); --card-bg: #ffffff; --card-bd: var(--p-line, #d9dee5); }
+.sec-title { font-size: var(--fs-h2); margin-bottom: 32px; }
+.sec-title::before { content: ""; display: block; width: 48px; height: 4px; border-radius: 2px; background: var(--accent); margin-bottom: 16px; }
+.pic, .stage { box-shadow: 0 12px 40px rgba(20, 22, 26, .10); }
+.pic { background: #ffffff; }
+/* hero */
+.hero { padding-top: 48px; padding-bottom: 48px; background: #ffffff; }
+.hero .eyebrow { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: .14em; }
+.hero .eyebrow::before { content: ""; width: 28px; height: 3px; background: var(--accent); border-radius: 2px; }
+.hero .headline { font-size: var(--fs-h1); }
+.hero .sub { color: var(--dim); }
+.badge { background: #ffffff; color: #14161a; border: 2px solid var(--p-line, #d9dee5); }
+.badge:first-child { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.hero-pic { margin-top: 24px; }
+/* 공감·문제 */
+.problem-item, .pain-card { box-shadow: 0 4px 16px rgba(20, 22, 26, .04); }
+/* 짙은 문장 */
+.agitate { background: var(--p-deep, #1a1d22) radial-gradient(120% 100% at 50% 100%, var(--p-deep2, #101418) 0%, var(--p-deep, #1a1d22) 70%); }
+.agitate-main { font-size: 46px; }
+/* 해법 */
+.solution { background: #ffffff; padding-top: 72px; padding-bottom: 72px; }
+.solution-head { font-size: 46px; }
+/* 핵심 차이 */
+.benefit { padding: 32px; box-shadow: 0 4px 16px rgba(20, 22, 26, .04); }
+.benefit h3 { font-size: 30px; }
+/* 숫자 */
+.proof-item { background: #ffffff; border: 1px solid var(--p-line, #d9dee5); }
+.sec[data-tone="a"] .proof-item { background: var(--p-tint, #f3f5f8); border-color: transparent; }
+.proof-num .val { font-size: 60px; }
+/* 비교 */
+table.compare { background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid var(--p-line, #d9dee5); }
+table.compare thead th.good { border-radius: 0; }
+/* 단계 */
+.step { background: #ffffff; border: 1px solid var(--p-line, #d9dee5); }
+.sec[data-tone="a"] .step { background: var(--p-tint, #f3f5f8); border-color: transparent; }
+/* 스펙 표 */
+table.spec { background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid var(--p-line, #d9dee5); }
+table.spec tr:nth-child(odd) { background: var(--p-tint, #f3f5f8); }
+table.spec tr:first-child th, table.spec tr:first-child td { border-top: 0; }
+table.spec th { color: var(--accent); }
+/* 구성·주의·FAQ */
+.chip { background: #ffffff; border: 2px solid var(--p-line, #d9dee5); }
+.checks .chk { background: var(--accent); color: var(--on-accent); }
+.checks .tag { background: #ffffff; border: 1px solid var(--p-line, #d9dee5); color: var(--accent); }
+.faq-card .qa { background: var(--accent); color: var(--on-accent); }
+.faq-card .a .qa { background: var(--p-tint2, #e4e8ee); color: var(--fg); }
+/* 마무리: 짙은 배경 */
+.cta { background: var(--p-deep, #1a1d22) radial-gradient(120% 90% at 50% 100%, var(--p-deep2, #101418) 0%, var(--p-deep, #1a1d22) 70%); color: #ffffff; padding-top: 80px; padding-bottom: 88px; }
+.cta .cta-head { color: #ffffff; font-size: 44px; }
+.cta .sub { color: rgba(255, 255, 255, .86); }
+.cta .stage.cta-pic { box-shadow: none; }
+/* 밝은 제품은 짙은 무대, 어두운 제품은 밝은 무대: 무대 안 글(치수선)은 base.css 가 처리 */

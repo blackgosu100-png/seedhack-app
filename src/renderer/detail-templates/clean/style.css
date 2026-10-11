@@ -1,0 +1,27 @@
+/* 클린: 흰 바탕 · 초록 강조 하나 · 둥근 흰 카드 · 넉넉한 여백 (앱 panel.css 색 체계와 같은 계열) */
+:root {
+  --page-bg: #ffffff; --fg: #1d2433; --dim: #475467; --title: #101828;
+  --accent: #15803d; --on-accent: #ffffff;
+  --card-bg: #f4f7f5; --card-bd: #e4ebe6; --line: #e4e7ec; --stripe: #f8faf9; --pic-bg: #f2f4f7;
+  --badge-bg: #ecfdf3; --badge-fg: #14532d; --badge-bd: #a6f4c5;
+  --ov-bg: rgba(255, 255, 255, .88); --ov-fg: #14532d;
+}
+.hero { background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 70%); }
+.hero .headline { color: #0b1a10; }
+.hero-pic { background: #ffffff; box-shadow: 0 10px 40px rgb(16 24 40 / .08); border: 1px solid #e4ebe6; }
+.sec-title::before { content: ""; display: block; width: 44px; height: 6px; border-radius: 3px; background: var(--accent); margin-bottom: 18px; }
+.pain { background: #f9fafb; }
+.pain-card { background: #ffffff; box-shadow: 0 2px 10px rgb(16 24 40 / .05); }
+.usp-item { background: #ffffff; box-shadow: 0 2px 10px rgb(16 24 40 / .05); }
+.usp-item .num { color: #15803d; }
+.feature { background: #ffffff; }
+.feature .cap-box { background: #f4f7f5; }
+.gallery { background: #f9fafb; }
+table.spec { background: #ffffff; border-radius: 14px; overflow: hidden; }
+.spec table.spec th { color: #344054; }
+.size { background: #f9fafb; }
+.notice .tag { background: #ecfdf3; color: #14532d; }
+.faq-card { background: #ffffff; box-shadow: 0 2px 10px rgb(16 24 40 / .05); }
+.cta { background: linear-gradient(180deg, #ffffff 0%, #ecfdf3 100%); }
+.cta .cta-head { color: #0b1a10; }
+.cta .sub { color: #166534; }
