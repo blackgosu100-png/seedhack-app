@@ -29,6 +29,8 @@ export function upsertPage(query, page, items, source = "coupang", tagQuery = ""
       rocket: it.rocket ?? o.rocket ?? null, pb: !!(it.pb ?? o.pb), seen: now, source: o.source || source,
       ship: it.ship ?? o.ship ?? null, shipDays: it.shipDays ?? o.shipDays ?? null,
     });
+    // 쿠팡 화면에서 직접 읽은 값은 따로 보관(Wing 값과 섞지 않는다) — 화면에서 못 읽은 칸은 null로 남겨 "확인 안 됨"을 구분
+    if (source === "coupang") o.page = { price: it.price ?? null, reviews: it.reviews ?? null, rating: it.rating ?? null, vid: it.vid || "", ts: now, q: q || "", raw: it.raw || "", revSrc: it.revSrc || "" };
     if (q) {
       o.query = q;
       if (!o.queries.includes(q)) o.queries = [q, ...o.queries].slice(0, 8);
@@ -65,6 +67,15 @@ export function upsertMetric(pid, ex, extra = {}) {
   return Object.keys(c).length;
 }
 
+// 📌 쿠팡 화면에서 사람이 직접 담은 상품: picked(담은 시각)을 남긴다. 자동 수집과 달리 지표가 없어도 수집함에 바로 보인다.
+export function pickCollect(it, query = "") {
+  if (!it?.pid) return countCollect();
+  upsertPage("", 1, [it], "coupang", query ? String(query).trim() : "");
+  const c = all();
+  const o = c[it.pid];
+  if (o) { o.picked = Date.now(); if (query && !o.query) o.query = String(query).trim(); c[it.pid] = o; put(c); }
+  return Object.keys(c).length;
+}
 export const listCollect = () => Object.values(all());
 export function removeCollect(pids) {
   const c = all();

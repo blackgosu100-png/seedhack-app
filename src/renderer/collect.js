@@ -7,11 +7,11 @@
   const man = (v) => (v == null ? "" : v >= 1e8 ? (v / 1e8).toFixed(1) + "억" : v >= 1e4 ? Math.round(v / 1e4).toLocaleString("ko-KR") + "만" : won(v));
   const IMG = "https://thumbnail6.coupangcdn.com/thumbnails/remote/230x230ex/image/";
   const imgUrl = (p) => (!p ? "" : /^https?:/.test(p) ? p : IMG + String(p).replace(/^\//, ""));
-  const AD = { go: "🟢 광고 시 여유", warn: "🟡 광고 시 빠듯", stop: "🔴 광고 시 적자" };
+  const AD = { go: "GO · 광고해도 남음", warn: "HOLD · 광고 시 빠듯", stop: "DROP · 광고 시 적자" };
   const SHIPC = { 로켓배송: "rk", 판매자로켓: "mr", 일반배송: "nm", 해외배송: "gl" };
   let MARGIN = 0.3, ADS = true; // 패널의 "광고 할 거예요/안 해요" 설정을 따른다. 클릭비용·광고 전환은 패널의 AdModel
 
-  let items = [], view = [], sel = new Set(), sort = { k: "rev", dir: -1 }, loaded = false;
+  let items = [], view = [], sel = new Set(), sort = { k: "when", dir: -1 }, loaded = false; // 기본: 최근 담은 순
   let pageLog = [], lastFq = null;
 
   // 광고 판정은 패널과 같은 식: 최대 ROAS(판매가×전환율÷예상 클릭비용) vs 본전 ROAS(1÷목표 마진)
@@ -30,6 +30,7 @@
     const cpa = AM.cpa(cvr), unitM = price ? price * MARGIN : null;
     const maxRoas = cvr != null && price ? (price * cvr * AM.conv) / AM.cpc : null;
     return { ...o, p: price, sales, views, cvr, rev: sales != null && price ? sales * price : null, maxRoas, cpa, unitM,
+      when: o.picked || o.seen || o.first || null, // 담은(본) 시각 — 직접 담은 상품은 picked 우선
       ad: ADS ? AM.judge(cpa, unitM) : null,
       rank: null, organic: null, adSlot: false,
       // 배송: Wing 조회값(판매자로켓/로켓배송) 우선, 없으면 화면 판단
@@ -37,11 +38,11 @@
   }
 
   const COLS = [
-    ["sel", "", 34], ["img", "", 52], ["name", "상품명", 260], ["query", "검색어", 110], ["rank", "노출 순위", 66], ["organic", "실제 순위", 66], ["ri", "순위 대비 판매", 96], ["p", "판매가", 82],
+    ["sel", "", 34], ["img", "", 52], ["name", "상품명", 260], ["query", "검색어", 110], ["when", "담은 날", 96], ["rank", "노출 순위", 66], ["organic", "실제 순위", 66], ["ri", "순위 대비 판매", 96], ["p", "판매가", 82],
     ["reviews", "리뷰", 66], ["sales", "28일 판매", 82], ["rev", "판매액", 82], ["views", "28일 조회", 82], ["cvr", "전환율", 66],
     ["ad", "광고 판정", 84], ["shipT", "배송", 84], ["seen", "지표 받은 날", 86],
   ];
-  const SORTABLE = new Set(["ri", "name", "query", "rank", "organic", "p", "reviews", "sales", "rev", "views", "cvr", "ad", "seen"]);
+  const SORTABLE = new Set(["ri", "name", "query", "when", "rank", "organic", "p", "reviews", "sales", "rev", "views", "cvr", "ad", "seen"]);
 
   function head() {
     $("coHead").innerHTML = `<tr>${COLS.map(([k, h, w]) => {
@@ -110,7 +111,7 @@
   }
   function filtered() {
     const fq = $("fQuery").value;
-    if (fq !== lastFq) { sort = fq ? { k: "rank", dir: 1 } : { k: "rev", dir: -1 }; lastFq = fq; } // 검색어를 고르면 순위 순서가 기본
+    if (fq !== lastFq) { sort = fq ? { k: "rank", dir: 1 } : { k: "when", dir: -1 }; lastFq = fq; } // 검색어를 고르면 순위 순서, 전체면 최근 담은 순이 기본
     const slots = fq ? slotRows(fq) : null;
     let list = slots;
     if (!slots) {
@@ -121,10 +122,11 @@
     $("coMode").textContent = slots ? `화면 순서 그대로 ${slots.length}칸 (${new Date(Math.max(...slots.map((r) => r.snapTs))).toLocaleString("ko-KR")} 기준) · 지표 없는 칸·PB도 표시` : "";
     const q = fq, s = +$("fSales").value || 0, cv = (+$("fCvr").value || 0) / 100;
     const pmin = +$("fPmin").value || 0, pmax = +$("fPmax").value || Infinity, rv = $("fRev").value === "" ? Infinity : +$("fRev").value;
-    const ad = $("fAd").value, needM = $("fMetric").checked, noAd = $("fNoAd").checked, noPb = $("fNoPb").checked;
+    const ad = $("fAd").value, needM = $("fMetric").checked, noAd = $("fNoAd").checked, noPb = $("fNoPb").checked, onlyPicked = $("fPicked").checked;
     return list.filter((o) => {
+      if (onlyPicked && !o.picked) return false;
       if (!slots && q && !(o.queries || []).includes(q)) return false;
-      if (!slots && needM && o.sales == null) return false; // 순위 보기에서는 빈칸 없이 모든 칸을 보여 준다
+      if (!slots && needM && o.sales == null && !o.picked) return false; // 직접 담은 상품은 지표가 없어도 보인다
       if (s && (o.sales ?? -1) < s) return false;
       if (cv && (o.cvr ?? -1) < cv) return false;
       if ((pmin || pmax !== Infinity) && (o.p == null || o.p < pmin || o.p > pmax)) return false;
@@ -169,11 +171,12 @@
       <td class="thumb">${o.img ? `<img loading="lazy" src="${esc(imgUrl(o.img))}" alt="">` : ""}</td>
       <td class="nm"><a href="${esc(link)}" target="_blank" title="${esc(o.name)}">${esc(o.name || `상품 ${o.pid} (정보 없음)`)}</a> ${pbTag}${adTag}${newTag}</td>
       <td title="${esc((o.queries || []).join(", "))}">${esc(o.query || "")}${(o.queries || []).length > 1 ? ` <small>+${o.queries.length - 1}</small>` : ""}</td>
+      <td class="when" title="${o.when ? new Date(o.when).toLocaleString("ko-KR") : ""}${o.picked ? " · 📦 담기로 직접 담음" : ""}">${o.picked ? `<span class="pk">📌</span>` : ""}${whenText(o.when)}</td>
       <td class="num rk" title="${o.rank ? `'${esc(o.rankQ)}' 화면에서 위에서 ${o.rank}번째 (광고 포함)` : "쿠팡 화면에서 본 순위 없음"}">${o.rank ?? ""}</td>
       <td class="num rk" title="${o.adSlot ? "광고 칸 — 실제 순위에서 제외" : o.organic ? `광고를 뺀 실제 순위 ${o.organic}위` : ""}">${o.adSlot ? `<span class="tag adslot">AD</span>` : o.organic ?? ""}</td>
       <td class="num ${o.ri >= 1.5 ? "good strong" : o.ri != null && o.ri < 0.67 ? "muted" : ""}" title="${o.ri != null ? `같은 검색어 ${o.riN}개 상품의 '순위별 판매 추세'로 보면 이 순위의 기대 판매는 약 ${won(o.sales / o.ri)}개 — 실제 ${won(o.sales)}개` : "같은 검색어에서 순위·판매가 있는 상품이 5개 이상 모이면 계산됩니다"}">${o.ri == null ? "" : `${o.ri >= 1.5 ? "🔥 " : ""}${o.ri.toFixed(1)}배`}</td>
-      <td class="num">${won(o.p)}</td>
-      <td class="num">${won(o.reviews)}</td>
+      <td class="num ${o.page?.price != null && o.p === o.page.price ? "cpt" : ""}" title="${o.page?.price != null && o.p === o.page.price ? "쿠팡 화면 가격(쿠폰·즉시할인 적용)" : "Wing 판매가 — 쿠팡 화면에서 아직 못 읽음"}">${won(o.p)}</td>
+      <td class="num ${o.page?.reviews != null ? "cpt-r" : ""}" title="${o.page?.reviews != null ? "쿠팡 화면 리뷰 수" : "Wing 리뷰 수"}">${won(o.reviews)}</td>
       <td class="num strong">${won(o.sales)}</td>
       <td class="num">${man(o.rev)}</td>
       <td class="num">${won(o.views)}</td>
@@ -183,10 +186,35 @@
       <td class="num ${days != null && days >= 7 ? "bad" : "muted"}" title="${ts ? new Date(ts).toLocaleString("ko-KR") : "지표를 아직 받지 않음"}">${days == null ? "" : days === 0 ? "오늘" : `${days}일 전`}</td></tr>`;
   }
 
+  // 날짜 표시·묶음 (맥 다운로드처럼): 오늘 14:32 · 어제 · 이번 주 요일 · 그 전은 날짜
+  const DAY = 864e5;
+  const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  function whenText(t) {
+    if (!t) return "";
+    const d = new Date(t), today = dayStart(Date.now()), day = dayStart(t);
+    const hm = d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    if (day === today) return `오늘 ${hm}`;
+    if (day === today - DAY) return `어제 ${hm}`;
+    if (today - day < 7 * DAY) return `${["일", "월", "화", "수", "목", "금", "토"][d.getDay()]}요일 ${hm}`;
+    return `${d.getMonth() + 1}/${d.getDate()}${d.getFullYear() !== new Date().getFullYear() ? `/${String(d.getFullYear()).slice(2)}` : ""}`;
+  }
+  function dayGroup(t) {
+    if (!t) return "날짜 없음";
+    const today = dayStart(Date.now()), day = dayStart(t);
+    return day === today ? "오늘" : day === today - DAY ? "어제" : today - day < 7 * DAY ? "이번 주" : today - day < 30 * DAY ? "이번 달" : "이전";
+  }
   function render() {
     view = sorted(filtered());
     head();
-    $("coBody").innerHTML = view.map(rowHtml).join("");
+    if (sort.k === "when") { // 최근순일 때만 날짜 묶음 줄을 끼운다
+      let last = null, html = "";
+      for (const o of view) {
+        const g = dayGroup(o.when);
+        if (g !== last) { const n = view.filter((x) => dayGroup(x.when) === g).length; html += `<tr class="day"><td colspan="${COLS.length}"><b>${g}</b>${n}개</td></tr>`; last = g; }
+        html += rowHtml(o);
+      }
+      $("coBody").innerHTML = html;
+    } else $("coBody").innerHTML = view.map(rowHtml).join("");
     $("coEmpty").hidden = items.length > 0;
     $("coTable").hidden = items.length === 0;
     $("coFilter").hidden = items.length === 0;
@@ -199,10 +227,11 @@
   }
 
   function fillQueries() {
-    const counts = {};
-    items.forEach((o) => (o.queries || []).forEach((q) => (counts[q] = (counts[q] || 0) + 1)));
+    const counts = {}, latest = {};
+    items.forEach((o) => (o.queries || []).forEach((q) => { counts[q] = (counts[q] || 0) + 1; latest[q] = Math.max(latest[q] || 0, o.when || 0); }));
     const cur = $("fQuery").value;
-    $("fQuery").innerHTML = `<option value="">전체</option>` + Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([q, n]) => `<option value="${esc(q)}">${esc(q)} (${n})</option>`).join("");
+    // 최근에 담은 검색어가 위로
+    $("fQuery").innerHTML = `<option value="">전체</option>` + Object.entries(counts).sort((a, b) => (latest[b[0]] || 0) - (latest[a[0]] || 0)).map(([q, n]) => `<option value="${esc(q)}">${esc(q)} (${n})</option>`).join("");
     $("fQuery").value = counts[cur] ? cur : "";
   }
 
@@ -223,7 +252,7 @@
   $("coFilter").addEventListener("input", render);
   $("fReset").addEventListener("click", () => {
     ["fSales", "fCvr", "fPmin", "fPmax", "fRev"].forEach((id) => ($(id).value = ""));
-    $("fQuery").value = ""; $("fAd").value = ""; $("fMetric").checked = true; $("fNoAd").checked = false; $("fNoPb").checked = true; $("fHidden").checked = false; $("fRookie").value = ""; $("fShip").value = ""; lastFq = null;
+    $("fQuery").value = ""; $("fAd").value = ""; $("fMetric").checked = true; $("fPicked").checked = false; $("fNoAd").checked = false; $("fNoPb").checked = true; $("fHidden").checked = false; $("fRookie").value = ""; $("fShip").value = ""; lastFq = null;
     render();
   });
   $("coHead").addEventListener("click", (e) => {
@@ -234,7 +263,7 @@
     const th = e.target.closest("th[data-k]");
     if (!th || !SORTABLE.has(th.dataset.k)) return;
     const k = th.dataset.k;
-    sort = { k, dir: sort.k === k ? -sort.dir : k === "name" || k === "query" || k === "rank" || k === "p" ? 1 : -1 };
+    sort = { k, dir: sort.k === k ? -sort.dir : k === "name" || k === "query" || k === "rank" || k === "p" ? 1 : -1 }; // when 은 최근순(-1)이 기본
     render();
   });
   let lastIdx = null;
@@ -274,8 +303,9 @@
     const picked = items.filter((o) => sel.has(o.pid));
     const dbCache = {};
     let added = 0, skipped = 0;
+    const px = window.AiScan?.pick(picked.length, $("fQuery").value || ""); // 🎤 발표 모드: 담기 해커 화면(실제 처리에 맞춰 한 개씩)
     for (const o of picked) {
-      if (window.Listup?.has(o.pid)) { skipped++; continue; }
+      if (window.Listup?.has(o.pid)) { skipped++; await px?.item(o, { skip: true }); continue; }
       const q = $("fQuery").value || o.query || "";
       if (q && !q.startsWith("📂") && !dbCache[q]) dbCache[q] = await api.invoke("kw:db", q); // 카테고리는 키워드 DB 조회 안 함
       const db = dbCache[q] || {};
@@ -283,16 +313,20 @@
       const page1 = items.filter((x) => x.pos?.[q]?.page === 1 && Date.now() - x.pos[q].ts < 3 * 864e5 && x.p);
       const prices = page1.map((x) => x.p);
       const sub = (db.subs || []).find((s) => !s.brand);
-      window.Listup.add({
+      const en = window.Entry?.forItem(o.p); // 🎯 추천 판매가(경쟁사보다 체감 할인)
+      const row = window.Listup.add({
         keyword: q, kwVol: db.main?.m1 ?? null, subKw: sub?.kw || "", subVol: sub?.m1 ?? null,
         subs: (db.subs || []).slice(0, 15).map((s) => ({ kw: s.kw, m1: s.m1, brand: s.brand })),
         maxPrice: prices.length ? Math.max(...prices) : null, minPrice: prices.length ? Math.min(...prices) : null,
         name: o.name, pid: o.pid, img: o.img, benchUrl: `https://www.coupang.com/vp/products/${o.pid}${o.vid ? `?vendorItemId=${o.vid}` : ""}`,
         bSales: o.sales, bViews: o.views, bCvr: o.cvr, ad: o.ad, maxRoas: o.maxRoas, cpa: o.cpa,
-        monthly: "", benchMonthly: o.sales != null ? Math.round((o.sales * 30) / 28) : null, benchPrice: o.p,
+        monthly: "", benchMonthly: o.sales != null ? Math.round((o.sales * 30) / 28) : null, benchPrice: o.p, recPrice: en?.cut > 0 ? en.price : null, bReviews: o.reviews ?? null, bRating: o.rating ?? null, bShip: o.shipT || "",
       });
+      window.Listup.queue1688?.(row); // 🎯 1688 자동 조사 줄에(하나씩 차례로)
       added++;
+      await px?.item(o, { db, minPrice: prices.length ? Math.min(...prices) : null, maxPrice: prices.length ? Math.max(...prices) : null });
     }
+    if (px) await px.finish({ added, skipped });
     window.PanelHooks?.log("go", `☆ 수집함 → 리스트업 ${added}개 담음${skipped ? ` · 이미 담긴 ${skipped}개 제외` : ""}`);
     sel.clear();
     render();
