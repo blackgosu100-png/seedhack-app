@@ -20,13 +20,14 @@ import updaterPkg from "electron-updater";
 const { autoUpdater } = updaterPkg;
 import { DEFAULTS, buildMarkets, judge, isPB, pbList } from "../shared/strategy-core.js";
 import { REVIEW_CAP } from "../shared/review-core.js";
-import { summarize as hyojaSummarize } from "../shared/hyoja-core.js";
+import { summarize as hyojaSummarize, pagePrice } from "../shared/hyoja-core.js";
 import { dhashFromGray, grayFromBGRA, rankBySimilarity, specRerank, decidePrice, koHint, toNum } from "./sku-core.js";
 import { parseCard, rankCards, decideCost, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
 import { combo, scan as kwScan, draw as kwDraw, famousBrands } from "./kw-combo.js";
 import { STRATEGY_SYSTEM, STRATEGY_SCHEMA, renderStrategyInput } from "./strategy-prompt.js";
 import { runStructured } from "./detail/cli.js";
 import { initChat } from "./chat.js";
+import { initWave } from "./wave.js"; // 🌊 파도타기
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,7 +119,25 @@ function layout() {
   cnView?.setVisible(active === "cn");
   cleanTabs.forEach((t) => { t.view.setBounds(bc); t.view.setVisible(active === "clean" && t.view === cleanView); });
 }
-const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc);
+const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || (!!cpBg && cpBg.webContents === wc);
+// 🕶 쿠폰가 읽기 전용 숨은 화면 — 쿠팡 탭과 같은 세션(클린 세션)이지만 화면에 보이지 않는다.
+//  키워드 추천·키워드 분석이 쿠팡 검색 화면을 열 때 사람이 보고 있는 쿠팡 탭을 새로고침하지 않도록 따로 둔다(2026-10-12)
+let cpBg = null, cpBgPart = null;
+function coupangBgView() {
+  if (cpBg && !cpBg.webContents.isDestroyed() && cpBgPart === cleanPart) return cpBg;
+  if (cpBg) { try { win.contentView.removeChildView(cpBg); cpBg.webContents.close(); } catch {} }
+  if (!cleanPart) cleanPart = `clean-${Date.now()}`;
+  cpBgPart = cleanPart;
+  cpBg = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  win.contentView.addChildView(cpBg);
+  const [w, h] = win.getContentSize();
+  cpBg.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) }); // 크기를 준 뒤 숨김(크기 0이면 카드가 안 그려질 수 있음)
+  cpBg.setVisible(false);
+  cpBg.webContents.setAudioMuted(true);
+  cpBg.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  cpBg.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다(쿠폰가 읽기): ${err?.message || err}`));
+  return cpBg;
+}
 function sendTabs() {
   send("ctabs", {
     active: cleanTabs.find((t) => t.view === cleanView)?.id ?? null,
@@ -188,6 +207,12 @@ function hookView(view, tab) {
         log("dim", `  💬 채팅창 열림 ${u.href.slice(0, 160)}`);
         if (/^https?:$/.test(u.protocol)) chat.opened(u.href); else log("stop", `✕ 💬 1688이 PC용 旺旺 프로그램(${u.protocol})을 열려고 합니다 — 웹 채팅이 아니라 자동 문의를 할 수 없습니다`);
         return { action: "deny" };
+      }
+      // 🛍 타오바오 사진 검색: 결과 주소(s.taobao.com/search?imgSearchOrigin=…)에 사진 번호가 없고, 사진은 "새로 연 창"에 넘겨준다.
+      // 같은 화면에 다시 열면 사진이 빠져 "网络信号走丢啦"(결과 없음) → 이 창만은 진짜 새 창으로 열어 준다(같은 로그인·도우미 스크립트 그대로)
+      if (tab === "cn" && /(^|\.)taobao\.com$/i.test(u.hostname) && u.searchParams.has("imgSearchOrigin")) {
+        log("dim", "  🛍 타오바오 사진 검색 결과를 새 창으로 엽니다");
+        return { action: "allow", overrideBrowserWindowOptions: { width: 1360, height: 900, title: "🛍 타오바오 — 씨드핵", autoHideMenuBar: true, backgroundColor: "#ffffff" } };
       }
       // (2026-10-08) 예전에 "전체 사진" 뜻으로 region=0,360,0,360 을 붙였으나 1688이 더 이상 받지 않아(썸네일 깨짐·0건) 붙이지 않는다 — 1688 기본(물체 자동 선택)으로 검색
       wc.loadURL(u.href);
@@ -345,15 +370,25 @@ function openDash(id) {
   dashView.webContents.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(id)}&embed=1`);
 }
 // 🔎 키워드 분석의 쿠폰가 읽기: ② 쿠팡 탭에서 같은 검색어를 뒤에서 연다(지금 보는 화면은 그대로). coupang.cjs가 카드 가격을 수집함에 넣는다
-ipcMain.handle("kw:coupang", (_e, kw) => {
+ipcMain.handle("kw:coupang", (_e, kw) => openCoupangSearch(kw));
+function openCoupangSearch(kw) {
   const q = String(kw || "").trim().slice(0, 60);
   if (!q || !licensed()) return false;
   if (SELFTEST && process.env.SELFTEST_SITES !== "1") return false; // 자체 점검은 실제 쿠팡에 접속하지 않는다
   const url = `https://www.coupang.com/np/search?q=${encodeURIComponent(q)}`;
-  if (!cleanView) openCleanTab(url, false);
-  else { cleanView.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); layout(); sendTabs(); }
+  if (!win) return false;
+  coupangBgView().webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); // 숨은 화면에서 — 사람이 보는 쿠팡 탭은 그대로
   return true; // 화면이 가격을 기다려도 된다
-});
+}
+// 쿠팡 화면이 이 검색어의 카드 가격을 수집함에 넣을 때까지 기다린다(coupang.cjs가 화면을 연 뒤 약 3초에 읽음) — 못 오면 있는 그대로
+async function waitCoupangRows(kw, since, ms) {
+  const q = String(kw || "").trim().slice(0, 60), end = since + ms;
+  for (;;) {
+    const rows = listCollect();
+    if (rows.some((r) => r.pos?.[q]?.ts >= since) || Date.now() >= end) return rows;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
 const curView = () => (active === "wing" ? wingView : active === "cn" ? cnView : active === "chat" ? chat.view() : active === "dash" ? dashView : cleanView);
 ipcMain.handle("nav:back", () => { const v = curView(); if (v?.webContents.navigationHistory.canGoBack()) v.webContents.navigationHistory.goBack(); });
 ipcMain.handle("nav:reload", () => curView()?.webContents.reload());
@@ -367,6 +402,18 @@ function createCn(url = CN_HOME) {
     win.contentView.addChildView(cnView);
     hookView(cnView, "cn");
     cnView.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 1688 도우미 스크립트 오류: ${err?.message || err}`));
+    // 🛍 타오바오 사진 검색 새 창: 같은 로그인(persist:1688)·도우미 스크립트를 물려받는다. 그 창에서 상품을 누르면 같은 창에서 연다(창이 늘어나지 않게)
+    const tbWin = (w) => {
+      const wc = w.webContents; tbWins.add(wc);
+      wc.setWindowOpenHandler(({ url }) => {
+        if (/(^|\.)taobao\.com\/search\?.*imgSearchOrigin/i.test(url.replace(/^https?:\/\//, ""))) return { action: "allow", overrideBrowserWindowOptions: { width: 1360, height: 900, title: "🛍 타오바오 — 씨드핵", autoHideMenuBar: true } }; // 그 창 안에서 다시 사진 검색해도 사진이 넘어가게
+        if (/^https?:\/\//i.test(url)) wc.loadURL(url);
+        return { action: "deny" };
+      });
+      wc.on("did-create-window", tbWin);
+      w.on("closed", () => tbWins.delete(wc));
+    };
+    cnView.webContents.on("did-create-window", tbWin);
     // 판매자 연락 버튼이 같은 화면에서 채팅으로 넘어간 경우: 채팅은 💬 화면으로 옮기고 상품 화면은 되돌린다
     cnView.webContents.on("did-navigate", (_e, url) => { if (chat.isImUrl(url)) { chat.opened(url); cnView.webContents.navigationHistory.goBack(); } });
   }
@@ -712,7 +759,10 @@ ipcMain.handle("cn:pendingDone", (e) => { if (cnView && e.sender === cnView.webC
 // ---- 🛍 타오바오에서 같은 상품 찾기 + 📷 리뷰 사진 모으기 ----
 // 1688은 도매라 싸지만 상세·리뷰 사진이 약하다 → 같은 사진으로 타오바오를 찾아, 직접 촬영한 판매자 상세와 구매자 리뷰 사진을 참고 자료로 모은다.
 // 1688 탭(같은 알리바바 로그인)에서 연다. 화면에 뜬 것만 읽고, 사진 검색·리뷰 저장은 사람이 누를 때만.
+initWave({ ipcMain, store, log, getCnView: () => cnView, fromCn: (e) => fromCn(e) || tbWins.has(e.sender), getTarget: () => cnTarget });
 let cnPhoto = null, tbPending = null;
+const tbWins = new Set(); // 타오바오 사진 검색 새 창(들)의 화면
+const fromTb = (e) => fromCn(e) || tbWins.has(e.sender);
 ipcMain.handle("tb:search", (e) => {
   if (!fromCn(e)) return { error: "1688 탭에서만 됩니다" };
   if (!cnPhoto) return { error: "쿠팡 상품 사진이 없습니다 — 리스트업에서 🔍1688로 먼저 검색해 주세요" };
@@ -721,13 +771,13 @@ ipcMain.handle("tb:search", (e) => {
   cnView.webContents.loadURL("https://www.taobao.com/");
   return { ok: true };
 });
-ipcMain.handle("tb:pending", (e) => (fromCn(e) && tbPending && Date.now() - tbPending.ts < 10 * 60 * 1000 ? tbPending : null));
-ipcMain.handle("tb:pendingDone", (e) => { if (fromCn(e)) tbPending = null; });
-ipcMain.on("tb:log", (e, t) => { if (fromCn(e)) log("dim", `  🛍 ${String(t).slice(0, 900)}`); });
-ipcMain.handle("tb:translate", async (e, texts) => (fromCn(e) ? chat.translate((Array.isArray(texts) ? texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 500))) : []));
+ipcMain.handle("tb:pending", (e) => (fromTb(e) && tbPending && Date.now() - tbPending.ts < 10 * 60 * 1000 ? tbPending : null));
+ipcMain.handle("tb:pendingDone", (e) => { if (fromTb(e)) tbPending = null; });
+ipcMain.on("tb:log", (e, t) => { if (fromTb(e)) log("dim", `  🛍 ${String(t).slice(0, 900)}`); });
+ipcMain.handle("tb:translate", async (e, texts) => (fromTb(e) ? chat.translate((Array.isArray(texts) ? texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 500))) : []));
 // 고른 리뷰 사진을 폴더에 저장(+번역한 리뷰 글) → 폴더를 연다. 상세페이지에 쓸지는 사람이 고른다(다른 판매자·구매자 사진의 권리 주의)
 ipcMain.handle("tb:saveReviews", async (e, p = {}) => {
-  if (!fromCn(e)) return { error: "1688 탭에서만 됩니다" };
+  if (!fromTb(e)) return { error: "1688 탭에서만 됩니다" };
   const id = String(p.itemId || "item").replace(/[^\w-]/g, "").slice(0, 30) || "item";
   const dir = path.join(app.getPath("userData"), "taobao-reviews", id);
   fs.mkdirSync(dir, { recursive: true });
@@ -1038,11 +1088,30 @@ ipcMain.handle("excel:save", async (_e, payload) => {
 
 // ---------- 키워드 검색 · 리스트업 ----------
 const calc = () => ({ fx: 300, fee: 0.1188, adRate: 0.1, ...(store.get("calc") || {}) });
-ipcMain.handle("kw:search", async (_e, { keyword, pages = 1, force = false }) => {
+// 🕘 키워드 분석 최근 검색: 저장된 검색 결과(kwCache, 최근 300개) 목록 — 최신 순 · 요약 숫자만
+//  키워드 추천이 카드를 채우려고 돌린 Wing 검색도 kwCache에 쌓인다 → 추천에서 받은 키워드는 사람이 키워드 분석에서 직접 검색한 것(kwMine)만 보여 준다(2026-10-12)
+const markMine = (kw) => { const m = mineInit(); m[kw] = Date.now(); const ks = Object.keys(m); if (ks.length > 500) ks.sort((a, b) => m[a] - m[b]).slice(0, ks.length - 500).forEach((k) => delete m[k]); store.set("kwMine", m); };
+// 처음 한 번: 키워드 분석 검색 때만 남는 정확도 대조 파일(userData/accuracy/검색어.json)로 예전에 직접 검색한 키워드를 채운다
+function mineInit() {
+  if (store.get("kwMine")) return store.get("kwMine");
+  const m = {};
+  try { const dir = path.join(app.getPath("userData"), "accuracy");
+    for (const f of fs.readdirSync(dir)) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); if (j?.kw) m[j.kw] = Date.parse(j.ts) || 0; } catch {} } } catch {}
+  store.set("kwMine", m);
+  return m;
+}
+ipcMain.handle("kw:history", () => {
+  const cache = store.get("kwCache") || {}, mine = mineInit();
+  const fromReco = new Set((store.get("recoDraw")?.history || []).map((k) => k.kw));
+  return Object.values(cache).filter((h) => h?.keyword && h.items?.length && (!fromReco.has(h.keyword) || mine[h.keyword])).sort((a, b) => b.ts - a.ts).slice(0, 100)
+    .map((h) => ({ kw: h.keyword, ts: h.ts, n: h.items.length, sales: h.items.reduce((t, it) => t + (it.ex?.sales || 0), 0), rev: h.items.reduce((t, it) => t + (it.ex?.sales || 0) * (it.ex?.price || it.price || 0), 0) }));
+});
+ipcMain.handle("kw:search", async (_e, { keyword, pages = 1, force = false, saved = false }) => {
   if (!licensed()) return LOCKED;
+  markMine(String(keyword || "")); // 키워드 분석에서 직접 검색 → 최근 검색에 보임
   const db = await lookup(keyword).catch(() => ({ month: null, main: null, subs: [] }));
   if (db.main) log("sys", `▶ '${keyword}' 네이버 월검색 ${db.main.m1?.toLocaleString() ?? "-"} · 서브키워드 후보 ${db.subs.length}개 (제휴 DB ${db.month})`);
-  const res = await searchKeyword(keyword, Math.min(3, Math.max(1, pages)), wingView.webContents, log, force);
+  const res = await searchKeyword(keyword, Math.min(3, Math.max(1, pages)), wingView.webContents, log, force, saved);
   if (res.items?.length) {
     const pbs = pbList(settings());
     upsertPage(null, 1, res.items.map((it) => ({ ...it, pb: isPB(it, pbs) })), "wing", keyword); // Wing 결과는 쿠팡 화면 순위(pos)를 건드리지 않는다
@@ -1072,40 +1141,78 @@ ipcMain.handle("kw:scan", (_e, o) => kwScan(o || {}));
 // 받은 키워드 결과 다시 보기용: 카드 요약을 키워드별로 저장(기간 제한 없음, 최근 300개) — 껐다 켜도 Wing 조회 없이 그대로 보여 줌
 const HY_KEEP = 300;
 const hySave = (kw, r) => { const all = store.get("hyojaSaved") || {}; all[kw] = { ...r, savedAt: Date.now() }; const ks = Object.keys(all); if (ks.length > HY_KEEP) ks.sort((a, b) => all[a].savedAt - all[b].savedAt).slice(0, ks.length - HY_KEEP).forEach((k) => delete all[k]); store.set("hyojaSaved", all); };
-ipcMain.handle("kw:hyoja", async (_e, { keyword, top = 5, saved = false } = {}) => {
-  if (!licensed()) return LOCKED;
-  const t0 = Date.now();
-  const kw = String(keyword || "");
-  if (saved) { const s = (store.get("hyojaSaved") || {})[kw]; if (s) return { ...s, cached: true, ms: 0 }; } // 지난 결과 다시 열기: 저장본 우선
-  const res = await searchKeyword(kw, 1, wingView.webContents, log, false);
-  if (res.error) return { error: res.error, ms: Date.now() - t0 };
-  const raw = (res.items || []).filter((x) => x.ex?.sales != null).map((x) => ({ name: x.name, brand: x.brand || "", pid: x.pid, vid: x.vid, img: x.img, price: x.ex.price || x.price || 0, reviews: x.reviews, sales: x.ex.sales }));
+// 카드를 빨리 보여 주려고 두 번에 나눠 채운다(2026-10-12)
+//  ① kw:hyoja — Wing 검색만으로 바로 카드(가격은 예전에 쿠팡 화면에서 본 것만 쿠폰가, 나머지는 Wing 판매가)
+//  ② kw:hyojaCp — 10개가 다 뜬 뒤 키워드마다 쿠팡 검색 화면을 뒤에서 1번 열어 쿠폰가를 읽고 숫자를 다시 계산(cp: true)
+const hyWing = new Map(); // 검색어 → 방금 받은 Wing 결과(②에서 Wing을 다시 부르지 않으려고)
+async function hyojaBuild(kw, res, rows, { top, t0, cp }) {
+  const byPid = new Map(rows.map((r) => [String(r.pid), r]));
+  const raw = (res.items || []).filter((x) => x.ex?.sales != null).map((x) => {
+    const wingP = x.ex.price || x.price || 0, p = pagePrice({ price: wingP, vid: x.vid }, byPid.get(String(x.pid)));
+    return { name: x.name, brand: x.brand || "", pid: x.pid, vid: x.vid, img: x.img, price: p.price || 0, listPrice: wingP, priceSrc: p.src, pagePrice: p.pagePrice, reviews: x.reviews, sales: x.ex.sales };
+  });
   // 카드 숫자(월매출·틈·1688 기준가)는 검색어와 다른 상품을 뺀 뒤 계산 — hyoja-core.js · 유명 브랜드(키워드 DB)는 "틈"에서 뺌
   const famous = await famousBrands(raw.map((x) => x.brand)).catch(() => new Set());
   const s = hyojaSummarize(kw, raw, { top, famous });
-  const out = { keyword: kw, ms: Date.now() - t0, cached: !!res.cached, n: s.n,
-    total: { sales: s.sales, rev: s.rev }, price: s.price, gap: s.gap, gapBrandOnly: s.gapBrandOnly, top1Share: s.top1Share, brandShare: s.brandShare, brandTop: s.brandTop, medical: s.medical,
+  // total = 판매액 상위 10개 합 · v3: v2 저장본은 price·gap·주의 정보가 빠진 채 저장됐음(주석 실수) → 다시 계산 · v4: 팔아봤어요 지표(top1Sales·big500) 추가 · v5: 쿠팡 화면 쿠폰가 반영(v4는 Wing 할인 전 가격)
+  const nPage = raw.filter((x) => x.priceSrc === "page").length;
+  if (cp) log(nPage ? "go" : "warn", `${nPage ? "✔" : "△"} ${kw.replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}: 쿠폰가 반영 ${nPage}/${raw.length}개${nPage < raw.length ? " · 나머지는 Wing 판매가(쿠폰 전)" : ""}`);
+  const out = { v: 5, keyword: kw, cp, priced: { page: nPage, all: raw.length }, ms: Date.now() - t0, cached: !!res.cached, n: s.n, nAll: s.nAll, wingRaw: res.raw ?? null,
+    total: { sales: s.sales, rev: s.rev, reviews: s.reviews, brandRev: s.brandRev }, price: s.price, gap: s.gap, top1Sales: s.top1Sales, big500: s.big500, gapBrandOnly: s.gapBrandOnly, top1Share: s.top1Share, brandShare: s.brandShare, brandTop: s.brandTop, medical: s.medical,
     drop: s.drop.map((x) => ({ name: x.name, sales: x.sales, why: x.why })),
     top: { sales: s.top.reduce((t, x) => t + x.sales, 0), rev: s.top.reduce((t, x) => t + x.rev, 0) },
     items: s.top };
   hySave(kw, out);
   return out;
+}
+ipcMain.handle("kw:hyoja", async (_e, { keyword, top = 5, saved = false } = {}) => {
+  if (!licensed()) return LOCKED;
+  const t0 = Date.now();
+  const kw = String(keyword || "");
+  if (saved) { const s = (store.get("hyojaSaved") || {})[kw]; if (s?.v === 5) return { ...s, cached: true, ms: 0 }; } // 지난 결과 다시 열기: 저장본 우선(v5 = 쿠팡 화면 쿠폰가 반영 · cp가 false면 화면에서 ②를 이어서 함)
+  const res = await searchKeyword(kw, 1, wingView.webContents, log, false);
+  if (res.error) return { error: res.error, ms: Date.now() - t0 };
+  hyWing.set(kw, res);
+  return hyojaBuild(kw, res, listCollect(), { top, t0, cp: false });
+});
+ipcMain.handle("kw:hyojaCp", async (_e, { keyword, top = 5 } = {}) => {
+  if (!licensed()) return LOCKED;
+  const t0 = Date.now();
+  const kw = String(keyword || "");
+  const cpOpen = openCoupangSearch(kw);
+  const res = hyWing.get(kw) || (await searchKeyword(kw, 1, wingView.webContents, log, false)); // 지난 결과를 다시 열 때는 7일 Wing 캐시
+  if (res.error) return { error: res.error };
+  if (!cpOpen) return { error: "쿠팡 화면을 열 수 없어요" };
+  const rows = await waitCoupangRows(kw, t0, 10000);
+  hyWing.delete(kw);
+  return hyojaBuild(kw, res, rows, { top, t0, cp: true });
 });
 // 🎁 키워드 받기: 10개 × 하루 10번(대표님 결정 2026-10-11). 이미 받은 키워드·오늘 횟수는 store("recoDraw")에 — 앱을 껐다 켜도 유지(서버 배분은 나중)
-const DRAW_PER = 10, DRAW_DAILY = 10;
-const drawState = () => { const st = store.get("recoDraw") || { day: "", used: 0, seen: [], history: [] }; const today = new Date().toLocaleDateString("sv-SE"); if (st.day !== today) { st.day = today; st.used = 0; } return st; };
+const DRAW_PER = 10, DRAW_DAILY = 10, DRAW_BONUS = 5; // 보너스: 하루 1번, 다 쓴 뒤 +5 (2026-10-12)
+const drawState = () => { const st = store.get("recoDraw") || { day: "", used: 0, seen: [], history: [] }; const today = new Date().toLocaleDateString("sv-SE"); if (st.day !== today) { st.day = today; st.used = 0; st.bonus = false; } return st; };
+const drawLimit = (st) => DRAW_DAILY + (st.bonus ? DRAW_BONUS : 0);
+const drawResetAt = () => { const d = new Date(); d.setHours(24, 0, 0, 0); return d.getTime(); }; // 다음 자정(앱 시계 기준)
+const drawInfo = (st) => ({ left: Math.max(0, drawLimit(st) - st.used), daily: DRAW_DAILY, per: DRAW_PER, bonus: DRAW_BONUS, bonusUsed: !!st.bonus, resetAt: drawResetAt(), seenTotal: st.seen.length });
 // batches = 받은 시각(at)별 묶음, 최근 순 30개 — 화면을 다시 열면 마지막 묶음을 그대로 보여 주고, 지난 묶음도 고를 수 있게
 const drawBatches = (hist) => { const m = new Map(); for (const k of hist || []) { if (!k.at) continue; if (!m.has(k.at)) m.set(k.at, []); m.get(k.at).push(k); } return [...m.entries()].sort((a, b) => b[0] - a[0]).slice(0, 30).map(([at, items]) => ({ at, items })); };
-ipcMain.handle("kw:drawState", () => { const st = drawState(); return { left: DRAW_DAILY - st.used, daily: DRAW_DAILY, per: DRAW_PER, seenTotal: st.seen.length, history: st.history.slice(0, 200), batches: drawBatches(st.history) }; });
+ipcMain.handle("kw:drawState", () => { const st = drawState(); return { ...drawInfo(st), history: st.history.slice(0, 200), batches: drawBatches(st.history) }; });
+ipcMain.handle("kw:drawBonus", () => { // 🎁 보너스 5번: 오늘 횟수를 다 썼을 때 하루 1번
+  const st = drawState();
+  if (st.bonus) return { error: "bonusUsed", ...drawInfo(st) };
+  if (st.used < DRAW_DAILY) return { error: "notYet", ...drawInfo(st) };
+  st.bonus = true; store.set("recoDraw", st);
+  log("go", `🎁 키워드 받기 보너스 +${DRAW_BONUS}번 (오늘 1회)`);
+  return { ok: true, ...drawInfo(st) };
+});
 ipcMain.handle("kw:draw", async (_e, o) => {
   const st = drawState();
-  if (st.used >= DRAW_DAILY) return { error: "limit", left: 0, daily: DRAW_DAILY };
+  if (st.used >= drawLimit(st)) return { error: "limit", ...drawInfo(st) };
   const d = await kwDraw({ seen: st.seen, n: DRAW_PER, opts: o || {} });
-  if (!d.items.length) return { error: "empty", ...d, left: DRAW_DAILY - st.used };
+  if (!d.items.length) return { error: "empty", ...d, ...drawInfo(st) };
   st.used++; st.seen.push(...d.items.map((k) => k.kw));
   st.history = [...d.items.map((k) => ({ ...k, at: Date.now() })), ...(st.history || [])].slice(0, 500);
   store.set("recoDraw", st);
-  return { ...d, left: DRAW_DAILY - st.used, daily: DRAW_DAILY, seenTotal: st.seen.length };
+  return { ...d, ...drawInfo(st) };
 }); // 🔍 AI 소싱: 깔때기(단계별 실제 개수·빠진 이유) + 세 묶음 결과 // 💡 조건 조합(로켓그로스·로켓배송·해외배송·리뷰·추세·평균가 적음/많음)
 ipcMain.handle("calc:get", () => calc());
 ipcMain.handle("calc:set", (_e, patch) => { store.set("calc", { ...calc(), ...patch }); return calc(); });

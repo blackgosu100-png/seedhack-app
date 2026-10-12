@@ -32,7 +32,7 @@
 .rc-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 30px; }
 .rc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .rc-card { display: flex; flex-direction: column; gap: 6px; padding: 14px; background: var(--r-surface); border: 1px solid var(--r-line); border-radius: 10px; animation: rc-in .32s ease-out both; animation-delay: calc(var(--i) * 18ms); }
-.reco.cascade .rc-card { animation-duration: .4s; animation-delay: calc(var(--i) * 70ms); }
+.reco.rc-cascade .rc-card { animation-duration: .4s; animation-delay: calc(var(--i) * 70ms); }
 .rc-bar[hidden] { display: none; }
 .rc-start { width: 100%; box-sizing: border-box; max-width: 640px; margin: 36px auto; padding: 26px 28px; background: var(--r-surface); border: 1px solid var(--r-line); border-radius: 12px; display: flex; flex-direction: column; gap: 6px; }
 .rc-start > b { font-size: 20px; }
@@ -121,12 +121,17 @@ details.rc-mix .rc-mix-h { justify-content: flex-end; margin: 6px 0 2px; }
 
 /* ── AI 소싱(버튼 하나) 화면 ── */
 .reco .rc-scroll { padding: 18px 22px 40px; }
-.rc-home { max-width: 920px; margin: 10px auto 0; display: flex; flex-direction: column; gap: 14px; }
+.rc-home { width: 100%; box-sizing: border-box; max-width: 920px; margin: 10px auto 0; display: flex; flex-direction: column; gap: 14px; }
 .rc-home .rc-hero { padding: 40px 24px 30px; gap: 10px; }
 .rc-kick { font: 700 12px var(--mono); letter-spacing: 1.5px; color: #3ddc84; border: 1px solid #1d4a33; border-radius: 99px; padding: 4px 12px; }
 .rc-home .rc-hero h3 { font-size: 32px; }
 .rc-home .rc-hero p { font-size: 15px; line-height: 1.7; }
 .rc-home .rc-bigbtn { font-size: 22px; padding: 17px 44px; margin-top: 10px; }
+/* 추천 기준 스위치(처음이에요 / 팔아봤어요) — 어두운 시작 화면 위 */
+.rc-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid #1d4a33; border-radius: 99px; margin-top: 6px; }
+.rc-seg button { padding: 8px 20px; border: 0; border-radius: 99px; background: transparent; color: #9fe1cb; font: 700 15px var(--sans); cursor: pointer; }
+.rc-seg button:hover { color: #eafff3; }
+.rc-seg button[aria-pressed="true"] { background: #3ddc84; color: #04210f; }
 .rc-scale { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .rc-scale div { background: var(--r-surface); border: 1px solid var(--r-line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
 .rc-scale b { font: 800 24px var(--mono); color: var(--r-text); } .rc-scale span { font-size: 12.5px; color: var(--r-text2); }
@@ -173,6 +178,7 @@ details.rc-mix .rc-mix-h { justify-content: flex-end; margin: 6px 0 2px; }
 .rc-again.wide { display: block; width: 100%; margin-top: 14px; padding: 13px; font-size: 16px; }
 .rc-again:disabled { background: #e4e4e7; color: #71717a; cursor: default; }
 .rc-rank.tA { background: #16a34a; } .rc-rank.tB { background: #2563eb; } .rc-rank.tC { background: #71717a; }
+.rc-rank.tL { background: #16a34a; } .rc-rank.tM { background: #2563eb; }
 
 details.rc-sales { background: var(--r-surface); border: 1px dashed #a1a1aa; border-radius: 12px; padding: 12px 14px; }
 details.rc-sales summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; font-size: 14px; } details.rc-sales summary span { font-size: 12.5px; color: var(--r-text2); }
@@ -224,6 +230,8 @@ details.rc-sales summary { cursor: pointer; display: flex; gap: 10px; align-item
 .rp-p .i { padding: 5px 5px 6px; font-size: 10.5px; line-height: 1.4; letter-spacing: -.2px; }
 .rp-p .pn { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--r-text2); }
 .rp-p .pp { font-weight: 700; white-space: nowrap; }
+.rp-p .pp s { margin-left: 4px; font-weight: 400; font-size: 10.5px; color: var(--r-text3, #9a9aa3); }
+.rp-p .pp .nc { margin-left: 4px; padding: 0 4px; border-radius: 3px; background: #f2f2f4; color: var(--r-text2, #6b6b73); font-weight: 600; font-size: 10px; }
 .rp-p .kv { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 4px; white-space: nowrap; }
 .rp-p .kv span:first-child { color: #a1a1aa; }
 .rp-p .kv b { color: var(--r-go); }
@@ -261,7 +269,13 @@ details.rc-sales summary { cursor: pointer; display: flex; gap: 10px; align-item
 .rp-head h2 { margin: 0; font-size: 22px; font-weight: 800; }
 .rp-head h2 em { font-style: normal; font-size: 13px; font-weight: 700; color: #16a34a; margin-left: 8px; }
 .rp-head p { margin: 4px 0 0; font-size: 13px; color: var(--r-text2); }
-.rp-btns { display: flex; gap: 8px; }
+.rp-btns { display: flex; gap: 8px; align-items: center; }
+/* 결과 위 기준 스위치(다음에 받을 기준) — 밝은 본문용 */
+.rp-seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--r-line2); border-radius: 99px; background: var(--r-surface); }
+.rp-seg button { padding: 6px 12px; border: 0; border-radius: 99px; background: transparent; color: var(--r-text2); font: 700 12.5px var(--sans); cursor: pointer; }
+.rp-seg button[aria-pressed="true"] { background: var(--r-go); color: #fff; }
+.rc-past { margin-top: 4px; padding: 6px 14px; border: 1px solid #1d4a33; border-radius: 99px; background: transparent; color: #9fe1cb; font: 600 13px var(--sans); cursor: pointer; }
+.rc-past:hover { color: #eafff3; border-color: #3ddc84; }
 .rp-btns .sec { padding: 10px 16px; border-radius: 9px; font-weight: 700; font-size: 13px; background: #fff; cursor: pointer; }
 .rp-again { padding: 10px 16px; border: 0; border-radius: 9px; background: #16a34a; color: #fff; font: 700 13px var(--sans); cursor: pointer; }
 .rp-again:hover { background: #15803d; }
@@ -307,3 +321,29 @@ a.rp-gap:hover small { color: var(--r-go); text-decoration: underline; }
 .rp-gap .rkt { display: inline-block; margin-right: 5px; padding: 0 5px; border-radius: 4px; background: var(--r-go-bg); color: var(--r-go); font-weight: 700; font-size: 10.5px; cursor: pointer; }
 .rp-past { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12.5px; color: var(--r-text2); }
 .rp-past select { font: 13px var(--sans); color: var(--r-text); background: var(--r-surface); border: 1px solid var(--r-line2); border-radius: 8px; padding: 5px 8px; max-width: 340px; }
+
+/* 예상 순서로 채운 뒤 실제 월매출로 확정: 그대로인 자리는 가만히, 바뀐 자리만 움직임 */
+.rp-card.still, .rp-li.still { animation: none; }
+.rp-card.moved, .rp-li.moved { animation: rp-move .7s ease-out backwards; }
+@keyframes rp-move { 0% { opacity: 0; transform: translateY(-16px); box-shadow: 0 0 0 3px rgba(34, 197, 94, .5); } 60% { opacity: 1; transform: none; box-shadow: 0 0 0 3px rgba(34, 197, 94, .35); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+.rp-card[data-slot] { animation-delay: 0s; }
+
+/* 정렬 버튼 */
+.rp-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; font-size: 12.5px; color: var(--r-text2); }
+.rp-sort > span { margin-right: 2px; font-weight: 700; }
+.rp-sort button { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--r-line2); background: var(--r-surface); color: var(--r-text); font: 600 12.5px var(--sans); cursor: pointer; }
+.rp-sort button.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.rp-sort button:disabled { opacity: .45; cursor: default; }
+.rp-sort small { font-size: 11.5px; color: #a1a1aa; }
+
+/* 횟수 다 썼을 때 안내 + 🎁 보너스 (2026-10-12) */
+.rc-bigbtn.off { background: #263a30; color: #9fb8aa; animation: none; cursor: not-allowed; box-shadow: none; }
+.rc-bigbtn.off:hover { background: #263a30; }
+.rc-limit { margin: 10px 0 0; padding: 8px 14px; border-radius: 9px; background: rgba(255, 196, 0, .12); border: 1px solid rgba(255, 196, 0, .45); color: #ffd666; font: 600 14px/1.5 var(--sans); }
+.rc-limit.shake { animation: rc-shake .4s ease; }
+@keyframes rc-shake { 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+.rc-bonus { margin: 8px 0 0 8px; padding: 10px 18px; border: 0; border-radius: 10px; background: #f59e0b; color: #2a1800; font: 800 15px var(--sans); cursor: pointer; animation: rc-pulse 2.4s ease-out infinite; }
+.rc-bonus:hover { background: #fbbf24; }
+.rc-bonus:disabled { opacity: .6; cursor: default; animation: none; }
+.rp-btns .rc-bonus { font-size: 13px; padding: 10px 14px; margin: 0 0 0 6px; }
+@media (prefers-reduced-motion: reduce) { .rc-bonus, .rc-limit.shake { animation: none; } }
