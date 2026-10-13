@@ -6,3 +6,6 @@ dist/
 # 📄 상세페이지 테스트 산출물
 test/detail/out/
 test/detail/img/out/
+
+# Claude Code 개인 설정
+.claude/settings.local.json

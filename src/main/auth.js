@@ -56,6 +56,15 @@ export async function restore() {
   }
 }
 
+// 📊 대시보드 화면 자동 로그인용 access_token(만료 5분 전이면 저장된 refresh_token 으로 새로 받음). 없으면 null.
+export async function accessToken() {
+  if (access && Date.now() < access.exp - 5 * 60 * 1000) return access.token;
+  const a = store.get("auth");
+  const rt = a?.rt && dec(a.rt);
+  if (!rt) return null;
+  try { await token({ refresh_token: rt }, "refresh_token"); return access?.token || null; } catch { return null; }
+}
+
 export function signOut() {
   user = null; access = null;
   store.set("auth", null);

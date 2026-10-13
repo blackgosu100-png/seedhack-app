@@ -8,11 +8,12 @@ import { store } from "./store.js";
 import { watchWing } from "./wing.js";
 import { runExact, stopExact, lookupOne, gate } from "./exact.js";
 import { buildXlsx } from "./excel.js";
-import { lookup, recommend } from "./kwdb.js";
+import { lookup, recommend, nameLookup } from "./kwdb.js";
+import { buildPool, defaultPicks, buildNames, checkName } from "../shared/name-core.js"; // ✍ 상품명 짓기
 import { searchKeyword } from "./kwsearch.js";
 import { buildListupXlsx, buildCollectXlsx } from "./listup-excel.js";
 import { upsertPage, upsertMetric, listCollect, removeCollect, countCollect, pickCollect } from "./collect.js";
-import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId } from "./auth.js";
+import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId, accessToken } from "./auth.js";
 import { DASHBOARD_URL } from "./auth-config.js";
 import { recommendViaCli, cliAvailable } from "./ai-cli.js";
 import { parseSpecs } from "./spec-core.js";
@@ -89,7 +90,7 @@ function buildPayload(snap) {
     return rv < 100 ? "go" : rv <= 500 ? "warn" : "stop";
   };
   return {
-    key: snap.key, name: snap.name, path: snap.path, date: snap.date, total: snap.total, mode: S.mode, ads: S.nicheMinMargin === 0.3,
+    key: snap.key, code: snap.code, name: snap.name, path: snap.path, date: snap.date, total: snap.total, mode: S.mode, ads: S.nicheMinMargin === 0.3,
     verdict: j.verdict, note: j.note, target: j.target, yuan: j.yuan, monthly: j.monthly,
     checks: j.checks.map((c) => ({ label: c.label, pass: c.pass, need: c.need })),
     items: m.items.slice(0, 60).map((it) => ({
@@ -119,16 +120,17 @@ function layout() {
   cnView?.setVisible(active === "cn");
   cleanTabs.forEach((t) => { t.view.setBounds(bc); t.view.setVisible(active === "clean" && t.view === cleanView); });
 }
-const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || (!!cpBg && cpBg.webContents === wc);
+const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || Object.values(cpBgs).some((o) => o.view?.webContents === wc);
 // 🕶 쿠폰가 읽기 전용 숨은 화면 — 쿠팡 탭과 같은 세션(클린 세션)이지만 화면에 보이지 않는다.
 //  키워드 추천·키워드 분석이 쿠팡 검색 화면을 열 때 사람이 보고 있는 쿠팡 탭을 새로고침하지 않도록 따로 둔다(2026-10-12)
-let cpBg = null, cpBgPart = null;
-function coupangBgView() {
-  if (cpBg && !cpBg.webContents.isDestroyed() && cpBgPart === cleanPart) return cpBg;
-  if (cpBg) { try { win.contentView.removeChildView(cpBg); cpBg.webContents.close(); } catch {} }
+//  "search" = 검색 화면 쿠폰가 · "detail" = 옵션이 다른 상품의 상품 페이지 가격(검색 화면 읽기와 겹쳐도 서로 새로고침하지 않게 따로)
+const cpBgs = {};
+function coupangBgView(slot = "search") {
+  const o = cpBgs[slot];
+  if (o?.view && !o.view.webContents.isDestroyed() && o.part === cleanPart) return o.view;
+  if (o?.view) { try { win.contentView.removeChildView(o.view); o.view.webContents.close(); } catch {} }
   if (!cleanPart) cleanPart = `clean-${Date.now()}`;
-  cpBgPart = cleanPart;
-  cpBg = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  const cpBg = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
   win.contentView.addChildView(cpBg);
   const [w, h] = win.getContentSize();
   cpBg.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) }); // 크기를 준 뒤 숨김(크기 0이면 카드가 안 그려질 수 있음)
@@ -136,7 +138,34 @@ function coupangBgView() {
   cpBg.webContents.setAudioMuted(true);
   cpBg.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   cpBg.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다(쿠폰가 읽기): ${err?.message || err}`));
+  cpBgs[slot] = { view: cpBg, part: cleanPart };
   return cpBg;
+}
+// 옵션이 다른 상품: 그 옵션(vendorItemId)의 상품 페이지를 숨은 화면에서 열어 판매가를 읽는다(2026-10-13, 한누네 팬트리 8개 Wing 116,000 → 실제 35,200)
+//  coupang.cjs pagePrice와 같은 규칙: 위쪽 구매 칸의 "35,200원" 중 가장 큰 글씨 · 취소선(할인 전 가격) 제외 · 열린 옵션 번호가 요청한 것과 같을 때만
+const DETAIL_PRICE_JS = `(() => {
+  let best = null;
+  for (const el of document.querySelectorAll("strong, span, div, em")) {
+    if (el.children.length > 2) continue;
+    const t = (el.textContent || "").replace(/\\s+/g, "");
+    const m = t.match(/^(\\d{1,3}(?:,\\d{3})+|\\d{3,7})원$/); if (!m) continue;
+    const r = el.getBoundingClientRect(); if (!r.width || r.top > 900 || r.top < 0) continue;
+    if (getComputedStyle(el).textDecorationLine.includes("line-through")) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize) || 0, v = Number(m[1].replace(/,/g, ""));
+    if (v >= 100 && (!best || fs > best.fs)) best = { v, fs };
+  }
+  return { price: best ? best.v : null, vid: new URL(location.href).searchParams.get("vendorItemId") || "" };
+})()`;
+async function readDetailPrice(pid, vid) {
+  const wc = coupangBgView("detail").webContents;
+  const url = `https://www.coupang.com/vp/products/${encodeURIComponent(pid)}?vendorItemId=${encodeURIComponent(vid)}`;
+  try { await wc.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); } catch { /* 쿠팡이 뒤에서 주소를 바꿔도 화면은 뜬다 — 아래에서 읽어 봄 */ }
+  for (let i = 0; i < 12; i++) { // 최대 약 6초
+    const r = await wc.executeJavaScript(DETAIL_PRICE_JS, true).catch(() => null);
+    if (r?.price > 0) return !r.vid || r.vid === String(vid) ? r.price : null; // 품절 등으로 다른 옵션이 열렸으면 안 씀
+    await new Promise((res) => setTimeout(res, 500));
+  }
+  return null;
 }
 function sendTabs() {
   send("ctabs", {
@@ -187,6 +216,8 @@ function hookView(view, tab) {
   wc.on("did-navigate-in-page", report);
   wc.on("did-finish-load", report);
   wc.on("did-finish-load", () => wc.setZoomFactor(ZOOM));
+  // 📊 대시보드가 로그인 화면으로 튕기면 앱 계정(Supabase 토큰)으로 자동 로그인 — 대시보드 /api/signal/embed-login → /auth/embed#th=…
+  if (tab === "dash") wc.on("did-navigate", (_e, url) => { if (url.startsWith(`${DASHBOARD_URL}/login`)) dashAutoLogin(wc); });
   if (tab === "wing") wc.on("did-navigate", (_e, url) => {
     if (!/^https:\/\/wing\.coupang\.com\//.test(url)) return;
     flushWing(); // 로그인 성공 직후 저장
@@ -350,7 +381,7 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   if (tab === "chat") chat.show(true); // ⑥ 💬 문의 탭: 채팅 화면(처음이면 마지막 문의 대화를 연다)
   layout(); sendTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
   const v = tab === "wing" ? wingView : tab === "clean" ? cleanView : tab === "cn" ? cnView : tab === "chat" ? chat.view() : tab === "dash" ? dashView : null;
-  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "reco" ? "💡 키워드 추천" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
+  send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "reco" ? "💡 키워드 추천" : tab === "name" ? "✍ 상품명 짓기" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
 });
 // 화면(panel.js)이 알려 주는 틀 크기: 왼쪽 사이드바 폭, Wing 오른쪽 칸 폭
 ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
@@ -358,6 +389,22 @@ ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
   stripW = Math.min(600, Math.max(0, Math.round(+strip) || 0));
   layout();
 });
+// 📊 대시보드 자동 로그인: 앱 토큰으로 본인 확인 → 1회용 token_hash → /auth/embed 가 세션을 만들고 /dashboard 로 돌아온다. 30초에 한 번만 시도(실패 반복 방지)
+let dashLoginAt = 0;
+async function dashAutoLogin(wc) {
+  if (Date.now() - dashLoginAt < 30000) return;
+  dashLoginAt = Date.now();
+  const at = await accessToken();
+  if (!at) { log("dim", "  📊 대시보드 로그인 화면 — 앱에 로그인된 계정이 없어 직접 로그인해 주세요"); return; }
+  try {
+    const r = await net.fetch(`${DASHBOARD_URL}/api/signal/embed-login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: at }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.token_hash) { log("warn", `△ 📊 대시보드 자동 로그인 실패 — ${j?.error || r.status}`); return; }
+    if (wc.isDestroyed()) return;
+    log("dim", `  📊 대시보드에 앱 계정(${j.email || ""})으로 들어가는 중`);
+    wc.loadURL(`${DASHBOARD_URL}/auth/embed#th=${encodeURIComponent(j.token_hash)}&tab=${encodeURIComponent(dashTab || "margin")}`);
+  } catch (e) { log("warn", `△ 📊 대시보드 자동 로그인 오류 — ${e?.message || e}`); }
+}
 // 📊 판매 관리 — 로켓그로스 대시보드의 메뉴(margin·ads·coupons·stock)를 본문에 띄운다
 function openDash(id) {
   if (!dashView) {
@@ -377,7 +424,7 @@ function openCoupangSearch(kw) {
   if (SELFTEST && process.env.SELFTEST_SITES !== "1") return false; // 자체 점검은 실제 쿠팡에 접속하지 않는다
   const url = `https://www.coupang.com/np/search?q=${encodeURIComponent(q)}`;
   if (!win) return false;
-  coupangBgView().webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); // 숨은 화면에서 — 사람이 보는 쿠팡 탭은 그대로
+  coupangBgView("search").webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); // 숨은 화면에서 — 사람이 보는 쿠팡 탭은 그대로
   return true; // 화면이 가격을 기다려도 된다
 }
 // 쿠팡 화면이 이 검색어의 카드 가격을 수집함에 넣을 때까지 기다린다(coupang.cjs가 화면을 연 뒤 약 3초에 읽음) — 못 오면 있는 그대로
@@ -434,6 +481,8 @@ initDetail({
   showDetail: () => { active = "detail"; layout(); send("nav", { tab: "detail", url: "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" }); },
   // 📄 화면의 주소 칸: 1688 탭을 보이게 열고 그 주소로 이동(화면이 보여야 지연 로딩 이미지·상세가 깨어난다). 읽기가 끝나면 showDetail 로 돌아온다
   openCn: (url) => { createCn(url); active = "cn"; layout(); send("nav", { tab: "cn", url }); },
+  // 📄 주소 칸의 쿠팡 상품 주소: 쿠팡 탭(사람이 보는 화면)에 새 탭으로 한 번 연다 — 그 화면을 읽고 끝나면 showDetail 로 돌아온다
+  openCoupang: (url) => (win ? openCleanTab(url, true).view.webContents : null),
 });
 ipcMain.handle("chat:inquire", (e, p) => (cnView && e.sender === cnView.webContents ? chat.inquire({ offerId: String(p?.offerId || ""), title: String(p?.title || "") }) : { error: "1688 상품 화면에서만 됩니다" }));
 ipcMain.handle("chat:state", () => chat.state());
@@ -452,6 +501,10 @@ ipcMain.handle("chat:act", (_e, { a, id } = {}) => {
 });
 const IMG_CDN = "https://thumbnail6.coupangcdn.com/thumbnails/remote/230x230ex/image/";
 // 리스트업 행 → 1688 이미지 검색. 사진은 클립보드에도 넣어 둔다(검색이 바로 안 뜨면 1688 검색창 카메라 아이콘에 Ctrl+V)
+// 1688에 올릴 사진은 긴 쪽 300px 이하로 줄인다. 1688은 "전체 사진" 영역(region=0,가로,0,세로)을 줄여 둔 사진 기준으로 받아서,
+// 640px 사진에 region=0,640,0,640을 주면 영역이 사진 밖이라 0건 → 대신 1688이 물체 하나(통조림·라면)를 골라 엉뚱한 결과(2026-10-13).
+// 230px 쿠팡 썸네일에서는 전체 사진 검색이 맞게 동작함을 확인했다
+const upImg = (im) => { const { width: w, height: h } = im.getSize(); const m = Math.max(w, h); return m > 300 ? im.resize(w >= h ? { width: 300, quality: "best" } : { height: 300, quality: "best" }) : im; };
 ipcMain.handle("cn:search", (_e, p) => { autoPause("직접 🔍1688 검색"); return cnSearch(p); });
 async function cnSearch({ rowId, name, keyword, img, allow, price, auto = false }) {
   cnTarget = { rowId, name: String(name || "").slice(0, 80), keyword: String(keyword || "").slice(0, 40), allow: Number(allow) > 0 ? Number(allow) : null, price: Number(String(price || "").replace(/[^\d.]/g, "")) || null, auto: !!auto }; // allow: 리스트업 허용 소싱가(¥) · auto: 담기 자동 조사
@@ -474,7 +527,7 @@ async function cnSearch({ rowId, name, keyword, img, allow, price, auto = false 
         if (!r.ok) { why = `HTTP ${r.status}`; continue; }
         const im = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
         if (im.isEmpty()) { why = "그림 해석 실패"; continue; }
-        cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
+        cnPending = { b64: upImg(im).toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
         cnPhotoHash = imageHash(im); // 상품 페이지에서 "사진과 같은 옵션" 고를 때 비교용
         copied = true;
         try { (electron.clipboard || clipboard).writeImage(im); clip = true; } catch {} // 클립보드는 보조 수단 — 실패해도 자동 검색은 진행
@@ -612,16 +665,18 @@ const fromCn = (e) => !!(cnView && e.sender === cnView.webContents) || !!(probeV
 // 상품 페이지를 하나씩(4초 간격) 열어 사진과 같은 옵션 가격을 읽고(sku-core) 가격 점수를 더해 🟢🟡🔴 확정.
 let cnRank = null;      // { cards: [...], ranked: [...] }
 let probeView = null, probeQueue = [], probeCur = null, probeTimer = null;
-const PROBE_MAX = 5, PROBE_TIMEOUT_MS = 25000;
+const PROBE_MAX = 3, PROBE_TIMEOUT_MS = 25000; // 추천은 3개라 3개만 확인(예전 5개)
+const probeGapFast = () => 1500 + Math.floor(Math.random() * 1500); // 빠른 확인(페이지 글만 받기) 사이 1.5~3초
 const probeGap = () => 8000 + Math.floor(Math.random() * 7000); // 8~15초 무작위 — 사람이 상품을 하나씩 열어 보는 속도. 1688 보안 인증을 덜 부른다
 function rankNow() {
   if (!cnRank) return null;
   const weights = { ...DEFAULT_WEIGHTS, ...(store.get("settings")?.rankWeights || {}) };
   const r = rankCards(cnRank.cards, { allow: cnTarget?.allow ?? null, weights, target: { name: cnTarget?.name || "", keyword: cnTarget?.keyword || "" } }); // target: 다른 상품(엉뚱한 물체로 찾은 결과) 거르기
   cnRank.ranked = r.ranked; cnRank.medianPrice = r.medianPrice; cnRank.offTarget = r.excluded.filter((x) => x.offTarget).length;
+  if (r.mismatch && !cnRank.mismatchLogged) { cnRank.mismatchLogged = true; log("stop", `✕ 1688 결과가 쿠팡 상품(${(cnTarget?.name || "").slice(0, 24)})과 닮은 게 없습니다 — 사진 검색이 빗나간 것 같습니다`); }
   const top = r.ranked.slice(0, 8).map((x) => ({ ...x, verdictKo: VERDICT_KO[x.verdict] || x.verdict }));
   return { top, total: cnRank.cards.length, excluded: r.excluded.length, allow: cnTarget?.allow ?? null, medianPrice: r.medianPrice,
-    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, captcha: !!cnRank.captcha, cost: costNow() };
+    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, captcha: !!cnRank.captcha, cost: costNow(), mismatch: !!r.mismatch };
 }
 // 원가 기준: AI 추천(없으면 점수) 상위 3개 → 1순위의 확인된 옵션가, 애매하면 확인된 것들의 중간값
 function costNow() {
@@ -653,6 +708,17 @@ ipcMain.handle("cn:rank", async (e, p) => {
   log("sys", `▶ 1688 후보 ${cards.length}개 읽음 · 상위 ${r.top.slice(0, 3).map((x) => `${x.score}점`).join("/")}${cnTarget.allow ? ` · 허용 소싱가 ¥${cnTarget.allow.toFixed(1)}` : " · 허용 소싱가 없음(리스트업 판매가 필요)"}`);
   return r;
 });
+// 카드 하나만 진짜 옵션가 확인(보드의 "옵션가 확인" 버튼)
+ipcMain.handle("cn:probeOne", async (e, offerId) => {
+  if (!cnView || e.sender !== cnView.webContents || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
+  const id = String(offerId || ""); if (!/^\d{6,15}$/.test(id)) return { error: "상품 번호가 없습니다" };
+  try {
+    const r = await fastProbe(id);
+    if (!r || r.captcha) return { error: r?.captcha ? "1688 보안 인증 — 상품 열기로 확인해 주세요" : "옵션표를 못 찾았습니다 — 상품 열기로 확인해 주세요" };
+    markProbe(id, r); log("dim", `  1688 가격 확인(하나) · ${id} → ${r.price != null ? "¥" + r.price : "없음"} · ${r.how || ""}`); pushRank();
+    return { ok: true, price: r.price };
+  } catch (err) { return { error: String(err?.message || err).slice(0, 80) }; }
+});
 // 진짜 가격 확인: 가격 모르는 상위 PROBE_MAX개를 숨은 창에서 차례로
 ipcMain.handle("cn:probe", (e) => {
   if (!cnView || e.sender !== cnView.webContents || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
@@ -660,15 +726,65 @@ ipcMain.handle("cn:probe", (e) => {
   cnRank.captcha = false;
   probeQueue = cnRank.ranked.filter((x) => x.realPrice == null && x.offerId).slice(0, PROBE_MAX).map((x) => x.offerId);
   if (!probeQueue.length) return { ok: true, nothing: true };
-  log("sys", `▶ 1688 진짜 가격 확인 · 상위 ${probeQueue.length}개 상품 페이지를 8~15초 간격으로 엽니다`);
+  log("sys", `▶ 1688 진짜 가격 확인 · 상위 ${probeQueue.length}개 (상품 페이지 글에서 옵션표를 바로 읽음)`);
   probeNext();
   return { ok: true, count: probeQueue.length };
 });
+const probeSlow = new Set(); // 빠른 확인이 안 되는 상품 → 예전 방식(숨은 창)
 function probeStop() { clearTimeout(probeTimer); probeQueue = []; probeCur = null; if (probeView) { try { win?.contentView.removeChildView(probeView); probeView.webContents.close(); } catch {} probeView = null; } }
+// ---- 빠른 옵션가 확인 (2026-10-13) ----
+// 상품 페이지를 숨은 창에 통째로 그리던 방식(상품당 10~20초 + 8~15초 쉼) 대신, 페이지 글(HTML)만 한 번 받아
+// 안에 든 옵션표(skuProps: 옵션 이름·사진 / skuInfoMap: 옵션별 가격·재고)를 읽는다 → 상품당 1초 안팎.
+// 보안 인증 페이지가 오거나 옵션표를 못 찾으면 예전 방식(숨은 창)으로 그 상품만 다시 확인한다.
+function jsonAt(html, key, open) {
+  const i = html.indexOf(`"${key}":`); if (i < 0) return null;
+  const st = html.indexOf(open, i); if (st < 0) return null;
+  const close = open === "{" ? "}" : "]"; let d = 0, inStr = false;
+  for (let k = st; k < html.length && k < st + 400000; k++) {
+    const ch = html[k];
+    if (inStr) { if (ch === "\\") k++; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true; else if (ch === open) d++; else if (ch === close && --d === 0) { try { return JSON.parse(html.slice(st, k + 1)); } catch { return null; } }
+  }
+  return null;
+}
+async function fastProbe(id) {
+  const ses = cnView?.webContents.session || session.fromPartition("persist:1688");
+  const r = await ses.fetch(`https://detail.1688.com/offer/${id}.html`, { headers: { Referer: "https://s.1688.com/", Accept: "text/html" } });
+  const html = await r.text();
+  if (/punish|_____tmd_____|x5sec|滑动验证|请拖动|captcha/i.test(html.slice(0, 20000)) && !/skuInfoMap/.test(html)) return { captcha: true };
+  const props = jsonAt(html, "skuProps", "[") || [], info = jsonAt(html, "skuInfoMap", "{");
+  const dec = (t) => String(t || "").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&quot;/g, '"');
+  const imgOf = new Map(); for (const pr of props) for (const v of pr?.value || []) if (v?.imageUrl) imgOf.set(dec(v.name), v.imageUrl);
+  let entries = [];
+  if (info && typeof info === "object") entries = Object.entries(info).map(([k, v]) => { const parts = dec(k).split(">"); return { label: parts.join(" › "), price: v?.discountPrice || v?.price || "", img: parts.map((x) => imgOf.get(x)).find(Boolean) || "", stock: v?.canBookCount ?? null }; }).filter((x) => x.price);
+  if (!entries.length) {
+    const pm = html.match(/"(?:price|discountPrice)"\s*:\s*"(\d+(?:\.\d+)?)"/);
+    return pm ? { price: Number(pm[1]), how: "옵션 없음 — 단일 가격", sure: true, fast: true } : null;
+  }
+  const list = entries.slice(0, 40);
+  const withHash = [];
+  for (let k = 0; k < list.length; k += 6) withHash.push(...await Promise.all(list.slice(k, k + 6).map(async (it) => ({ ...it, hash: it.img ? await hashImageUrl(it.img) : null, ko: koHint(it.label) }))));
+  const d = decidePrice(withHash, { photoHash: cnPhotoHash, name: cnTarget?.name || "" });
+  const options = (d.alts || []).slice(0, 10).map((a) => ({ label: a.label, price: a.price, dist: a.dist ?? null, bait: !!a.bait }));
+  return { price: d.price ?? null, pick: d.pick ? { i: d.pick.i, label: d.pick.label, price: d.pick.price, dist: d.pick.dist ?? null, ko: koHint(d.pick.label) } : null, how: (d.how || "") + " · 빠른 확인", sure: !!d.sure, options, fast: true };
+}
 function probeNext() {
   clearTimeout(probeTimer);
   probeCur = probeQueue.shift() || null;
   if (!probeCur) { log("sys", "■ 1688 진짜 가격 확인 끝"); probeStop(); pushRank(); return; }
+  if (!probeSlow.has(probeCur)) {
+    const id = probeCur; pushRank();
+    fastProbe(id).then((r) => {
+      if (probeCur !== id) return; // 그사이 취소
+      if (r?.captcha) { probeSlow.add(id); log("dim", `  1688 빠른 확인 중 보안 인증 → 화면으로 확인 · ${id}`); probeQueue.unshift(id); probeCur = null; return probeNext(); }
+      if (!r) { probeSlow.add(id); probeQueue.unshift(id); probeCur = null; return probeNext(); } // 옵션표 못 찾음 → 예전 방식
+      markProbe(id, r);
+      log("dim", `  1688 가격 확인 · ${id} → ${r.price != null ? "¥" + r.price : "없음"}${r.pick?.label ? ` (${String(r.pick.label).slice(0, 24)})` : ""} · ${r.how || ""}`);
+      pushRank();
+      probeTimer = setTimeout(probeNext, probeGapFast());
+    }).catch((err) => { probeSlow.add(id); log("dim", `  1688 빠른 확인 실패(${String(err?.message || err).slice(0, 60)}) → 화면으로 확인 · ${id}`); probeQueue.unshift(id); probeCur = null; probeNext(); });
+    return;
+  }
   if (!probeView) {
     probeView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, preload: path.join(__dirname, "../preload/cn.cjs") } });
     win.contentView.addChildView(probeView);
@@ -755,6 +871,13 @@ ipcMain.handle("cn:pending", (e) => {
   return cnPending; // 업로드가 끝났다고 알려 올 때까지 유지(페이지가 한 번 다시 열려도 이어서)
 });
 ipcMain.handle("cn:pendingDone", (e) => { if (cnView && e.sender === cnView.webContents) cnPending = null; });
+// ✕ 1688 검색 취소: 잘못 누른 검색(예: 상세페이지 사진)을 멈춘다 — 올릴 사진·대상·옵션가 확인을 모두 비우고 1688 첫 화면으로
+ipcMain.handle("cn:cancel", (e) => {
+  if (!cnView || e.sender !== cnView.webContents) return;
+  log("stop", `■ 1688 검색 취소 · ${cnTarget?.name || ""}`);
+  cnPending = null; cnTarget = null; cnRank = null; probeStop();
+  cnView.webContents.loadURL(CN_HOME);
+});
 
 // ---- 🛍 타오바오에서 같은 상품 찾기 + 📷 리뷰 사진 모으기 ----
 // 1688은 도매라 싸지만 상세·리뷰 사진이 약하다 → 같은 사진으로 타오바오를 찾아, 직접 촬영한 판매자 상세와 구매자 리뷰 사진을 참고 자료로 모은다.
@@ -1057,6 +1180,17 @@ ipcMain.handle("live:open", () => {
   current = snap;
   return buildPayload(snap) || { error: "판정할 상품이 없습니다." };
 });
+// 🕘 카테고리 진단 시작 화면의 "최근 진단한 카테고리": 저장된 인기상품 스냅샷(카테고리마다 최신 1개) · 최신 순
+ipcMain.handle("cat:history", () => Object.values(store.get("snapshots") || {}).filter((s) => s?.items?.length > 1).sort((a, b) => b.ts - a.ts).slice(0, 100)
+  .map((s) => { const lead = [...s.items].sort((a, b) => a.order - b.order)[0]; return { key: s.key, name: s.name, path: s.path, date: s.date, ts: s.ts, total: s.total, pvLo: lead?.pvLo ?? null, pvHi: lead?.pvHi ?? null, reviews: lead?.reviews ?? null }; }));
+// 저장본 바로 열기: Wing 요청 없이 그 스냅샷으로 판정(틈새/큰 시장 전환도 이 스냅샷 기준으로 다시 계산되게 current로)
+ipcMain.handle("cat:openSaved", (_e, key) => {
+  const s = (store.get("snapshots") || {})[key];
+  if (!s) return { error: "저장된 진단이 없어요" };
+  current = s;
+  const p = buildPayload(s);
+  return p ? { ...p, ts: s.ts, saved: true } : { error: "판정할 상품이 없습니다." };
+});
 
 ipcMain.handle("settings:get", () => store.get("settings") || {});
 ipcMain.handle("settings:set", (_e, patch) => {
@@ -1064,9 +1198,34 @@ ipcMain.handle("settings:set", (_e, patch) => {
   return current ? buildPayload(current) : null;
 });
 
-ipcMain.handle("exact:start", async (_e, items) => {
+// ⚡ 카테고리 진단: 상품마다 하나씩 묻기 전에 카테고리 이름으로 Wing 키워드 검색 1번 → 응답에 있는 상품은 판매량을 바로 채운다(2026-10-13)
+//  같은 상품 판단은 하나씩 조회(exact.js pickItem)와 같게 — 상품 번호가 같으면 같은 상품, 옵션 번호까지 같으면 그 옵션 값을 우선
+//  응답에 없는 상품만 runExact가 예전처럼 하나씩(4초 간격) 조회 — 채운 상품은 "최근 조회값 재사용"으로 Wing 요청 없이 지나감
+const catQuery = (name) => String(name || "").replace(/[/·,()]/g, " ").split(/\s+/).filter((w) => w && w !== "기타").join(" ").trim().slice(0, 60);
+async function catBatch(name, items) {
+  const q = catQuery(name);
+  if (!q) return 0;
+  const exC = store.get("exactCache") || {};
+  const need = items.filter((it) => { const c = exC[`${it.pid}:${it.vid ?? ""}`]; return !(c && Date.now() - c.ts < 7 * 864e5); });
+  if (!need.length) return 0;
+  const res = await searchKeyword(q, 1, wingView.webContents, log, false);
+  if (res.error) { log("warn", `△ '${q}' 키워드 검색으로 한 번에 받기 실패 — ${res.error} · 상품별 조회로 진행`); return 0; }
+  const got = (res.items || []).filter((x) => x.ex && (x.ex.sales != null || x.ex.views != null));
+  let n = 0;
+  for (const it of need) {
+    const x = got.find((g) => g.pid === String(it.pid) && g.vid === String(it.vid)) || got.find((g) => g.pid === String(it.pid));
+    if (!x) continue;
+    store.putExact(`${it.pid}:${it.vid ?? ""}`, { ts: Date.now(), views: x.ex.views, sales: x.ex.sales, price: x.ex.price });
+    n++;
+  }
+  log(n ? "go" : "warn", `${n ? "⚡" : "△"} '${q}' 키워드 검색 1번 — 상위 ${need.length}개 중 ${n}개 판매량 바로 채움${n < need.length ? ` · 나머지 ${need.length - n}개는 하나씩 조회` : ""}${res.cached ? " (저장된 검색 결과 · Wing 요청 없음)" : ""}`);
+  return n;
+}
+ipcMain.handle("exact:start", async (_e, arg) => {
   if (!licensed()) return LOCKED;
+  const items = Array.isArray(arg) ? arg : arg?.items, opt = Array.isArray(arg) ? {} : arg || {}; // 예전 호출(상품 배열)도 그대로 받음
   if (!items?.length) return { error: "조회할 상품이 없습니다." };
+  if (opt.catName) await catBatch(opt.catName, items).catch((e) => log("warn", `△ 키워드 검색으로 한 번에 받기 실패 — ${e?.message || e}`));
   const r = await runExact(items, wingView.webContents, (ev, data) => { send(`exact:${ev}`, data); if (ev === "progress") console.log(`[정확한 지표] ${data.pos}/${data.total} ${data.msg}`); });
   if (current) send("live:refresh", buildPayload(current));
   return r;
@@ -1093,11 +1252,17 @@ const calc = () => ({ fx: 300, fee: 0.1188, adRate: 0.1, ...(store.get("calc") |
 const markMine = (kw) => { const m = mineInit(); m[kw] = Date.now(); const ks = Object.keys(m); if (ks.length > 500) ks.sort((a, b) => m[a] - m[b]).slice(0, ks.length - 500).forEach((k) => delete m[k]); store.set("kwMine", m); };
 // 처음 한 번: 키워드 분석 검색 때만 남는 정확도 대조 파일(userData/accuracy/검색어.json)로 예전에 직접 검색한 키워드를 채운다
 function mineInit() {
-  if (store.get("kwMine")) return store.get("kwMine");
+  const had = store.get("kwMine");
+  if (had && !store.get("kwMineNoReco")) { // 한 번만: 추천 카드에서 넘어와 기록된 추천 키워드를 뺀다(예전에는 구분이 없었음 · 2026-10-13 대표님 결정)
+    for (const k of (store.get("recoDraw")?.history || []).map((x) => x.kw)) delete had[k];
+    store.set("kwMine", had); store.set("kwMineNoReco", true);
+  }
+  if (had) return had;
   const m = {};
   try { const dir = path.join(app.getPath("userData"), "accuracy");
     for (const f of fs.readdirSync(dir)) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); if (j?.kw) m[j.kw] = Date.parse(j.ts) || 0; } catch {} } } catch {}
-  store.set("kwMine", m);
+  for (const k of (store.get("recoDraw")?.history || []).map((x) => x.kw)) delete m[k]; // 추천 키워드는 빼고 시작(위와 같은 규칙)
+  store.set("kwMine", m); store.set("kwMineNoReco", true);
   return m;
 }
 ipcMain.handle("kw:history", () => {
@@ -1106,9 +1271,9 @@ ipcMain.handle("kw:history", () => {
   return Object.values(cache).filter((h) => h?.keyword && h.items?.length && (!fromReco.has(h.keyword) || mine[h.keyword])).sort((a, b) => b.ts - a.ts).slice(0, 100)
     .map((h) => ({ kw: h.keyword, ts: h.ts, n: h.items.length, sales: h.items.reduce((t, it) => t + (it.ex?.sales || 0), 0), rev: h.items.reduce((t, it) => t + (it.ex?.sales || 0) * (it.ex?.price || it.price || 0), 0) }));
 });
-ipcMain.handle("kw:search", async (_e, { keyword, pages = 1, force = false, saved = false }) => {
+ipcMain.handle("kw:search", async (_e, { keyword, pages = 1, force = false, saved = false, src = "" }) => {
   if (!licensed()) return LOCKED;
-  markMine(String(keyword || "")); // 키워드 분석에서 직접 검색 → 최근 검색에 보임
+  if (src !== "reco") markMine(String(keyword || "")); // 키워드 분석에서 직접 검색 → 최근 검색에 보임 · 추천 카드의 🔎 키워드 분석으로 넘어온 건 남기지 않음(2026-10-13)
   const db = await lookup(keyword).catch(() => ({ month: null, main: null, subs: [] }));
   if (db.main) log("sys", `▶ '${keyword}' 네이버 월검색 ${db.main.m1?.toLocaleString() ?? "-"} · 서브키워드 후보 ${db.subs.length}개 (제휴 DB ${db.month})`);
   const res = await searchKeyword(keyword, Math.min(3, Math.max(1, pages)), wingView.webContents, log, force, saved);
@@ -1133,6 +1298,123 @@ ipcMain.handle("collect:export", async (_e, { rows, cpc, margin }) => {
 ipcMain.handle("collect:pagelog", () => store.get("pageLog") || []);
 ipcMain.handle("collect:remove", (_e, pids) => { const n = removeCollect(pids); collectChanged(); return n; });
 ipcMain.handle("kw:db", (_e, keyword) => lookup(keyword).catch(() => ({ month: null, main: null, subs: [] })));
+// ✍ 상품명 짓기(강의 2주차 공식) — 제휴 DB 서브키워드 + 키워드 분석에서 받아 둔 쿠팡 상위 상품명(Wing 요청 없음)으로 단어 후보·후보 상품명 3개·검사
+//  picks 를 안 주면 처음 고를 단어를 정해서 돌려준다. 계산은 shared/name-core.js
+const namePools = new Map();
+const nameItems = (kw) => {
+  const cache = store.get("kwCache") || {};
+  const hit = cache[kw] || cache[kw.replace(/\s+/g, "")];
+  return { ts: hit?.ts || null, items: (hit?.items || []).filter((it) => it.name).sort((a, b) => (b.ex?.sales || 0) - (a.ex?.sales || 0)).slice(0, 20)
+    .map((it) => ({ name: it.name, brand: it.brand, sales: it.ex?.sales ?? null, reviews: it.reviews ?? null, price: it.ex?.price ?? it.price ?? null, pid: it.pid, img: it.img || null })) };
+};
+async function namePool(keyword) {
+  const kw = String(keyword || "").trim();
+  const { items, ts } = nameItems(kw);
+  const cp = cpWordsGet(kw);
+  const words = buildPool({ keyword: kw, items, cp }).filter((p) => p.top >= 2 || p.cp).map((p) => p.word.replace(/\s+/g, ""));
+  const db = await nameLookup(kw, words).catch(() => ({ month: null, main: null, subs: [], vol: {} }));
+  const pool = buildPool({ keyword: kw, subs: db.subs, items, vol: db.vol, cp });
+  const r = { keyword: kw, month: db.month, main: db.main, pool, items, ts, cp };
+  namePools.set(kw, r);
+  return r;
+}
+ipcMain.handle("name:build", async (_e, { keyword, brand = "", qty = "", feats = "", picks = null, fresh = false } = {}) => {
+  if (!licensed()) return LOCKED;
+  const kw = String(keyword || "").trim();
+  if (!kw) return { error: "키워드를 넣어 주세요" };
+  const p = (!fresh && namePools.get(kw)) || (await namePool(kw));
+  const use = Array.isArray(picks) ? picks : defaultPicks(p.pool);
+  return { ...p, picks: use, names: buildNames({ keyword: kw, brand, qty, feats, pool: p.pool, picks: use, main: p.main }) };
+});
+// 🛒 쿠팡 자동완성·연관검색어(강의 p.9~11): 숨은 쿠팡 화면에서 검색 1번 → ① 연관검색어(검색 결과 위 줄) ② 자동완성(검색창과 같은 주소)
+//  ③ 파생 키워드(고탄력·학생 등)로 자동완성을 한 번 더 — 내 키워드가 들어간 것만. 키워드당 7일 저장(쿠팡 보안에 걸리지 않게 자주 열지 않음)
+const CPW_FRESH = 7 * 864e5;
+const cpWordsGet = (kw) => { const c = (store.get("cpWords") || {})[kw]; return c && c.v === 2 && Date.now() - c.ts < CPW_FRESH ? c : null; }; // v2: 연관검색어 2단계(related2) 추가
+let cpwBusy = null, cpwView = null, cpwPart = null;
+// 상품명 짓기 전용 숨은 쿠팡 화면 — 쿠팡 탭과 같은 클린 세션이지만 지표 스크립트(coupang.cjs)를 안 붙여서 수집함에 상품이 쌓이지 않는다
+function cpWordsView() {
+  if (cpwView && !cpwView.webContents.isDestroyed() && cpwPart === cleanPart) return cpwView;
+  if (cpwView) { try { win.contentView.removeChildView(cpwView); cpwView.webContents.close(); } catch {} }
+  if (!cleanPart) cleanPart = `clean-${Date.now()}`;
+  cpwPart = cleanPart;
+  cpwView = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  win.contentView.addChildView(cpwView);
+  const [w, h] = win.getContentSize();
+  cpwView.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) });
+  cpwView.setVisible(false);
+  cpwView.webContents.setAudioMuted(true);
+  cpwView.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  return cpwView;
+}
+async function cpWordsFetch(kw) {
+  if (cpwBusy) await cpwBusy.catch(() => {});
+  const run = (async () => {
+    if (!win) return { error: "창이 없어요" };
+    const wc = cpWordsView().webContents;
+    log("sys", `↗ 쿠팡 자동완성·연관검색어 읽기 '${kw.replace(/[<&]/g, "")}' (숨은 쿠팡 화면 · 연관검색어 2단계까지 최대 4번)`);
+    // 쿠팡 검색 화면 1장 열고 "연관검색어:" 줄 읽기 — 연관검색어가 없는 검색이면 [] , 화면을 못 읽으면 null
+    let blocked = false;
+    const readRelated = async (q) => {
+      wc.loadURL(`https://www.coupang.com/np/search?q=${encodeURIComponent(q)}`, { httpReferrer: "https://www.coupang.com/" }).catch(() => {});
+      const want = encodeURIComponent(q);
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const got = await wc.executeJavaScript(`(() => { if (!/\\/np\\/search/.test(location.pathname) || !location.search.includes(${JSON.stringify(want)}) || document.readyState === "loading") return null;
+          const box = document.querySelector('[class*="srp_relatedKeywords"]'); if (box) return [...box.querySelectorAll("a")].map((a) => (a.title || a.textContent || "").trim()).filter(Boolean);
+          return document.querySelector('[class*="ProductUnit_productName"]') ? [] : null; })()`).catch(() => null);
+        if (got != null) return got;
+      }
+      const why = await wc.executeJavaScript(`(document.body?.innerText || "").replace(/\\s+/g, " ").slice(0, 80)`).catch(() => "");
+      if (/사용권한|Access Denied/i.test(why)) blocked = true; // 쿠팡 보안이 잠시 막음(짧은 시간에 여러 번 열었을 때)
+      log("warn", `△ 쿠팡 화면 읽기 실패 · ${blocked ? "쿠팡이 잠시 접속을 막았어요" : why.slice(0, 60)}`);
+      return null;
+    };
+    const related = await readRelated(kw);
+    if (related == null) return { error: blocked ? "쿠팡이 잠시 접속을 막았어요 · 30분쯤 뒤 ↻로 다시 읽어 주세요" : "쿠팡 화면을 읽지 못했어요 · 잠시 뒤 다시 눌러 주세요" };
+    const ac = async (q) => {
+      const r = await wc.executeJavaScript(`fetch("/n-api/web-adapter/search?keyword=" + encodeURIComponent(${JSON.stringify(q)}) + "&_=" + Date.now(), { credentials: "include", headers: { accept: "application/json" } })
+        .then((r) => (r.ok ? r.json() : [])).then((j) => (Array.isArray(j) ? j.map((x) => String(x?.keyword || "").trim()).filter(Boolean) : [])).catch(() => [])`).catch(() => []);
+      await new Promise((r) => setTimeout(r, 400));
+      return r;
+    };
+    const auto = await ac(kw);
+    // 파생 키워드: 자동완성·연관검색어에서 내 키워드 앞뒤에 붙은 단어 + 상위 판매 상품명에 자주 나오는 단어 중 5개
+    //  상위 상품에만 나오고 쿠팡 검색어로는 아직 확인 안 된 단어(학생용 등)를 먼저 — 그게 "다시 검색해서 확인"하는 단계
+    const cand = buildPool({ keyword: kw, items: nameItems(kw).items, cp: { auto, related, deep: {} } }).filter((p) => !p.flag && (p.cp || p.top >= 3));
+    const seeds = [...cand.filter((p) => !p.cp).sort((a, b) => b.top - a.top), ...cand.filter((p) => p.cp)].slice(0, 5).map((p) => p.word);
+    const base = kw.replace(/\s+/g, ""), tail = base.length >= 4 ? base.slice(-3) : base, deep = {};
+    for (const s of seeds) deep[s] = (await ac(s)).filter((x) => { const k = x.replace(/\s+/g, ""); return k.includes(base) || k.endsWith(tail); });
+    // 연관검색어 2단계(변기솔 → 화장실변기솔 → 스텐변기솔): 첫 화면 연관검색어 중 내 키워드가 들어가고 색상·브랜드가 아닌 것 3개를 다시 열어 그 화면의 연관검색어를 읽는다
+    const norm = (x) => x.replace(/\s+/g, "").toLowerCase();
+    const hops = related.filter((r) => { const k = norm(r); return k !== norm(base) && (k.includes(norm(base)) || k.endsWith(norm(tail))); })
+      .filter((r) => { const ws = buildPool({ keyword: kw, cp: { related: [r] } }); return ws.length && ws.every((w) => !w.flag); }).slice(0, 3);
+    const related2 = {};
+    for (const h of hops) {
+      await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000)); // 쿠팡 보안: 화면 사이 간격
+      const r2 = await readRelated(h);
+      if (r2 == null) break; // 막히면 더 열지 않는다
+      related2[h] = r2.filter((x) => !related.includes(x) && norm(x) !== norm(h));
+    }
+    const out = { v: 2, ts: Date.now(), auto, related, related2, deep };
+    store.set("cpWords", { ...Object.fromEntries(Object.entries(store.get("cpWords") || {}).filter(([, v]) => Date.now() - v.ts < CPW_FRESH)), [kw]: out });
+    log("go", `✔ 쿠팡 자동완성 ${auto.length}개 · 연관검색어 ${related.length}개 · 연관 2단계 ${Object.values(related2).flat().length}개(${Object.keys(related2).length}화면) · 파생 ${Object.values(deep).flat().length}개`);
+    return out;
+  })();
+  cpwBusy = run;
+  return run;
+}
+ipcMain.handle("name:coupang", async (_e, { keyword, force = false } = {}) => {
+  if (!licensed()) return LOCKED;
+  const kw = String(keyword || "").trim();
+  if (!kw) return { error: "키워드를 넣어 주세요" };
+  if (SELFTEST && process.env.SELFTEST_SITES !== "1") return { error: "자체 점검은 쿠팡에 접속하지 않아요" };
+  const hit = !force && cpWordsGet(kw);
+  const r = hit || (await cpWordsFetch(kw));
+  if (r.error) return r;
+  namePools.delete(kw); // 다음 name:build 에서 새 단어로 다시 계산
+  return { ok: true, cached: !!hit };
+});
+ipcMain.handle("name:check", (_e, { name, keyword, brand = "" } = {}) => checkName(name, { keyword, brand, pool: namePools.get(String(keyword || "").trim())?.pool || [] }));
 ipcMain.handle("kw:reco", () => recommend());
 ipcMain.handle("kw:combo", (_e, c) => combo(c || {}));
 ipcMain.handle("kw:scan", (_e, o) => kwScan(o || {}));
@@ -1145,19 +1427,20 @@ const hySave = (kw, r) => { const all = store.get("hyojaSaved") || {}; all[kw] =
 //  ① kw:hyoja — Wing 검색만으로 바로 카드(가격은 예전에 쿠팡 화면에서 본 것만 쿠폰가, 나머지는 Wing 판매가)
 //  ② kw:hyojaCp — 10개가 다 뜬 뒤 키워드마다 쿠팡 검색 화면을 뒤에서 1번 열어 쿠폰가를 읽고 숫자를 다시 계산(cp: true)
 const hyWing = new Map(); // 검색어 → 방금 받은 Wing 결과(②에서 Wing을 다시 부르지 않으려고)
-async function hyojaBuild(kw, res, rows, { top, t0, cp }) {
+async function hyojaBuild(kw, res, rows, { top, t0, cp, detail = new Map() }) {
   const byPid = new Map(rows.map((r) => [String(r.pid), r]));
   const raw = (res.items || []).filter((x) => x.ex?.sales != null).map((x) => {
-    const wingP = x.ex.price || x.price || 0, p = pagePrice({ price: wingP, vid: x.vid }, byPid.get(String(x.pid)));
+    const wingP = x.ex.price || x.price || 0, dp = detail.get(`${x.pid}:${x.vid}`);
+    const p = dp ? { price: dp.price, src: "detail", pagePrice: dp.page } : pagePrice({ price: wingP, vid: x.vid }, byPid.get(String(x.pid)));
     return { name: x.name, brand: x.brand || "", pid: x.pid, vid: x.vid, img: x.img, price: p.price || 0, listPrice: wingP, priceSrc: p.src, pagePrice: p.pagePrice, reviews: x.reviews, sales: x.ex.sales };
   });
   // 카드 숫자(월매출·틈·1688 기준가)는 검색어와 다른 상품을 뺀 뒤 계산 — hyoja-core.js · 유명 브랜드(키워드 DB)는 "틈"에서 뺌
   const famous = await famousBrands(raw.map((x) => x.brand)).catch(() => new Set());
   const s = hyojaSummarize(kw, raw, { top, famous });
   // total = 판매액 상위 10개 합 · v3: v2 저장본은 price·gap·주의 정보가 빠진 채 저장됐음(주석 실수) → 다시 계산 · v4: 팔아봤어요 지표(top1Sales·big500) 추가 · v5: 쿠팡 화면 쿠폰가 반영(v4는 Wing 할인 전 가격)
-  const nPage = raw.filter((x) => x.priceSrc === "page").length;
-  if (cp) log(nPage ? "go" : "warn", `${nPage ? "✔" : "△"} ${kw.replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}: 쿠폰가 반영 ${nPage}/${raw.length}개${nPage < raw.length ? " · 나머지는 Wing 판매가(쿠폰 전)" : ""}`);
-  const out = { v: 5, keyword: kw, cp, priced: { page: nPage, all: raw.length }, ms: Date.now() - t0, cached: !!res.cached, n: s.n, nAll: s.nAll, wingRaw: res.raw ?? null,
+  const nPage = raw.filter((x) => x.priceSrc === "page" || x.priceSrc === "detail").length, nDetail = raw.filter((x) => x.priceSrc === "detail").length;
+  if (cp) log(nPage ? "go" : "warn", `${nPage ? "✔" : "△"} ${kw.replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}: 쿠폰가 반영 ${nPage}/${raw.length}개${nDetail ? `(상품 페이지 ${nDetail}개)` : ""}${nPage < raw.length ? " · 나머지는 Wing 판매가(쿠폰 전)" : ""}`);
+  const out = { v: 6, keyword: kw, cp, priced: { page: nPage, all: raw.length }, ms: Date.now() - t0, cached: !!res.cached, n: s.n, nAll: s.nAll, wingRaw: res.raw ?? null,
     total: { sales: s.sales, rev: s.rev, reviews: s.reviews, brandRev: s.brandRev }, price: s.price, gap: s.gap, top1Sales: s.top1Sales, big500: s.big500, gapBrandOnly: s.gapBrandOnly, top1Share: s.top1Share, brandShare: s.brandShare, brandTop: s.brandTop, medical: s.medical,
     drop: s.drop.map((x) => ({ name: x.name, sales: x.sales, why: x.why })),
     top: { sales: s.top.reduce((t, x) => t + x.sales, 0), rev: s.top.reduce((t, x) => t + x.rev, 0) },
@@ -1169,7 +1452,7 @@ ipcMain.handle("kw:hyoja", async (_e, { keyword, top = 5, saved = false } = {}) 
   if (!licensed()) return LOCKED;
   const t0 = Date.now();
   const kw = String(keyword || "");
-  if (saved) { const s = (store.get("hyojaSaved") || {})[kw]; if (s?.v === 5) return { ...s, cached: true, ms: 0 }; } // 지난 결과 다시 열기: 저장본 우선(v5 = 쿠팡 화면 쿠폰가 반영 · cp가 false면 화면에서 ②를 이어서 함)
+  if (saved) { const s = (store.get("hyojaSaved") || {})[kw]; if (s?.v === 6) return { ...s, cached: true, ms: 0 }; } // 지난 결과 다시 열기: 저장본 우선(v6 = 쿠팡 화면 쿠폰가 + 옵션 다른 상품의 상품 페이지 가격 · cp가 false면 화면에서 ②를 이어서 함)
   const res = await searchKeyword(kw, 1, wingView.webContents, log, false);
   if (res.error) return { error: res.error, ms: Date.now() - t0 };
   hyWing.set(kw, res);
@@ -1185,7 +1468,19 @@ ipcMain.handle("kw:hyojaCp", async (_e, { keyword, top = 5 } = {}) => {
   if (!cpOpen) return { error: "쿠팡 화면을 열 수 없어요" };
   const rows = await waitCoupangRows(kw, t0, 10000);
   hyWing.delete(kw);
-  return hyojaBuild(kw, res, rows, { top, t0, cp: true });
+  // 판매액 상위 10개 중 "옵션 다름"이면서 Wing가와 쿠팡 화면 가격이 1.5배 넘게 차이 나는 상품만(키워드당 최대 3개) 상품 페이지를 연다 — 월매출을 크게 흔드는 것만
+  const byPid = new Map(rows.map((r) => [String(r.pid), r]));
+  const cand = (res.items || []).filter((x) => x.ex?.sales != null).map((x) => ({ x, wingP: x.ex.price || x.price || 0 }))
+    .sort((a, b) => b.x.ex.sales * b.wingP - a.x.ex.sales * a.wingP).slice(0, 10)
+    .filter(({ x, wingP }) => { const p = pagePrice({ price: wingP, vid: x.vid }, byPid.get(String(x.pid))); return p.src === "vid" && wingP > 0 && p.pagePrice > 0 && Math.max(wingP / p.pagePrice, p.pagePrice / wingP) > 1.5; })
+    .slice(0, 3);
+  const detail = new Map();
+  for (const { x, wingP } of cand) {
+    const price = await readDetailPrice(x.pid, x.vid).catch(() => null);
+    if (price > 0 && price <= wingP * 1.05 && price >= wingP * 0.1) detail.set(`${x.pid}:${x.vid}`, { price, page: byPid.get(String(x.pid))?.page?.price ?? null }); // 할인가는 Wing가(할인 전)보다 클 수 없음
+    else log("dim", `  ${String(x.name).slice(0, 24)} — 상품 페이지 가격을 못 읽어 Wing 판매가 유지`);
+  }
+  return hyojaBuild(kw, res, rows, { top, t0, cp: true, detail });
 });
 // 🎁 키워드 받기: 10개 × 하루 10번(대표님 결정 2026-10-11). 이미 받은 키워드·오늘 횟수는 store("recoDraw")에 — 앱을 껐다 켜도 유지(서버 배분은 나중)
 const DRAW_PER = 10, DRAW_DAILY = 10, DRAW_BONUS = 5; // 보너스: 하루 1번, 다 쓴 뒤 +5 (2026-10-12)
@@ -1242,12 +1537,36 @@ async function selftest() {
     console.log("WING_COOKIE", c ? `session=${c.session} 남은 일수=${c.expirationDate ? Math.round((c.expirationDate - Date.now() / 1000) / 86400) : "-"}` : "없음");
     await ses.cookies.remove("https://xauth.coupang.com/", "selftest_sess");
   }
+  if (process.env.SELFTEST_NAME) { // ✍ 상품명 짓기 화면: 강의 예시(팬티스타킹) 상위 상품을 저장된 검색 결과로 넣고 화면 캡처(Wing 접속 없음)
+    const nm = (name, brand, sales) => ({ name, brand, pid: String(sales), ex: { sales, price: 11590 }, reviews: 100 });
+    store.set("kwCache", { ...(store.get("kwCache") || {}), 팬티스타킹: { keyword: "팬티스타킹", ts: Date.now(), pages: 1, fields: [], items: [
+      nm("베이스알파에센셜 국내산 학생용 팬티스타킹 20D 10p 벌크형", "베이스알파에센셜", 5200), nm("비비안 고탄력 팬티스타킹 5+5", "비비안", 3100),
+      nm("베이스알파에센셜 팬티스타킹 쫀쫀 고탄력 20D 10매입", "베이스알파에센셜", 2800), nm("비비안 판도라 고탄력 팬티스타킹 벌크 10매세트", "비비안", 1900),
+      nm("탐사 학생용 고탄력 20D 팬티스타킹 벌크형 10P", "탐사", 1500), nm("시글락 요즘애들 학생용 80D 팬티스타킹 6P", "", 900),
+      nm("패션파트너 [자체제작] 프리미엄 슬림 핏 하이서포트 고탄력 20D 팬티스타킹 10P", "", 600), nm("플레시크 고탄력 팬티스타킹 내추럴 7매 SET", "", 400)] } });
+    await new Promise((r) => setTimeout(r, 1500));
+    const go = (js) => win.webContents.executeJavaScript(`(async () => { ${js} })()`).catch((e) => ({ err: e.message }));
+    await go(`document.getElementById("tName").click();`);
+    await new Promise((r) => setTimeout(r, 800));
+    fs.writeFileSync(path.join(out, "name-start.png"), (await win.webContents.capturePage()).toPNG());
+    const r = await go(`window.NameMaker.open(${JSON.stringify(process.env.SELFTEST_NAME_KW || "팬티스타킹")}); for (let i = 0; i < 40 && !document.querySelector(".nm-cand"); i++) await new Promise((r) => setTimeout(r, 100));
+      document.getElementById("nmBrand").value = "제이"; const q = document.getElementById("nmQty"); q.value = "10P"; document.getElementById("nmForm").requestSubmit(); await new Promise((r) => setTimeout(r, 600));
+      const m = document.getElementById("nmMine"); m.value = "패션파트너 [자체제작] 프리미엄 슬림핏 고탄력 하이서포트 엉덩이 두줄 봉제선 150D 페이크 착시 팬티 스타킹 검정"; m.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 800));
+      for (let i = 0; i < 300 && document.querySelector(".nm-cp.run"); i++) await new Promise((r) => setTimeout(r, 100)); // 쿠팡 읽기(SELFTEST_SITES=1)
+      await new Promise((r) => setTimeout(r, 1200));
+      document.querySelector("details.nm-cp")?.setAttribute("open", "");
+      return { cp: document.querySelector(".nm-cp")?.textContent.replace(/\s+/g, " ").trim().slice(0, 600), view: document.body.dataset.view, names: [...document.querySelectorAll(".nm-name b")].map((b) => b.textContent), words: [...document.querySelectorAll(".nm-w")].map((b) => b.textContent.trim().replace(/\\s+/g, " ")), chks: [...document.querySelectorAll(".nm-chk")].map((b) => b.textContent) };`);
+    console.log("NAME", JSON.stringify(r, null, 1));
+    fs.writeFileSync(path.join(out, "name.png"), (await win.webContents.capturePage()).toPNG());
+    console.log("SELFTEST_OK", out); app.quit(); return;
+  }
   if (process.env.SELFTEST_1688) { // 실제 1688 이미지 검색 시험(쿠팡·Wing 접속 없음)
     const fakeImg = "https://picsum.photos/id/1060/400/400.jpg";
     cnTarget = { rowId: 1, name: "시험 상품" };
     // cn:search 처리와 같은 흐름
     const rr = await net.fetch(fakeImg); const im = nativeImage.createFromBuffer(Buffer.from(await rr.arrayBuffer()));
-    cnPending = { b64: im.toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
+    cnPending = { b64: upImg(im).toJPEG(90).toString("base64"), type: "image/jpeg", ts: Date.now() }; cnPhoto = cnPending; // 🛍 타오바오 같은 상품 찾기에 다시 쓴다
     createCn(CN_HOME); active = "cn"; layout();
     await new Promise((res) => setTimeout(res, 40000));
     console.log("CN_URL", cnView.webContents.getURL().slice(0, 160), "| TITLE", cnView.webContents.getTitle());
