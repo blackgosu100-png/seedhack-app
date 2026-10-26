@@ -329,12 +329,7 @@ function createWindow() {
   wingView = new WebContentsView({ webPreferences: { partition: "persist:wing", contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   win.contentView.addChildView(wingView);
   hookView(wingView, "wing");
-  watchWing(wingView.webContents, (snap) => {
-    if (snap?.tree) { send("cattree", { count: snap.tree }); return; } // 카테고리 목록 저장됨 → 대시보드 검색창 갱신
-    current = snap;
-    const p = buildPayload(snap);
-    if (p) { log("sys", `▶ Wing 인기상품 응답 수신 · ${snap.name} · 상품 ${snap.items.length}개`); send("live", p); }
-  }, log);
+  watchWing(wingView.webContents, onWingSnap, log); // 사람이 Wing 탭에서 직접 카테고리를 열어도 판정
   if (!SELFTEST) wingView.webContents.loadURL(WING_HOME);
 
   win.on("resize", layout);
@@ -1289,13 +1284,43 @@ ipcMain.handle("nav:newClean", () => { active = "clean"; createClean(); layout()
 
 // 대시보드에서 카테고리 고르기: 저장된 트리를 주고, 고르면 Wing 화면을 그 카테고리 주소로 연다(Wing이 스스로 인기상품을 받아오면 CDP가 읽어 판정)
 ipcMain.handle("cat:tree", () => { const t = store.get("cattree"); return t ? { ts: t.ts, nodes: t.nodes } : null; });
-ipcMain.handle("cat:loadTree", () => { wingView.webContents.loadURL(WING_TREND); return { ok: true }; });
-ipcMain.handle("cat:open", (_e, { code, name }) => {
+// Wing 인기상품 응답(카테고리 목록·인기상품 60개) → 판정 화면으로
+function onWingSnap(snap) {
+  if (snap?.tree) { send("cattree", { count: snap.tree }); return; } // 카테고리 목록 저장됨 → 대시보드 검색창 갱신
+  current = snap;
+  const p = buildPayload(snap);
+  if (p) { log("sys", `▶ Wing 인기상품 응답 수신 · ${snap.name} · 상품 ${snap.items.length}개`); send("live", p); }
+}
+// 🕶 카테고리 조회 전용 숨은 Wing 화면(2026-10-26) — Wing 로그인(persist:wing)은 같이 쓰고, 사람이 보는 Wing 탭은 그대로 둔다.
+//  Wing 탭 안에서 도는 키워드 검색(runInWing)과 겹쳐도 페이지가 넘어가며 검색이 끊기지 않게 따로
+let catBg = null;
+function catBgView() {
+  if (catBg && !catBg.webContents.isDestroyed()) return catBg;
+  catBg = new WebContentsView({ webPreferences: { partition: "persist:wing", contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  win.contentView.addChildView(catBg);
+  const [w, h] = win.getContentSize();
+  catBg.setBounds({ x: 0, y: 0, width: Math.max(1100, w), height: Math.max(700, h) }); // 크기를 준 뒤 숨김(크기 0이면 Wing 화면이 데이터를 안 부를 수 있음)
+  catBg.setVisible(false);
+  catBg.webContents.setAudioMuted(true);
+  catBg.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  watchWing(catBg.webContents, onWingSnap, log);
+  return catBg;
+}
+// 숨은 화면에 Wing 인기상품 페이지를 연다 — 로그인 화면으로 넘어가면(로그인 만료) 알려 준다
+async function openCatBg(url) {
+  const wc = catBgView().webContents;
+  await wc.loadURL(url).catch(() => {}); // 로그인 화면으로 넘어가도 오류 없이 계속
+  if (!/^https:\/\/wing\.coupang\.com\//.test(wc.getURL())) return { error: "Wing 로그인이 필요해요 — 왼쪽 Wing 로그인 메뉴에서 로그인한 뒤 다시 진단해 주세요" };
+  return { ok: true };
+}
+ipcMain.handle("cat:loadTree", () => openCatBg(WING_TREND));
+ipcMain.handle("cat:open", async (_e, { code, name }) => {
   if (!/^\d+$/.test(String(code || ""))) return { error: "카테고리 코드가 없습니다" };
   const u = new URL(WING_TREND); u.searchParams.set("categoryCode", String(code)); u.searchParams.set("categoryName", String(name || ""));
-  wingView.webContents.loadURL(u.href);
-  log("sys", `▶ 카테고리 열기 · ${name} (${code}) — Wing 응답을 받으면 판정합니다`);
-  return { ok: true };
+  log("sys", `▶ 카테고리 열기 · ${name} (${code}) — Wing 응답을 받으면 판정합니다(숨은 Wing 화면 · Wing 탭은 그대로)`);
+  const r = await openCatBg(u.href);
+  if (r.error) log("stop", `✕ ${r.error}`);
+  return r;
 });
 ipcMain.on("cattree:changed", () => {});
 

@@ -405,7 +405,7 @@
     if (!catTree) {
       catList.innerHTML = `<div class="hint">카테고리 목록이 아직 없습니다. Wing에 로그인한 뒤 한 번만 불러오면 됩니다.<br><button type="button" id="catLoad">카테고리 목록 불러오기</button></div>`;
       catList.hidden = false;
-      $("catLoad").onclick = async () => { $("catLoad").textContent = "불러오는 중… (Wing 인기상품 화면을 엽니다)"; await api.invoke("cat:loadTree"); };
+      $("catLoad").onclick = async () => { $("catLoad").textContent = "불러오는 중… (숨은 Wing 화면에서 인기상품 화면을 엽니다)"; const r = await api.invoke("cat:loadTree").catch(() => null); if (r?.error) $("catLoad").textContent = r.error; };
       return;
     }
     if (!q) { catList.hidden = true; return; }
