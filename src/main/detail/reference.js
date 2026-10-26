@@ -244,7 +244,7 @@ export async function buildReference({ input, outDir, model = process.env.SEEDHA
     L.push("", "[열별 OCR 글(위→아래)]");
     for (const s of sheets) for (const c of s.cols) L.push(`열 ${c.n}: ${allBoxes.filter((b) => b.y >= c.y0 && b.y < c.y1).map((b) => b.text).join(" | ").slice(0, 700)}`);
     L.push("", `[측정값(참고)] 바탕 ${px.bg} · 어두운 띠 비율 ${px.darkRatio} · 브랜드 후보 ${px.brand}(${px.brandShare}) · 글 정렬 가운데 ${text.align.center}/왼쪽 ${text.align.left}`);
-    const r = await runStructured({ system: REF_VISION_SYSTEM, schema: REF_VISION_SCHEMA, text: L.join("\n"), model, timeoutMs, allowedTools: ["Read"] });
+    const r = await runStructured({ purpose: "ref-vision", system: REF_VISION_SYSTEM, schema: REF_VISION_SCHEMA, text: L.join("\n"), model, timeoutMs, allowedTools: ["Read"] });
     times.visionMs = Date.now() - ta;
     if (r?.ok) { v = r.result; cost = r.costUsd ?? null; } else { error = r?.error || "비전 결과 없음"; log("warn", `△ 🧲 레퍼런스 비전 실패 → 측정값만 (${error})`); }
   }

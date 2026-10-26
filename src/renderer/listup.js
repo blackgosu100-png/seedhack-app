@@ -59,7 +59,22 @@
     const bRoi = bNet != null && cost ? bNet / (cost * bm) : null;
     return { cost, fee, margin, rate, costM, revM, marginM, adM, net, roi, allow, ad, maxRoas, cpa, unitM, bp, bm, bUnit, bNet, bRoi };
   }
+  // ⚠ 확인 필요(2026-10-13): 오타·못 읽은 값처럼 보이는 칸 — 판정 대신 그 칸만 주황으로 알린다
+  const BAD_NAME = /^(product image|상품 ?이미지|image)$/i;
+  function issues(r) {
+    const out = {};
+    if (BAD_NAME.test(String(r.name || "").trim())) out.name = "상품명을 못 읽었어요 · 쿠팡 페이지에서 확인해 고쳐 주세요";
+    const p = n(r.price), ref = Math.max(n(r.maxPrice) ?? 0, n(r.benchPrice) ?? 0);
+    const lo = n(r.minPrice);
+    if (p != null && ref > 0 && p > ref * 3) out.price = `판매가가 1페이지 최고가(${won(ref)}원)보다 ${Math.round(p / ref)}배 커요 · 0이 더 붙었는지 확인해 주세요`;
+    // 담을 때부터 가격을 잘못 읽으면 최고가·벤치마킹가도 같이 틀린다(예: 빨래바구니 1,980,000원 · 1페이지 최저가 380원) → 최저가 대비 50배 · 100만원 초과도 확인
+    else if (p != null && lo > 0 && p > lo * 50) out.price = `판매가가 1페이지 최저가(${won(lo)}원)의 ${won(Math.round(p / lo))}배예요 · 가격을 잘못 읽었는지 확인해 주세요`;
+    else if (p != null && p >= 1e6) out.price = `판매가가 100만원이 넘어요 · 0이 더 붙었는지 확인해 주세요`;
+    return out;
+  }
+  const stOf = (r) => ({ need: n(r.yuan) == null, done: calc(r).rate != null, warn: Object.keys(issues(r)).length > 0 });
   function verdict(r, c) {
+    if (issues(r).price) return ["warn", "⚠ 판매가를 확인하세요"];
     if (n(r.price) == null) return ["", "판매가를 넣으세요"];
     if (c.rate == null) return ["", c.allow > 0 ? `¥${c.allow.toFixed(1)} 이하로 사 오면 OK` : "이 판매가로는 남지 않아요"];
     if (c.margin < 0) return ["bad", `🔴 1개 팔 때마다 ${won(-c.margin)}원 손해`];
@@ -97,16 +112,16 @@
   // 간단 보기: 위안을 넣고 바로 결론이 보이도록 핵심 칸만, 결론 칸을 앞쪽에
   const SIMPLE = [
     ["img", "사진", "img", 58],
-    ["name", "상품명", "txt", 180],
+    ["name", "상품명", "txt", 220], ["vd", "한 줄 판정", "c", 230], // 2026-10-13: 판정을 상품명 바로 옆으로(스크롤 없이 보이게)
     ["cnUrl", "1688 찾기 · 중국URL", "url", 150], ["yuan", "위안", "num", 66], ["price", "판매가", "num", 84],
     ["cat", "카테고리", "cat", 112], ["dims", "크기 mm (가로×세로×높이)", "in", 150], ["wt", "무게 g", "num", 70], ["rgSize", "사이즈", "c", 84],
-    ["vd", "한 줄 판정", "c", 220], ["allow", "최대 위안", "c", 78], ["bNet", "경쟁사 월 순이익", "c", 112], ["strat", "🧠 판매전략", "strat", 190],
+    ["allow", "최대 위안", "c", 78], ["bNet", "경쟁사 월 순이익", "c", 112], ["strat", "🧠 판매전략", "strat", 190],
     byF.rate, byF.margin, byF.cost, byF.fee, ["logi", "입출고비+배송비", "num", 104],
     ["monthly", "내 예상 월판매", "num", 92], byF.net, byF.roi,
     ["ad", "광고 판정 (가정)", "c", 120],
     ["keyword", "대표키워드", "in", 96], byF.benchUrl,
   ];
-  const SIMPLE_GROUPS = [["상품", 2], ["입력 — 🔍1688로 위안 찾기", 3], ["🚚 물류 — 크기를 넣으면 입출고비 자동", 4], ["결론", 4], ["개당 원가·마진", 6], ["월 손익 (가정)", 3], ["광고", 1], ["참고", 2]];
+  const SIMPLE_GROUPS = [["상품", 3], ["입력 — 🔍로 1688에서 위안 찾기", 3], ["🚚 물류 — 크기를 넣으면 입출고비 자동", 4], ["참고", 3], ["개당 원가·마진", 6], ["월 손익 (가정)", 3], ["광고", 1], ["참고", 2]];
   const EXT = new Set(["bSales", "bViews", "bCvr", "ad", "cpa"]);
   let COLS = full ? TEMPLATE : SIMPLE, GROUPS = full ? TEMPLATE_GROUPS : SIMPLE_GROUPS;
   const PCT = new Set(["rate", "roi"]);
@@ -121,10 +136,13 @@
     cpa: "광고로 1개 팔 때 드는 광고비 = 클릭비용 ÷ (전환율 × 광고 전환 비율)", vd: "개당 남는 돈 기준 한 줄 결론",
   };
 
+  // 머리글 글자를 그 열의 값과 같은 쪽에 붙인다: 숫자 = 오른쪽, 글 = 왼쪽, 사진·짧은 표시 = 가운데(오와 열 맞춤 · 2026-10-13)
+  const TXT_C = new Set(["vd", "strat", "ad"]), MID_C = new Set(["rgSize"]);
+  const alignOf = (f, k) => (k === "img" || MID_C.has(f) ? "a-c" : k === "num" || (k === "c" && !TXT_C.has(f)) || (k === "ro" && f !== "ad") ? "a-r" : "a-l");
   function head() {
     $("luHead").innerHTML =
-      `<tr class="grp"><th class="no mg" rowspan="2"><label class="pk" data-tip="☑ 전체 선택 / 해제"><input type="checkbox" id="luAll" aria-label="전체 선택" ${rows.length && rows.every((r) => picked.has(r.id)) ? "checked" : ""}></label>No.</th>${GROUPS.map(([g, span], i) => `<th colspan="${span}" class="${i === GROUPS.length - 1 ? "ext" : ""}">${g}</th>`).join("")}<th rowspan="2" class="del"></th></tr>` +
-      `<tr>${COLS.map(([f, h, k, w]) => `<th style="min-width:${w}px;width:${w}px" class="${k === "c" ? "calc" : ""} ${EXT.has(f) ? "ext" : ""}" title="${esc(TIPS[f] || "")}">${typeof h === "function" ? h() : h}</th>`).join("")}</tr>`;
+      `<tr class="grp"><th class="no mg" rowspan="2"><span class="grip sp" aria-hidden="true">⠿</span><label class="pk" data-tip="☑ 전체 선택 / 해제"><input type="checkbox" id="luAll" aria-label="전체 선택" ${rows.length && rows.every((r) => picked.has(r.id)) ? "checked" : ""}></label><b>No.</b></th>${GROUPS.map(([g, span], i) => `<th colspan="${span}" class="${i === GROUPS.length - 1 ? "ext" : ""}">${g}</th>`).join("")}<th rowspan="2" class="del"></th></tr>` +
+      `<tr>${COLS.map(([f, h, k, w]) => `<th style="min-width:${w}px;width:${w}px" class="${k === "c" ? "calc" : ""} ${EXT.has(f) ? "ext" : ""} ${alignOf(f, k)}" title="${esc(TIPS[f] || "")}">${typeof h === "function" ? h() : h}</th>`).join("")}</tr>`;
   }
 
   function cellHtml(r, ri, [f, , k], c) {
@@ -174,15 +192,16 @@
     const at = f !== "yuan" ? "" : autoSt.cur?.rowId === r.id ? `<span class="atag run" title="1688 자동 조사 중">조사 중</span>`
       : autoSt.q.includes(r.id) ? `<span class="atag run" title="1688 자동 조사 대기">대기</span>`
       : r.cnAuto ? `<span class="atag ${r.cnAuto.sure && !r.cnAuto.warn ? "" : "est"}" title="${esc(["1688 자동 조사", r.cnAuto.how, r.cnAuto.option ? "옵션: " + r.cnAuto.option : "", r.cnAuto.warn ? "⚠ " + r.cnAuto.warn : "", r.cnAuto.sure ? "" : "추정값 — 🔍1688로 옵션을 확인하세요"].filter(Boolean).join("\n"))}">${r.cnAuto.sure ? "자동" : "추정"}${r.cnAuto.warn ? "⚠" : ""}</span>` : "";
-    const extra = k === "url" ? `${v ? `<a class="go" href="${esc(v)}" target="_blank" title="열기">↗</a>` : ""}<button type="button" class="cnbtn" data-cn="${ri}" title="이 상품 사진으로 1688 이미지 검색 → 상품 페이지에서 '리스트업에 넣기'를 누르면 위안·중국URL이 채워집니다">🔍1688</button>` : "";
+    const extra = k === "url" ? `${v ? `<a class="go" href="${esc(v)}" target="_blank" title="열기">↗</a>` : ""}<button type="button" class="cnbtn" data-cn="${ri}" title="🔍 이 상품 사진으로 1688 이미지 검색 → 상품 페이지에서 '리스트업에 넣기'를 누르면 위안·중국URL이 채워집니다" aria-label="1688에서 찾기">🔍</button>` : "";
     const ph = k === "url" ? "1688 주소" : f === "monthly" && r.benchMonthly ? `1등 ${won(r.benchMonthly)}` : f === "yuan" ? "¥" : f === "dims" ? "200x150x80" : f === "wt" ? "g" : "";
     const autoCls = f === "logi" && r.logiAuto !== false && r.rg?.total != null ? "auto" : "";
-    return `<td class="in ${isNum ? "num" : ""} ${k === "txt" ? "long" : ""}"><input class="${autoCls}" data-r="${ri}" data-f="${f}" ${isNum ? 'inputmode="decimal"' : ""} value="${esc(isNum && v != null && v !== "" ? (+v).toLocaleString("ko-KR") : v ?? "")}" placeholder="${ph}" title="${esc(f === "monthly" && r.benchMonthly ? `벤치마킹 1등 상품 월 판매 약 ${won(r.benchMonthly)}개 — 신규 진입은 보통 이보다 훨씬 적습니다` : v ?? "")}">${extra}${at}</td>`;
+    const iss = issues(r)[f], need = (f === "yuan" || f === "price") && (v === "" || v == null);
+    return `<td class="in ${isNum ? "num" : ""} ${k === "txt" ? "long" : ""} ${need ? "need" : ""} ${iss ? "warn" : ""}" ${iss ? `title="${esc(iss)}"` : ""}><input class="${autoCls}" data-r="${ri}" data-f="${f}" ${isNum ? 'inputmode="decimal"' : ""} value="${esc(isNum && v != null && v !== "" ? (+v).toLocaleString("ko-KR") : v ?? "")}" placeholder="${ph}" title="${esc(f === "monthly" && r.benchMonthly ? `벤치마킹 1등 상품 월 판매 약 ${won(r.benchMonthly)}개 — 신규 진입은 보통 이보다 훨씬 적습니다` : v ?? "")}">${extra}${at}</td>`;
   }
   function rowHtml(r, ri) {
     const c = calc(r);
     const on = picked.has(r.id);
-    return `<tr data-r="${ri}" class="${on ? "sel" : ""}"><td class="no mg"><label class="pk"><input type="checkbox" data-pick="${ri}" aria-label="${ri + 1}번 선택" ${on ? "checked" : ""}></label><span class="grip" draggable="true" data-grip="${ri}" data-tip="⠿ 끌어서 순서 바꾸기" aria-label="끌어서 순서 바꾸기">⠿</span><b>${ri + 1}</b></td>${COLS.map((col) => cellHtml(r, ri, col, c)).join("")}<td class="del"><button type="button" data-del="${ri}" data-tip="✕ 이 상품 빼기 (되돌리기 가능)" aria-label="이 상품 빼기">✕</button></td></tr>`;
+    return `<tr data-r="${ri}" class="${on ? "sel" : ""}"><td class="no mg"><span class="grip" draggable="true" data-grip="${ri}" data-tip="⠿ 끌어서 순서 바꾸기" aria-label="끌어서 순서 바꾸기">⠿</span><label class="pk"><input type="checkbox" data-pick="${ri}" aria-label="${ri + 1}번 선택" ${on ? "checked" : ""}></label><b>${ri + 1}</b></td>${COLS.map((col) => cellHtml(r, ri, col, c)).join("")}<td class="del"><button type="button" data-del="${ri}" data-tip="✕ 이 상품 빼기 (되돌리기 가능)" aria-label="이 상품 빼기">✕</button></td></tr>`;
   }
   function totals() {
     const sum = (f) => rows.reduce((a, r) => a + (calc(r)[f] ?? 0), 0);
@@ -204,6 +223,20 @@
     $("cFx").value = cfg.fx; $("cFee").value = String(cfg.fee); $("cAd").value = Math.round(cfg.adRate * 100);
     totals();
     selBar();
+    renderTop(true);
+  }
+  // 맨 위 숫자 4개 · 계산 기준(접힘) · 상태 칩(눌러서 걸러 보기). apply=false면 숫자만 고침(입력 중에 줄이 사라지지 않게)
+  let luFilter = "all";
+  const LF = [["all", "전체", ""], ["need", "위안 입력 필요", "o"], ["done", "계산 완료", "g"], ["warn", "확인 필요", "o"]];
+  function renderTop(apply) {
+    const st = rows.map(stOf), cnt = { all: rows.length, need: st.filter((x) => x.need).length, done: st.filter((x) => x.done).length, warn: st.filter((x) => x.warn).length };
+    $("luTop").hidden = !rows.length;
+    $("luNums").innerHTML = LF.map(([k, l, c]) => `<div class="lu-num ${c}"><span>${k === "all" ? "담은 상품" : l}</span><b>${cnt[k]}</b></div>`).join("");
+    if (!cnt[luFilter]) luFilter = "all";
+    $("luChips").innerHTML = LF.map(([k, l, c]) => `<button type="button" class="lu-chip ${c} ${luFilter === k ? "on" : ""}" data-lf="${k}" ${k !== "all" && !cnt[k] ? "disabled" : ""}>${k === "warn" ? "⚠ " : ""}${l} ${cnt[k]}</button>`).join("");
+    const fee = Math.round(cfg.fee * 10000) / 100;
+    $("luCfgT").textContent = `⚙ 계산 기준 · ${won(cfg.fx)}원/¥ · 수수료 ${fee}% · 광고 ${Math.round(cfg.adRate * 100)}% ${$("luCfg").hidden ? "▾" : "▴"}`;
+    if (apply) $("luBody").querySelectorAll("tr[data-r]").forEach((tr) => { const x = st[+tr.dataset.r]; tr.hidden = luFilter !== "all" && !(x && x[luFilter]); });
   }
   // ☑ 선택 막대 — 체크한 행이 있을 때만: 맨 위로 · 위로 · 아래로 · 맨 아래로 · 빼기 / ↶ 되돌리기는 삭제 직후 10초
   function selBar() {
@@ -255,7 +288,17 @@
       const nt = tmp.querySelector("td");
       td.className = nt.className; td.textContent = nt.textContent; td.title = nt.title; // 설명(경쟁사 순이익 근거 등)도 같이 갱신
     });
+    // 입력 칸 표시(비어 있는 위안·판매가 = 노랑, 이상한 값 = 주황)도 바로
+    const iss = issues(rows[ri]);
+    ["name", "yuan", "price"].forEach((f) => {
+      const td = tr.querySelector(`[data-f="${f}"]`)?.closest("td"); if (!td) return;
+      const v = rows[ri][f];
+      td.classList.toggle("need", f !== "name" && (v === "" || v == null));
+      td.classList.toggle("warn", !!iss[f]);
+      if (iss[f]) td.title = iss[f]; else td.removeAttribute("title");
+    });
     totals();
+    renderTop(false);
   }
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => api.invoke("listup:save", rows), 400); };
 
@@ -504,6 +547,9 @@
   });
   $("luBody").addEventListener("dragend", () => { if (drag) { drag = null; clearMark(); render(); } });
 
+  // 상태 칩 · 계산 기준 펼치기
+  $("luChips").addEventListener("click", (e) => { const b = e.target.closest("button[data-lf]"); if (!b) return; luFilter = luFilter === b.dataset.lf ? "all" : b.dataset.lf; renderTop(true); });
+  $("luCfgT").addEventListener("click", () => { const c = $("luCfg"); c.hidden = !c.hidden; $("luCfgT").setAttribute("aria-expanded", String(!c.hidden)); renderTop(false); });
   // 계수 설정
   const setCfg = async (patch) => { cfg = await api.invoke("calc:set", patch); render(); };
   $("luView").addEventListener("click", () => {

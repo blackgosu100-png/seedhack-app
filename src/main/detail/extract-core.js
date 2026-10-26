@@ -23,6 +23,9 @@ export function refererFor(source, url) {
   if (s === "1688") return "https://detail.1688.com/";
   if (s === "taobao") return "https://item.taobao.com/";
   if (s === "tmall") return "https://detail.tmall.com/";
+  if (s === "coupang") return "https://www.coupang.com/";
+  if (s === "naver") return "https://smartstore.naver.com/";
+  if (s === "ohou") return "https://store.ohou.se/";
   try { return new URL(String(url || "")).origin + "/"; } catch { return ""; }
 }
 
@@ -186,12 +189,12 @@ export function fillGallery(gallery, detailImages, { min = 2, upTo = 5 } = {}) {
 export function normalizeSource(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
   const url = str(r.url, 500);
-  const source = ["1688", "taobao", "tmall", "other"].includes(r.source) ? r.source : siteOf(url);
+  const source = ["1688", "taobao", "tmall", "other", ...KO_SOURCES].includes(r.source) ? r.source : siteOf(url);
   const attrs = normalizeAttrs(r.attrs);
   const t = pickTitle(r, attrs);
   let shop = normalizeShop(r.shop);
   if (t.company && !shop?.name) shop = { name: t.company.slice(0, 80), years: shop?.years ?? null, repeat: shop?.repeat ?? null }; // 회사명은 상점 이름으로 옮긴다
-  return {
+  const out = {
     source,
     url,
     offerId: str(r.offerId, 40),
@@ -203,6 +206,21 @@ export function normalizeSource(raw) {
     detailText_zh: String(r.detailText_zh ?? "").replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, LIMITS.text),
     shop,
     readAt: num(r.readAt) || Date.now(),
+  };
+  return r.lang === "ko" || KO_SOURCES.includes(source) ? koSource(out, r) : out;
+}
+// 한국 판매처(쿠팡·네이버·오늘의집 — site-core.buildKoRaw): 이미 한글이라 _ko 칸을 원문으로 채운다(번역·중국어 지우기 안 함). 가격은 원(KRW)
+export const KO_SOURCES = ["coupang", "naver", "ohou"];
+function koSource(out, r) {
+  const won = (v) => { const n = num(v); return n != null && n >= 100 && n < 1e9 ? Math.round(n) : null; };
+  const p = r.price && typeof r.price === "object" ? [won(r.price.min), won(r.price.max)].filter((n) => n != null) : [];
+  return {
+    ...out, lang: "ko", title_ko: out.title_zh,
+    price: p.length ? { min: Math.min(...p), max: Math.max(...p), currency: "KRW" } : null,
+    attrs: out.attrs.map((a) => ({ ...a, k_ko: a.k_zh, v_ko: a.v_zh })),
+    options: out.options.map((o) => ({ ...o, label_ko: o.label_ko || o.label_zh })),
+    detailText_ko: out.detailText_zh,
+    ...(r.category ? { category: str(r.category, 40) } : {}),
   };
 }
 

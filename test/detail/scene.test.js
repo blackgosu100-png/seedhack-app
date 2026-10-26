@@ -75,12 +75,14 @@ test("Gemini 경로(가짜 fetch): 요청 형식, 이미지 저장, 실패 컷�
   const fetchImpl = async (url, init) => {
     seen.push({ url, init }); call++;
     if (call === 3) return { ok: true, text: async () => JSON.stringify({ candidates: [{ finishReason: "IMAGE_SAFETY", content: { parts: [{ text: "no" }] } }] }) };
-    return { ok: true, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }, { inlineData: { mimeType: "image/png", data: png } }] } }] }) };
+    return { ok: true, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }, { inlineData: { mimeType: "image/png", data: png } }] } }], usageMetadata: { promptTokenCount: 300, candidatesTokenCount: 1290 } }) };
   };
   const shots = planShots({ product: PLANT }).slice(0, 2);
-  const prog = [];
-  const r = await generateScenes({ productImages: [src], shots, n: 2, outDir: path.join(dir, "out"), env: { GEMINI_API_KEY: "AIzaTESTKEY1234567890" }, fetchImpl, onProgress: (p) => prog.push(p) });
+  const prog = [], usage = [];
+  const r = await generateScenes({ productImages: [src], shots, n: 2, outDir: path.join(dir, "out"), env: { GEMINI_API_KEY: "AIzaTESTKEY1234567890" }, fetchImpl, onProgress: (p) => prog.push(p), onUsage: (u) => usage.push(u) });
   assert.equal(seen.length, 4);
+  assert.equal(usage.length, 3); // 받은 장만(IMAGE_SAFETY 1번은 빠짐)
+  assert.deepEqual(usage[0], { provider: "gemini", model: "gemini-2.5-flash-image", inTok: 300, outTok: 1290 });
   assert.match(seen[0].url, /v1beta\/models\/gemini-2\.5-flash-image:generateContent$/);
   assert.equal(seen[0].init.headers["x-goog-api-key"], "AIzaTESTKEY1234567890");
   const body = JSON.parse(seen[0].init.body);

@@ -1,5 +1,6 @@
 import { applyReferenceOrder, refKickers } from "./reference-core.js";
-import { normKind } from "./extract-core.js"; // 이미지 kind: main/sku/detail(구 gallery/option/detail) 둘 다 받는다
+import { normKind } from "./extract-core.js";
+import { fixLiteralText } from "./localize-core.js"; // 이미지 kind: main/sku/detail(구 gallery/option/detail) 둘 다 받는다
 const nk = (k) => normKind(k);
 // ⑦ 구성 — 이미지 분류 + 카피 → PagePlan(CONTRACTS 7절). 순수 함수(파일·electron 없음, node --test 로 검증).
 //   buildPlan({ source, ocr, cleaned, copy, templateId, translations?, copyInput?, jobId?, now? }) → plan
@@ -708,23 +709,31 @@ export function buildLocalizePlan({ source = {}, localized = {}, copy = null, br
   // hero 사진: 대표(main) 중 상품이 잘리지 않고 다른 브랜드가 두드러지지 않는 것(비전) → 없으면 첫 대표
   const vMap0 = new Map((Array.isArray(vision) ? vision : vision?.items || []).map((v) => [v.id, v]));
   const mains = (source.images || []).filter((im) => nk(im.kind) === "main");
-  const heroPick = rankByProduct(mains.map((im) => ({ ...(vMap0.get(im.id) || {}), id: im.id })).filter((v) => v.usable !== false), { heroUse: true })[0];
+  // v12: 글이 많은 대표 사진(비교표·배지 알약)은 히어로에서 지운 글 자리가 빈 장식으로 남는다 → 남길 글이 2줄 이하인 대표 사진을 먼저
+  const textN = (id) => ((locById.get(id) || {}).layers || []).filter((l) => l.role !== "number" && S(l.zh)).length;
+  const heroCand = mains.map((im) => ({ ...(vMap0.get(im.id) || {}), id: im.id })).filter((v) => v.usable !== false && !locById.get(v.id)?.promo);
+  const heroPick = rankByProduct(heroCand.filter((v) => textN(v.id) <= 2), { heroUse: true })[0] || rankByProduct(heroCand, { heroUse: true })[0];
   const order = [...(heroPick ? mains.filter((im) => im.id === heroPick.id) : mains.slice(0, 1)), ...(source.images || []).filter((im) => nk(im.kind) === "detail")];
   const excluded = [], sections = [];
   const vBad = new Set((Array.isArray(vision) ? vision : vision?.items || []).filter((v) => v.usable === false).map((v) => v.id));
   let heroDone = false;
   for (const im of order) {
     const loc = locById.get(im.id) || {};
-    if (loc.promo) { excluded.push({ id: im.id, why: `홍보 이미지(${S(loc.promo_reason) || "인증·공장·맞춤제작"})` }); continue; }
+    const human = vMap0.get(im.id)?.human; // 확인 화면에서 사람이 고른 것(excluded·included)이 판정보다 우선
+    if (human === "excluded") { excluded.push({ id: im.id, why: "확인 화면에서 제외", kind: "user" }); continue; }
+    if (vMap0.get(im.id)?.endorser && human !== "included") { excluded.push({ id: im.id, why: "유명인·홍보대사 사진(초상권) — 기본 제외", kind: "endorser" }); continue; } // v13.2 비전 판정
+    if (loc.promo && human !== "included") { excluded.push({ id: im.id, why: loc.promo_kind === "spec_table" ? S(loc.promo_reason) : `홍보·정책 이미지(${S(loc.promo_reason) || "인증·공장·맞춤제작"})`, kind: loc.promo_kind || "promo" }); continue; }
     const img = fileOf(im.id); if (!img) { excluded.push({ id: im.id, why: "파일 없음" }); continue; }
-    const layers = (loc.layers || []).filter((l) => !l.drop && S(l.ko)).map((l) => ({ ...(l.box || {}), x: l.x, y: l.y, w: l.w, h: l.h, role: l.role, ko: S(l.ko), emph: l.emph || [], rewrite_ok: l.rewrite_ok !== false, icon: l.icon === true, ...(l.style ? { style: l.style } : {}), ...(l.textBox ? { textBox: l.textBox } : {}) }));
-    if (!heroDone && !vBad.has(im.id)) { heroDone = true; const f = focusOf(vMap0.get(im.id)); sections.push({ type: "hero", id: im.id, image: img, ...(localized.hero || {}), ...(f ? { focus: f } : {}) }); continue; }
-    sections.push({ type: "image", id: im.id, image: img, layers });
+    const layers = (loc.layers || []).filter((l) => !l.drop && S(l.ko)).map((l) => ({ ...(l.box || {}), x: l.x, y: l.y, w: l.w, h: l.h, role: l.role, ko: S(l.ko), emph: l.emph || [], rewrite_ok: l.rewrite_ok !== false, icon: l.icon === true, ...(l.style ? { style: l.style } : {}), ...(l.textBox ? { textBox: l.textBox } : {}), ...(l.shape ? { shape: l.shape } : {}), ...(l.seam != null ? { seam: l.seam } : {}) }));
+    if (!heroDone && !vBad.has(im.id)) { heroDone = true;
+      const crop = textN(im.id) > 2 ? cleanById.get(im.id)?.photo?.file : null; // v12: 글 많은 대표 사진은 히어로에 글 없는 제품 부분(clean 사진 자르기)을 — 지운 알약·배지가 빈 장식으로 남지 않게
+      const f = crop ? null : focusOf(vMap0.get(im.id)); sections.push({ type: "hero", id: im.id, image: crop ? relPath(crop) : img, ...(crop ? { from: "photo_crop" } : {}), ...(localized.hero || {}), ...(f ? { focus: f } : {}) }); continue; }
+    sections.push({ type: "image", id: im.id, image: img, layers, ...(human === "included" ? { human } : {}) }); // human: 사람이 켠 장(뒤 규칙이 빼지 않게)
   }
   const notice = (copy?.notice?.items || copy?.notice || []).map ? (Array.isArray(copy?.notice) ? copy.notice : copy?.notice?.items || []) : [];
   const spec = cleanSpecRows(brief?.specs || copy?.spec || [], { options, vision });
   if (notice.length) sections.push({ type: "notice", title: S(copy?.notice?.title) || "구매 전 확인해 주세요", items: notice.map(S).filter(Boolean) });
-  if (spec.rows.length) sections.push({ type: "spec", rows: spec.rows });
+  if (spec.rows.length) sections.push({ type: "spec", rows: spec.rows.map((r) => (r && typeof r === "object" && typeof r.v === "string" ? { ...r, v: fixLiteralText(r.v) } : r)) }); // v13 사양 값 직역체(베이킹 페인트 → 도장)
   // 사진 속 타 브랜드 로고(가전 등)는 원본 사진 일부라 지우지 않지만, 확인 화면에 경고로 남긴다
   const vMap = new Map((Array.isArray(vision) ? vision : vision?.items || []).map((v) => [v.id, v]));
   const logoNotes = sections.filter((x) => x.id && vMap.get(x.id)?.has_logo).map((x) => `${x.id}: 사진 속 타 브랜드 로고 노출 가능(${S(vMap.get(x.id).shows) || "확인 필요"}) — 사람 확인 후 사용`);
@@ -795,4 +804,18 @@ export function insertClaimSections(sections = [], claims = null) {
   let mi = out.findIndex((s) => s.type === "spec"); if (mi < 0) mi = out.findIndex((s) => ["notice", "faq"].includes(s.type)); if (mi < 0) mi = out.length; out.splice(mi, 0, ...mid);
   let ei = out.findIndex((s) => ["notice", "faq", "cta"].includes(s.type)); if (ei < 0) ei = out.length; out.splice(ei, 0, ...end);
   return out;
+}
+
+// 제품 정보 표 값의 중국 단위·한자 정리(렌더 직전 공통): "360斤(약 180kg, …)" → "180kg(제조사 표시 기준)" 처럼 斤→kg 환산(1斤=0.5kg), 같은 kg 이 괄호에 또 있으면 한 번만.
+// 값에 한자가 남으면 그 한자 묶음만 지우고, 지운 뒤 비면 그 줄을 뺀다
+export function tidySpecUnits(rows = []) {
+  const kg = (n) => { const v = Math.round(n * 0.5 * 10) / 10; return `${v}kg`; };
+  return (rows || []).map((r) => {
+    if (!r || typeof r !== "object") return r;
+    let v = String(r.v ?? "");
+    v = v.replace(/(\d+(?:\.\d+)?)\s*斤/g, (_, n) => kg(+n)).replace(/百斤/g, "50kg").replace(/千斤/g, "500kg");
+    v = v.replace(/(\d+(?:\.\d+)?kg)\s*\(\s*약\s*\1\s*,?\s*/g, "$1(").replace(/\(\s*\)/g, "").replace(/\(\s*,\s*/g, "(");
+    v = v.replace(/[㐀-鿿]+/g, "").replace(/\s{2,}/g, " ").replace(/\(\s*\)/g, "").trim();
+    return { ...r, v };
+  }).filter((r) => !r || typeof r !== "object" || String(r.v ?? "").trim());
 }

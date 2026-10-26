@@ -4,10 +4,12 @@
 // 키: settings.geminiKey 또는 GEMINI_API_KEY / settings.openaiKey 또는 OPENAI_API_KEY. 키가 없으면 즉시 { ok:false, error:"이미지 생성 키 없음" } (파이프라인은 사진 경로로 계속).
 // 모델: settings.geminiImageModel(기본 gemini-2.5-flash-image) / settings.openaiImageModel(기본 gpt-image-1).
 // Electron 없이도 돈다(fetch·fs 만 사용) — 키는 로그·파일 어디에도 남기지 않는다.
+// server(서버 중계): 이 PC 에 키·자격증명이 없으면(수강생 PC) 대시보드 서버 task:"image" 가 대표님 Vertex 로 대신 만든다(relay.js). SEEDHACK_RELAY=server 면 키가 있어도 서버로.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { googleConnected, googleAuth } from "./google-conn.js";
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image";
 export const DEFAULT_OPENAI_MODEL = "gpt-image-1";
@@ -61,6 +63,15 @@ export function createRegionRouter({ regions = DEFAULT_SCENE_REGIONS, perRegion 
   };
 }
 export function resolveProvider({ provider, settings = {}, env = process.env } = {}) {
+  const local = resolveLocalProvider({ provider, settings, env });
+  // 수강생 구글 클라우드 연결(google-conn.js): 이 PC 에 키가 없으면 그 프로젝트의 Vertex 로(무료 체험 크레딧)
+  if (!local.key && env.SEEDHACK_RELAY !== "server" && googleConnected()) return { provider: "google", key: "google", location: DEFAULT_VERTEX_LOCATION, model: settings.vertexImageModel || settings.geminiImageModel || DEFAULT_GEMINI_MODEL };
+  // 서버 중계: 강제(SEEDHACK_RELAY=server) 또는 Electron 앱인데 이 PC 에 키·자격증명이 없을 때(노드 테스트는 그대로)
+  const relayOn = env.SEEDHACK_RELAY === "server" || (env.SEEDHACK_RELAY !== "off" && !!process.versions.electron && !local.key);
+  if (relayOn && local.provider !== "openai") return { provider: "server", key: "server", model: settings.vertexImageModel || settings.geminiImageModel || DEFAULT_GEMINI_MODEL };
+  return local;
+}
+function resolveLocalProvider({ provider, settings = {}, env = process.env } = {}) {
   const gKey = settings.geminiKey || env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "";
   const oKey = settings.openaiKey || env.OPENAI_API_KEY || "";
   // 앱을 Dock에서 켜면 GOOGLE_CLOUD_PROJECT 환경변수가 없다 → gcloud 로그인 파일의 quota_project_id 를 프로젝트로 쓴다
@@ -101,13 +112,17 @@ export async function getVertexToken(credFile, { fetchImpl = globalThis.fetch, t
   else if (cred.type === "authorized_user" && cred.refresh_token) body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: cred.refresh_token, client_id: cred.client_id, client_secret: cred.client_secret });
   else throw new Error(`지원하지 않는 자격증명 종류: ${cred.type || "알 수 없음"}`);
   const url = cred.type === "service_account" ? cred.token_uri || "https://oauth2.googleapis.com/token" : "https://oauth2.googleapis.com/token";
-  const j = await fetchJson(fetchImpl, url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body.toString() }, timeoutMs)
-    .catch((e) => { throw new Error(`Vertex 토큰 발급 실패: ${safeErr(e)}`); });
+  // v13 동시에 여러 장이 토큰을 받으러 가면(지우기 동시 8장) 한 요청만 보내고 나눠 쓴다 · 네트워크 실패(fetch failed)는 2번 더(1초·3초 뒤) — 일시 실패로 그 장 AI 지우기가 통째 빠지던 것(빨래건조대 8장)
+  const once = () => fetchJson(fetchImpl, url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body.toString() }, timeoutMs);
+  let p = tokenInflight.get(credFile);
+  if (!p) { p = (async () => { let err; for (let k = 0; k < 3; k++) { try { return await once(); } catch (e) { err = e; if (/40[013]/.test(String(e?.message || e))) break; await new Promise((r) => setTimeout(r, k ? 3000 : 1000)); } } throw err; })().finally(() => tokenInflight.delete(credFile)); tokenInflight.set(credFile, p); }
+  const j = await p.catch((e) => { throw new Error(`Vertex 토큰 발급 실패: ${safeErr(e)}`); });
   if (!j?.access_token) throw new Error("Vertex 토큰 발급 실패: access_token 없음");
   const project = cred.project_id || cred.quota_project_id || "";
   tokenCache.set(credFile, { token: j.access_token, exp: now() + (Number(j.expires_in) || 3600) * 1000, project });
   return { token: j.access_token, project };
 }
+const tokenInflight = new Map();
 export const clearVertexTokenCache = () => tokenCache.clear();
 // 엔드포인트(global 은 지역 접두어가 없다)
 export function vertexUrl({ project, location = DEFAULT_VERTEX_LOCATION, model }) {
@@ -149,22 +164,46 @@ async function fetchJson(fetchImpl, url, init, timeoutMs) {
 // ---- Gemini(나노바나나) ----
 // 한 번 호출에 이미지 1장. 반환 [{ mime, b64 }]
 // vertex 를 주면 Vertex AI 엔드포인트 + Bearer 토큰(요청 본문은 같은 generateContent 형식, Vertex 는 camelCase inlineData)
-async function geminiOnce({ key, model, images, prompt, aspect, fetchImpl, timeoutMs, vertex = null }) {
+async function geminiOnce({ key, model, images, prompt, aspect, fetchImpl, timeoutMs, vertex = null, server = false }) {
+  if (server) return serverOnce({ model, images, prompt, aspect, timeoutMs });
   const parts = images.map((f) => { const d = fs.readFileSync(f).toString("base64"); return vertex ? { inlineData: { mimeType: mimeOf(f), data: d } } : { inline_data: { mime_type: mimeOf(f), data: d } }; });
   parts.push({ text: prompt });
   const body = { contents: [{ role: "user", parts }], generationConfig: { responseModalities: ["IMAGE", "TEXT"], imageConfig: aspect ? { aspectRatio: aspect } : undefined } };
-  const url = vertex ? vertexUrl({ project: vertex.project, location: vertex.location, model }) : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const headers = vertex ? { "Content-Type": "application/json", Authorization: `Bearer ${vertex.token}` } : { "Content-Type": "application/json", "x-goog-api-key": key };
+  const url = vertex?.auth ? vertex.auth.vertexUrl(model, vertex.location) : vertex ? vertexUrl({ project: vertex.project, location: vertex.location, model }) : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const headers = vertex?.auth ? vertex.auth.headers : vertex ? { "Content-Type": "application/json", Authorization: `Bearer ${vertex.token}` } : { "Content-Type": "application/json", "x-goog-api-key": key };
   const j = await fetchJson(fetchImpl, url, { method: "POST", headers, body: JSON.stringify(body) }, timeoutMs);
   const out = [];
   for (const c of j?.candidates || []) for (const p of c?.content?.parts || []) {
     const d = p.inlineData || p.inline_data;
     if (d?.data) out.push({ mime: d.mimeType || d.mime_type || "image/png", b64: d.data });
   }
+  const um = j?.usageMetadata; // 사용량 기록용 토큰 수(요청 1번 = 1장)
+  if (out[0] && um) { out[0].inTok = Number(um.promptTokenCount) || 0; out[0].outTok = Number(um.candidatesTokenCount) || 0; }
   if (!out.length) {
     const why = j?.promptFeedback?.blockReason || j?.candidates?.[0]?.finishReason || "이미지 없음";
     throw new Error(`Gemini 응답에 이미지가 없음(${why})`);
   }
+  return out;
+}
+
+// ---- 서버 중계(task:"image") ---- 사진은 줄여 보낸다(요청 한도 4.5MB). 실패는 HTTP 상태 글로 던져 위 재시도 규칙(429·5xx 다시, 401·403 중단)을 그대로 탄다
+async function serverOnce({ model, images, prompt, aspect, timeoutMs }) {
+  const relay = await import("./relay.js");
+  let ims = [];
+  for (const side of [1536, 1152, 864]) {
+    ims = [];
+    for (const f of images) { const p = await relay.prepImage(f, { maxSide: side, quality: 92 }); ims.push({ mime: p.mime, b64: p.b64 }); }
+    if (ims.reduce((t, im) => t + im.b64.length, 0) <= 3_400_000) break;
+  }
+  const r = await relay.callRelay("image", { model, images: ims, prompt, aspect }, { timeoutMs: Math.max(timeoutMs, 180000), retries: 0 });
+  if (!r.ok) {
+    const sticky = ["login", "approval", "wing", "pages", "daily", "global"].includes(r.code);
+    throw new Error(`HTTP ${sticky ? 403 : r.code === "net" || r.code === "busy" || r.status === 503 ? 503 : r.status || 500}: ${r.userMessage || r.error}`);
+  }
+  const out = (r.result?.images || []).map((g) => ({ mime: g.mime || "image/png", b64: g.b64 }));
+  if (!out.length) throw new Error("서버 응답에 이미지가 없음");
+  out[0].inTok = Number(r.usage?.input_tokens) || 0; out[0].outTok = Number(r.usage?.output_tokens) || 0;
+  if (r.result?.region) out[0].region = `server·${r.result.region}`;
   return out;
 }
 
@@ -178,7 +217,8 @@ async function openaiBatch({ key, model, images, prompt, aspect, n, fetchImpl, t
   fd.append("size", OPENAI_SIZE[aspect] || "1024x1024");
   for (const f of images) fd.append("image[]", new Blob([fs.readFileSync(f)], { type: mimeOf(f) }), path.basename(f));
   const j = await fetchJson(fetchImpl, "https://api.openai.com/v1/images/edits", { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd }, timeoutMs);
-  const out = (j?.data || []).filter((d) => d.b64_json).map((d) => ({ mime: "image/png", b64: d.b64_json }));
+  const per = Math.max(1, (j?.data || []).length); // 요청 1번의 토큰을 장수로 나눠 기록
+  const out = (j?.data || []).filter((d) => d.b64_json).map((d) => ({ mime: "image/png", b64: d.b64_json, inTok: (Number(j?.usage?.input_tokens) || 0) / per, outTok: (Number(j?.usage?.output_tokens) || 0) / per }));
   if (!out.length) throw new Error("OpenAI 응답에 이미지가 없음");
   return out;
 }
@@ -189,9 +229,10 @@ const aspectLine = (aspect) => ({ "4:5": "Vertical 4:5 composition.", "3:4": "Ve
 // productImages: 제품 사진 절대경로 1~3장(누끼 우선), shots: planShots() 결과, n: 컷마다 몇 장
 // 반환: [{ id, purpose, files:[...], ok, error }]  — 컷마다 성공한 장만 files 에. 전부 실패해도 throw 하지 않는다.
 // postProcess(file): 저장 직후 후처리(기본 = 액자 테두리 제거 stripFrame). null 이면 안 함.
+// onUsage({ provider, model, inTok, outTok }): 받은 이미지 1장마다(실패·429 는 청구되지 않아 부르지 않음) — 사용량 기록용
 export async function generateScenes({ productImages = [], shots = [], aspect = "4:5", n = 2, outDir, log = noop, onProgress = noop,
   provider, settings = {}, env = process.env, fetchImpl = globalThis.fetch, timeoutMs = 120000, lang = "en", postProcess = defaultPostProcess, retryDelays = [15000, 35000, 60000], // 새 GCP 프로젝트는 분당 한도가 낮아(2~3회) 429 가 잦다
-  concurrency = 1, regions = null, perRegion = 2, regionCooldownMs = 20000, maxAttempts = 24, sleep } = {}) {
+  concurrency = 1, regions = null, perRegion = 2, regionCooldownMs = 20000, maxAttempts = 24, sleep, onUsage = noop } = {}) {
   // 컷마다 s.aspect / s.n / s.model(예: hero 만 상위 모델) 로 덮어쓸 수 있다. 상위 모델이 없으면(404) 기본 모델로 대체하고 사유를 남긴다.
   const prov = resolveProvider({ provider, settings, env });
   const imgs = (productImages || []).filter((f) => f && fs.existsSync(f)).slice(0, 3);
@@ -200,6 +241,10 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
   if (!imgs.length) return fail("제품 사진 없음");
   if (!outDir) return fail("출력 폴더 없음");
   let vertex = null;
+  if (prov.provider === "google") {
+    try { const a = await googleAuth({ fetchImpl }); vertex = { auth: a, project: a.project, location: prov.location }; }
+    catch (e) { log("dim", `  🎨 ${safeErr(e)}`); return fail(safeErr(e)); }
+  }
   if (prov.provider === "vertex") {
     try {
       const t = await getVertexToken(prov.credFile, { fetchImpl });
@@ -250,7 +295,7 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
           return null;
         }
         for (let a = 0; ; a++) { // gemini(AI Studio) 키: 한 엔드포인트 — 429/5xx 는 잠깐 쉬었다 다시
-          try { const g = (await geminiOnce({ key: prov.key, model, images: imgs, prompt, aspect: sAspect, fetchImpl, timeoutMs, vertex }))[0]; error = null; return g; }
+          try { const g = (await geminiOnce({ key: prov.key, model, images: imgs, prompt, aspect: sAspect, fetchImpl, timeoutMs, vertex, server: prov.provider === "server" }))[0]; error = null; if (g.region) usedRegion = g.region; return g; }
           catch (e) {
             error = safeErr(e);
             if (model !== prov.model && /HTTP 404|NOT_FOUND|not found|is not supported/i.test(error)) { // 상위 모델 없음 → 기본 모델로
@@ -264,6 +309,7 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
       const save = async (g, k) => {
         const f = path.join(outDir, `${s.id}-${k + 1}${EXT[g.mime] || ".png"}`);
         fs.writeFileSync(f, Buffer.from(g.b64, "base64"));
+        try { onUsage({ provider: prov.provider, model: prov.provider === "openai" ? prov.model : model, inTok: g.inTok || 0, outTok: g.outTok || 0 }); } catch {}
         const pr = postProcess ? await postProcess(f, s) : null;
         if (pr?.stripped) { framed++; log("dim", `  🎨 ${path.basename(f)} 액자 테두리 제거 → ${pr.w}×${pr.h}`); }
         if (pr?.fitted) log("dim", `  🎨 ${path.basename(f)} 빈 가장자리 ${Math.round((pr.emptyFrac || 0) * 100)}% 잘라 맞춤 → ${pr.w}×${pr.h}`);

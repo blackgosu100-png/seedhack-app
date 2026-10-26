@@ -1,5 +1,6 @@
 // OCR — 상세 이미지에서 중국어 글자 상자(x,y,w,h,text)를 찾는다. 규약: docs/detail/CONTRACTS.md 3절
-// 제공자: vision(macOS Vision, tools/ocr-mac/ocr.swift 를 첫 실행 때 swiftc 로 컴파일) → tesseract(tesseract.js, 윈도우 대비) → none(상자 0개, 파이프라인은 계속)
+// 제공자: vision(macOS Vision, tools/ocr-mac/ocr.swift 를 첫 실행 때 swiftc 로 컴파일) → server(대시보드 서버 task:"ocr" = Google Cloud Vision, 수강생 윈도우 PC)
+//   → tesseract(tesseract.js, 서버를 못 쓸 때 — 중국어 약함) → none(상자 0개, 파이프라인은 계속). SEEDHACK_RELAY=server 면 맥에서도 server
 import { app } from "electron";
 import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -7,6 +8,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { hasCJK } from "./image-core.js";
+import { forceServer, relayEnabled, prepImage, callRelay } from "./relay.js";
+import { googleConnected, googleAuth, googleError } from "./google-conn.js";
+import { visionLines } from "./vision-lines.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SWIFT_SRC = path.join(here, "..", "..", "..", "tools", "ocr-mac", "ocr.swift").replace("app.asar" + path.sep, "app.asar.unpacked" + path.sep); // 설치판: asarUnpack 으로 풀어 둔 경로(swiftc 는 asar 안을 못 읽음)
@@ -34,7 +38,10 @@ export function hasTesseract() {
 
 // darwin + (이미 컴파일된 바이너리 또는 swiftc) → vision, 아니면 tesseract.js 가 있으면 tesseract, 둘 다 없으면 none
 export function pickProvider() {
-  if (process.platform === "darwin" && (fs.existsSync(binPath()) || hasSwiftc())) return "vision";
+  if (["vision", "server", "google", "tesseract"].includes(process.env.SEEDHACK_OCR_PROVIDER)) return process.env.SEEDHACK_OCR_PROVIDER; // 시험용: OCR 만 따로 고정
+  if (!forceServer() && process.platform === "darwin" && (fs.existsSync(binPath()) || hasSwiftc())) return "vision";
+  if (googleConnected() && !forceServer()) return "google"; // 수강생 구글 클라우드(무료 체험)로 Cloud Vision 직접
+  if (relayEnabled()) return "server";
   if (hasTesseract()) return "tesseract";
   return "none";
 }
@@ -124,6 +131,31 @@ async function runTesseract(file, opts) {
   return boxes;
 }
 
+// ---- 서버(Google Cloud Vision) ----
+// 한 장씩 보낸다(긴 상세 이미지는 장당 수백 KB). 보낸 크기 기준 좌표를 원래 크기로 되돌린다. 한도·로그인 실패면 남은 장은 부르지 않는다.
+async function runServerOcr(im, langs, direct = false) {
+  let p = null;
+  for (const [side, q] of [[4000, 90], [3000, 85], [2200, 80]]) { p = await prepImage(im.file, { maxSide: side, quality: q }); if (p.b64.length <= 3_400_000) break; }
+  let res;
+  if (direct) { // 수강생 구글: vision.googleapis.com 직접
+    const a = await googleAuth();
+    const hints = String(langs || "zh-Hans,en").split(",").map((x) => x.trim().split("-")[0]).filter(Boolean);
+    const rr = await fetch(a.visionUrl, { method: "POST", headers: a.headers, body: JSON.stringify({ requests: [{ image: { content: p.b64 }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }], imageContext: { languageHints: hints } }] }) });
+    const j = await rr.json().catch(() => ({}));
+    if (!rr.ok) { const e = new Error(googleError(rr.status, j?.error?.message)); if (rr.status === 403 || rr.status === 400) e.code = "approval"; throw e; }
+    const one = j.responses?.[0] || {}, pg = one.fullTextAnnotation?.pages?.[0];
+    res = { w: pg?.width || 0, h: pg?.height || 0, boxes: one.error ? [] : visionLines(one.fullTextAnnotation), ...(one.error ? { error: String(one.error.message || "").slice(0, 120) } : {}) };
+  } else {
+    const r = await callRelay("ocr", { images: [{ id: im.id, mime: p.mime, b64: p.b64 }], langs: langs || "zh-Hans,en" }, { timeoutMs: 90000 });
+    if (!r.ok) { const e = new Error(r.userMessage || r.error); e.code = r.code; throw e; }
+    res = r.result?.images?.[0] || {};
+  }
+  const k = p.scale > 0 && p.scale < 1 ? 1 / p.scale : 1;
+  const sc = (v) => Math.round(v * k);
+  const boxes = (res.boxes || []).map((b) => ({ ...b, x: sc(b.x), y: sc(b.y), w: sc(b.w), h: sc(b.h), ...(Array.isArray(b.quad) ? { quad: b.quad.map(sc) } : {}) }));
+  return { w: res.w ? sc(res.w) : im.w || 0, h: res.h ? sc(res.h) : im.h || 0, boxes, error: res.error };
+}
+
 // ---- 공통 ----
 // 상자 마무리: 공백 정리, 빈 상자 제거, CJK 없는 상자는 latin:true, 너무 낮은 신뢰도 제거
 function finishBoxes(boxes) {
@@ -134,6 +166,7 @@ function finishBoxes(boxes) {
     if (b.conf != null && b.conf < 0.15) continue;
     const o = { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h), text, conf: b.conf == null ? 1 : Math.round(b.conf * 1000) / 1000 };
     if (Array.isArray(b.quad) && b.quad.length === 8) { o.quad = b.quad; o.angle = b.angle ?? 0; } // Vision: 기울어진 글의 네 꼭짓점·기울기(도)
+    if (b.vertical) o.vertical = true; // 서버(Cloud Vision)가 읽은 세로쓰기 줄
     if (!hasCJK(text)) o.latin = true;
     out.push(o);
   }
@@ -164,6 +197,7 @@ export async function ocrImages(images, { onProgress = noop, log = noop, provide
     bin = await ensureVisionBinary({ log });
     if (!bin) prov = hasTesseract() ? "tesseract" : "none";
   }
+  if (prov === "server" && !relayEnabled()) prov = hasTesseract() ? "tesseract" : "none";
   if (prov === "tesseract") {
     try { await getTessWorker({ log }); } catch (e) { log("dim", `  🔎 ${e.message} → OCR 없이 계속합니다`); prov = "none"; }
   }
@@ -184,6 +218,24 @@ export async function ocrImages(images, { onProgress = noop, log = noop, provide
         onProgress({ done, total, id: im.id });
       }
     }
+  } else if (prov === "server" || prov === "google") {
+    const direct = prov === "google";
+    let stop = null, i = 0;
+    const one = async () => {
+      while (i < list.length) {
+        const im = list[i++];
+        let r = null;
+        if (!stop) { try { r = await runServerOcr(im, langs, direct); } catch (e) { log("dim", `  🔎 서버 OCR 실패(${im.id}): ${String(e?.message || e).slice(0, 120)}`); if (["login", "approval", "wing", "pages", "daily", "global"].includes(e.code)) stop = e.message; } }
+        if (r?.error) log("dim", `  🔎 ${im.id}: ${r.error}`);
+        const s = r?.w ? { w: r.w, h: r.h } : im.w && im.h ? { w: im.w, h: im.h } : await sizeOf(im.file);
+        out.push({ id: im.id, w: s.w, h: s.h, boxes: finishBoxes(r?.boxes) });
+        done++;
+        onProgress({ done, total, id: im.id });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, list.length || 1) }, one)); // 동시 4장
+    out.sort((a, b) => list.findIndex((x) => x.id === a.id) - list.findIndex((x) => x.id === b.id));
+    prov = direct ? "gcv-direct" : "gcv";
   } else if (prov === "tesseract") {
     for (const im of list) {
       let boxes = [];

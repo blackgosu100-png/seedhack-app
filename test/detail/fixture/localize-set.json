@@ -1,0 +1,83 @@
+{
+  "_note": "원본 한글화 회귀 고정 세트(v13, 2026-10-13). job = 씨드핵 userData/detail/<job> 폴더 이름(읽기만 함). tuned=true 는 v11~v12 튜닝에 쓴 대조군. reOcr=true 는 기울기(quad) 없는 예전 OCR 이라 지금 코드로 다시 읽는다. 탄소강 데스크탑 풀아웃(20261009-132404)·2단 풀아웃 슬라이드(20261009-200500)는 커피 랙(coffee)과 같은 상품 사진이라(OCR·지우기 결과 동일) 빼 둠 — 처음 보는 상품은 dryrack·cupholder·hipband 3개. allow = 상품별로 아는 문제의 허용치(이유 포함) — 이보다 나빠지면 실패.",
+  "jobs": [
+    {
+      "key": "dryrack",
+      "name": "벽걸이형 접이식 빨래건조대",
+      "job": "20261009-080956-948424797701",
+      "reOcr": true
+    },
+    {
+      "key": "cupholder",
+      "name": "탄소강 손잡이형 컵홀더",
+      "job": "20261009-183329-782706077987",
+      "reOcr": true,
+      "allow": {
+        "lowContrast": {
+          "max": 1,
+          "why": "d09 '고온 녹에 강한 보호층' — r2 에서 AI 로 지운 장이라 v13 글자색(채움↔테두리) 고침 전 스타일. 다음 full 재생에서 풀릴 것"
+        }
+      }
+    },
+    {
+      "key": "hipband",
+      "name": "실리콘 힙업 저항밴드",
+      "job": "20261010-220704-950582055367"
+    },
+    {
+      "key": "slicer",
+      "name": "상업용 전동 고기채소 절단기(슬라이서)",
+      "job": "20261013-205301-737670160588",
+      "reOcr": true,
+      "allow": {
+        "rectEdge": {
+          "max": 3,
+          "why": "g09 대표 사진 초록 알약(색 채운 알약 못 찾음) · d07/d08 빨간 ⊗+검은 글 두 색 줄을 평평하게 채워 회색 판 귀퉁이가 깎임"
+        }
+      }
+    },
+    {
+      "key": "coffee",
+      "name": "커피 랙(튜닝)",
+      "job": "20261009-225748-p7m0t1",
+      "tuned": true
+    },
+    {
+      "key": "glasses",
+      "name": "안경 세척기(튜닝)",
+      "job": "20261012-151942-988732283056",
+      "tuned": true,
+      "allow": {
+        "colDev": {
+          "max": 5,
+          "why": "d06 큰 제목과 아래 설명 줄 안쪽 여백(.12em) 차이 5px — 눈으로는 같은 열"
+        }
+      }
+    },
+    {
+      "key": "scallion",
+      "name": "대파 분쇄기(튜닝)",
+      "job": "20261013-150247-742640871856",
+      "tuned": true,
+      "allow": {
+        "rectEdge": {
+          "max": 1,
+          "why": "d16 '大葱碎' 사진 위 보간 자국(AI 지우기 대상 아님 — 대표 사진)"
+        }
+      }
+    }
+  ],
+  "limits": {
+    "overlaps": 0,
+    "clipped": 0,
+    "shapeOverflow": 0,
+    "roleDev": 0,
+    "colDev": 4,
+    "rectEdge": 0,
+    "chinese": 0,
+    "lowContrast": 0,
+    "tiny": 0,
+    "emptyDeco": 0,
+    "literal": 0
+  }
+}

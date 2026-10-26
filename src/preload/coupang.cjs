@@ -132,18 +132,20 @@ function start() {
   // 예전에는 카드 글 전체의 첫 "(숫자)"를 써서, 상품명·옵션의 "(3)" 같은 숫자를 리뷰로 잘못 읽을 수 있었다.
   const cls = (e) => String(e.className && e.className.baseVal != null ? e.className.baseVal : e.className || "");
   const numIn = (t) => { const m = String(t || "").match(/\(?\s*(\d[\d,]*)\s*\)?/); return m ? +m[1].replace(/,/g, "") : null; };
+  // 리뷰가 아닌 괄호 숫자: "새 상품, 반품 (3)"(다른 옵션의 반품 상품 개수)·중고·리퍼 — 별점 옆에 붙어 나와 리뷰로 읽힌 적 있음(2026-10-12 전동청소솔 3,911 → 3)
+  const noRev = (t) => String(t || "").replace(/(반품|새\s*상품|중고|리퍼|전시)[^()|]{0,12}\(\s*\d[\d,]*\s*\)/g, " ");
   function reviewsOf(card, text, name) {
     const countEl = [...card.querySelectorAll("*")].find((e) => /((rating|review)[-_]?(total[-_]?)?count|count[-_]?(rating|review)|ratingTotal|reviewCnt)/i.test(cls(e)) && /\d/.test(e.textContent));
-    if (countEl) return { n: numIn(countEl.textContent), src: `칸 ${cls(countEl).slice(0, 40)}` };
+    if (countEl) return { n: numIn(noRev(countEl.textContent)), src: `칸 ${cls(countEl).slice(0, 40)}` };
     const star = [...card.querySelectorAll("*")].find((e) => /(star|rating)/i.test(cls(e)));
     if (star) {
       let host = star.parentElement;
       for (let i = 0; i < 3 && host && host !== card; i++, host = host.parentElement) {
-        const m = String(host.textContent).match(/\((\d[\d,]*)\)/);
+        const m = noRev(host.textContent).match(/\((\d[\d,]*)\)/);
         if (m) return { n: +m[1].replace(/,/g, ""), src: `별점 옆 ${cls(host).slice(0, 30)}` };
       }
     }
-    let t = String(text || "");
+    let t = noRev(text);
     if (name) t = t.split(name).join(" ");
     const all = [...t.matchAll(/\((\d[\d,]*)\)/g)].map((m) => +m[1].replace(/,/g, ""));
     return { n: all.length ? all[all.length - 1] : null, src: all.length ? `글 마지막 괄호 [${all.join(",")}]` : "없음" };
@@ -376,6 +378,18 @@ function start() {
   cnStyle.textContent = `.sg-cn-hover{position:fixed;z-index:2147483647;display:none;border:0;border-radius:7px;padding:5px 9px;background:#f97316;color:#fff;font:800 12px -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer}.sg-cn-hover:hover{background:#ea580c}.sg-pick{background:#16a34a}.sg-pick:hover{background:#15803d}`;
   let hoverImg = null, hideT = null;
   const detailPid = () => pidOf(location.href);
+  // 상품 상세 화면의 대표 사진: 페이지 맨 위(구매 칸 옆) 큰 사진. 상세페이지를 읽다가 🔍1688을 누르면 마지막에 마우스가 지나간
+  // 상세 이미지로 검색되던 문제(2026-10-12) → 상세 화면에서는 늘 이 대표 사진을 쓴다
+  const mainImg = () => {
+    const cands = [...document.querySelectorAll("img")].map((i) => ({ i, r: i.getBoundingClientRect() }))
+      .filter((x) => x.r.width >= 200 && x.r.height >= 200 && x.r.top + scrollY < 1100 && !x.i.closest(".sg-cn-hover"))
+      .sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height);
+    if (cands[0]) return cands[0].i;
+    const og = document.querySelector('meta[property="og:image"]')?.content;
+    if (og) { const im = new Image(); im.src = og.replace(/^\/\//, "https://"); return im; }
+    return null;
+  };
+  const target = () => (detailPid() ? mainImg() || hoverImg : hoverImg);
   function productFor(img) {
     const dp = detailPid();
     const a = dp ? null : img.closest('a[href*="/products/"]'); // 상품 상세 페이지에서는 그 페이지 상품으로(연관 상품 링크에 걸리지 않게)
@@ -413,7 +427,7 @@ function start() {
   addEventListener("scroll", () => { if (hoverImg && cnBtn.style.display === "block") placeBtn(hoverImg); }, true);
   cnBtn.addEventListener("click", async (e) => {
     e.preventDefault(); e.stopPropagation();
-    const p = hoverImg && productFor(hoverImg);
+    const ti = target(), p = ti && productFor(ti);
     if (!p) { cnBtn.textContent = "✕ 상품 못 읽음"; setTimeout(() => (cnBtn.textContent = "🔍 1688"), 2500); ipcRenderer.send("cp:log", `🔍1688 눌렀지만 상품을 못 읽음 · ${location.pathname} · 사진 ${hoverImg ? (hoverImg.currentSrc || hoverImg.src || "").slice(-40) : "없음"}`); return; }
     cnBtn.textContent = "여는 중…";
     ipcRenderer.send("cp:log", `🔍1688 클릭 · ${String(p.name || "").slice(0, 30)} · pid ${p.pid || "?"}`);
@@ -424,7 +438,7 @@ function start() {
   }, true);
   pickBtn.addEventListener("click", async (e) => {
     e.preventDefault(); e.stopPropagation();
-    const p = hoverImg && productFor(hoverImg);
+    const ti = target(), p = ti && productFor(ti);
     if (!p) { pickBtn.textContent = "✕ 상품 못 읽음"; setTimeout(() => (pickBtn.textContent = "📦 담기"), 2000); return; }
     const r = await ipcRenderer.invoke("cp:pick", { ...p, query: pageQuery(new URL(location.href)) || "" });
     pickBtn.textContent = r?.ok ? `✔ 담김 (${r.count})` : "✕ " + String(r?.error || "").slice(0, 14);
@@ -891,6 +905,8 @@ function start() {
     });
   }
   tplBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); openTemplateCapture(); }, true);
+  // 📄 ▶ 주소로 만들기(쿠팡 주소): 앱이 이 화면을 연 뒤 상세 이미지 주소를 물으면 🧲 와 같은 규칙(collectDetailImages)으로 답한다 — 추가 요청 없음
+  ipcRenderer.on("detail:collectCoupang", () => { let r = null; try { r = { images: collectDetailImages(), name: pageName(), category: pageCategory() }; } catch {} ipcRenderer.send("detail:collectCoupangDone", r); });
   const mountRev = () => {
     if (!revStyle.isConnected) (document.head || document.documentElement).appendChild(revStyle);
     const want = onDetail() ? "📝 리뷰 분석" : "📝 리뷰 기록";
@@ -904,7 +920,11 @@ function start() {
   mountRev();
   setInterval(mountRev, 1500);
   // 페이지를 열면 화면 순서만 기록(네트워크 요청 없음) — 롤링 노출 자리 분석용. 지표 조회는 버튼을 누를 때만.
-  setTimeout(() => { try { const a = scan(false); if (a.length) reportPage(a); } catch {} }, 3000);
+  // 카드가 다 뜨면 바로(1초부터 0.5초마다, 상품 수가 두 번 연속 같고 20개 이상이면) — 늦어도 3초에 한 번. 키워드 추천의 쿠폰가 확인을 빠르게(2026-10-12)
+  { let last = -1, n = 0; const tick = () => { n++; let a = []; try { a = scan(false); } catch {}
+      if ((a.length >= 20 && a.length === last) || n >= 5) { try { if (a.length) reportPage(a); } catch {} return; }
+      last = a.length; setTimeout(tick, 500); };
+    setTimeout(tick, 1000); }
   label();
   ipcRenderer.send("cp:log", `쿠팡 지표 버튼 준비 · ${location.pathname}`);
 }

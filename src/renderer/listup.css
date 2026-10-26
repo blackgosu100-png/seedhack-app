@@ -166,3 +166,114 @@ table.lu { border-collapse: separate; border-spacing: 0; font-size: 12px; backgr
 .lu-sel button.ghost { border-color: transparent; background: transparent; color: var(--s-text2); }
 .lu-sel button.undo { margin-left: auto; background: #111827; color: #fff; border-color: #111827; font-weight: 600; }
 .lu td.del button:hover { background: var(--s-bad); color: #fff; border-color: var(--s-bad); }
+
+/* 📋 리스트업 새 모양(2026-10-13): 맨 위 숫자 4개 · 접힌 계산 기준 · 상태 칩 · 밝은 머리글 · 노랑은 비어 있는 위안·판매가 칸만 · 이상한 값은 그 칸만 주황
+   (.lu 공통 스타일은 수집함도 쓰므로 #luTable 로만 덮는다) */
+.lu-help { display: none; } /* 긴 안내 문장 대신 머리글에 마우스를 올리면 설명 */
+.lu-bar b { font-size: 16px; }
+.lu-bar button { border-radius: 8px; padding: 6px 12px; font-size: 12.5px; }
+.lu-top { padding: 12px 14px 10px; background: var(--s-surface); border-bottom: 1px solid var(--s-line); display: grid; gap: 10px; }
+.lu-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; max-width: 900px; }
+.lu-num { background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 10px; padding: 9px 14px; }
+.lu-num span { display: block; font-size: 12px; color: var(--s-text2); }
+.lu-num b { font: 800 24px var(--mono); color: var(--s-text); letter-spacing: -.5px; }
+.lu-num.g b { color: var(--s-good); } .lu-num.o b { color: var(--s-mid); }
+.lu-row2 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; font-size: 12.5px; }
+.lu-cfgt { border: 1px solid var(--s-line2); background: var(--s-surface); color: var(--s-text2); border-radius: 8px; padding: 4px 10px; font: 12.5px var(--sans); cursor: pointer; }
+.lu-cfgt:hover { color: var(--s-text); border-color: var(--s-text2); }
+.lu-cfg { display: inline-flex; align-items: center; gap: 12px; padding: 3px 10px; border: 1px dashed var(--s-line2); border-radius: 8px; color: var(--s-text2); }
+.lu-cfg[hidden] { display: none; }
+.lu-cfg label { display: inline-flex; align-items: center; gap: 4px; }
+.lu-cfg input, .lu-cfg select { font: 12.5px var(--sans); color: var(--s-text); background: #fff; border: 1px solid var(--s-line2); border-radius: 6px; padding: 3px 6px; }
+.lu-cfg input.num { width: 64px; text-align: right; font-family: var(--mono); }
+.lu-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.lu-chip { border: 1px solid var(--s-line2); background: var(--s-surface); color: var(--s-text2); border-radius: 99px; padding: 4px 12px; font: 600 12.5px var(--sans); cursor: pointer; }
+.lu-chip:hover:not(:disabled) { border-color: var(--s-text2); color: var(--s-text); }
+.lu-chip.o { color: var(--s-mid); border-color: #fcd34d; }
+.lu-chip.on { background: var(--s-good); border-color: var(--s-good); color: #fff; }
+.lu-chip:disabled { opacity: .45; cursor: default; }
+.lu-row2 .muted { margin-left: auto; color: var(--s-text2); font-size: 12px; }
+
+/* 밝은 머리글 */
+#luTable thead th { background: #f4f4f5; color: var(--s-text); border-bottom-color: var(--s-line2); font-size: 11.5px; font-weight: 700; }
+#luTable thead tr.grp th { background: #fafafa; color: var(--s-text2); font-size: 11px; font-weight: 600; }
+#luTable thead th.calc { background: #ededf0; }
+#luTable thead th.ext, #luTable thead tr.grp th.ext { background: #ecfdf3; color: #166534; }
+#luTable thead th.no, #luTable thead th.del { background: #fafafa; color: var(--s-text2); }
+/* 입력 칸: 평소엔 흰 바탕(밑줄만) · 비어 있는 위안·판매가만 노랑 · 이상한 값은 주황 */
+#luTable td.in { background: var(--s-surface); }
+#luTable td.in input, #luTable td.in select { box-shadow: inset 0 -1px 0 transparent; }
+#luTable td.in:hover input, #luTable td.in:hover select { box-shadow: inset 0 -1px 0 var(--s-line2); }
+#luTable td.in.need { background: var(--s-input); }
+#luTable td.in.warn { background: #fff7ed; box-shadow: inset 0 0 0 1px #fdba74; }
+#luTable td.in.warn input { color: #c2410c; font-weight: 700; }
+#luTable td.calc { background: #fafafa; }
+#luTable td.warn { color: #c2410c; background: #fff7ed; }
+#luTable td.vd { font-size: 12.5px; }
+#luTable tbody tr[hidden] { display: none; }
+/* 🔍 1688 버튼: 작은 아이콘 */
+#luTable td.in .cnbtn { border: 1px solid var(--s-line2); background: #fff; color: var(--s-text2); border-radius: 6px; font-size: 12px; padding: 1px 6px; }
+#luTable td.in .cnbtn:hover { border-color: var(--s-good); color: var(--s-good); background: var(--s-good-bg); }
+#luTable td.in .go { right: 34px; color: var(--s-good); font-weight: 700; }
+#luTable td.in input[data-f="cnUrl"] { padding-right: 56px; }
+/* 오와 열 맞춤(2026-10-13): 번호 칸은 머리글도 줄과 같은 자리(☑ · ⠿ · 번호) · 머리글 글자는 그 열의 값과 같은 쪽 */
+#luTable th.mg { text-align: left; padding: 0 4px; }
+#luTable .mg .grip.sp { visibility: hidden; cursor: default; }
+#luTable th.mg .grip.sp, #luTable td.mg .grip { display: inline-block; width: 18px; text-align: center; font-size: 15px; vertical-align: middle; }
+#luTable th.mg b, #luTable td.mg b { display: inline-block; min-width: 22px; text-align: right; vertical-align: middle; font: 600 11.5px var(--mono); }
+#luTable td.mg b { font-weight: 500; font-size: 12px; }
+#luTable .mg .pk { padding: 0 4px; vertical-align: middle; }
+#luTable thead th.a-r { text-align: right; }
+#luTable thead th.a-l { text-align: left; }
+#luTable thead th.a-c { text-align: center; }
+#luTable td.vd, #luTable td.strat { text-align: left; }
+/* 위쪽 줄(제목·숫자·칩)의 왼쪽 선 = 표 첫 칸 체크박스 선 */
+#listup .lu-bar, #listup .lu-top, #listup .lu-sel { padding-left: 8px; }
+/* ⠿ 끌기 손잡이: 맨 바깥 · 평소엔 연하게, 마우스를 올린 줄에서만 진하게(가독성 매뉴얼 2-14) */
+#luTable td.mg .grip { color: #d4d4d8; }
+#luTable tbody tr:hover td.mg .grip { color: #71717a; }
+#luTable td.mg .grip:hover { color: var(--s-text); }
+#luTable th.mg, #luTable td.mg { padding-left: 8px; } /* 맨 앞 ⠿ = 위쪽 제목·숫자 상자와 같은 세로선 */
+
+/* 📦 수집함 새 모양(2026-10-13): 숫자 4개 · 검색어 + 빠른 칩 · 조건 접기 · 날짜 구간 → 검색어 묶음 · 밝은 머리글 · 초록 하나 · 28일 판매 크게
+   (#collect / #coTable 로만 덮는다 — 리스트업과 같은 위쪽 줄 부품 .lu-top/.lu-nums/.lu-chip 재사용) */
+#collect .lu-bar, #collect .lu-top, #collect .co-filter { padding-left: 8px; }
+#collect .lu-bar .faint { opacity: .55; } #collect .lu-bar .faint:hover:not(:disabled) { opacity: 1; }
+#collect .co-q { display: inline-flex; align-items: center; gap: 6px; color: var(--s-text2); }
+#collect .co-q select { font: 12.5px var(--sans); color: var(--s-text); background: #fff; border: 1px solid var(--s-line2); border-radius: 8px; padding: 4px 8px; max-width: 220px; }
+#collect .lu-cfgt.act { color: var(--s-mid); border-color: #fcd34d; }
+#collect .co-mode { font-size: 12px; color: var(--s-text2); }
+#collect .co-mode:empty { display: none; }
+#collect .co-filter[hidden] { display: none; }
+/* 밝은 머리글 · 값과 같은 쪽 정렬 */
+#coTable thead th { background: #f4f4f5; color: var(--s-text); font-size: 11.5px; font-weight: 700; border-bottom-color: var(--s-line2); }
+#coTable thead th.sortable:hover { background: #e9e9ec; }
+#coTable thead th.a-r { text-align: right; } #coTable thead th.a-l { text-align: left; } #coTable thead th.a-c { text-align: center; }
+#coTable th.sel, #coTable td.sel { width: 34px; min-width: 34px; text-align: left; padding: 0 0 0 8px; }
+#coTable th.sel input, #coTable td.sel input { margin: 0; width: 14px; height: 14px; accent-color: #15803d; vertical-align: middle; }
+#coTable td.rn { color: var(--s-text2); font: 500 12px var(--mono); }
+/* 색은 초록 하나: 판매가·리뷰는 검정, 🔥·틈만 초록 · 28일 판매 크게 */
+#coTable td.num { color: var(--s-text); }
+#coTable td.good { color: var(--s-good); background: transparent; }
+#coTable td.num.big { font: 800 14px var(--mono); color: var(--s-text); }
+#coTable td.muted { color: var(--s-text2); }
+#coTable td.bad { color: var(--s-mid); background: transparent; }
+#coTable td.adj.go { color: var(--s-good); } #coTable td.adj.warn { color: var(--s-mid); } #coTable td.adj.stop { color: var(--s-text2); }
+/* 진한 배지는 연하게 */
+#coTable .tag.rookie, #coTable .tag.rookie.recent { background: #f4f4f5; color: #52525b; font-weight: 600; }
+#coTable .tag.ship.rk, #coTable .tag.ship.mr, #coTable .tag.ship.gl, #coTable .tag.ship.nm { background: #f4f4f5; color: #3f3f46; font-weight: 600; }
+#coTable .tag.pk { background: var(--s-good-bg); color: var(--s-good); }
+#coTable .tag.adslot { background: #f4f4f5; color: #52525b; }
+/* 날짜 구간 · 검색어 묶음 */
+#coTable tr.day td { height: 30px; background: #fafafa; color: var(--s-text2); font-size: 12px; font-weight: 500; border-right: 0; padding-left: 8px; letter-spacing: 0; }
+#coTable tr.day td b { color: var(--s-text); font-size: 13px; margin-right: 8px; }
+#coTable tr.kg td { height: 34px; background: var(--s-surface); border-right: 0; padding-left: 8px; cursor: pointer; font-size: 13px; }
+#coTable tr.kg:hover td { background: #f7f7f8; }
+#coTable tr.kg .arr { display: inline-block; width: 34px; color: var(--s-text2); }
+#coTable tr.kg b { color: var(--s-text); margin-right: 8px; }
+#coTable tr.kg small { color: var(--s-text2); font-size: 12px; }
+#coTable tr.kg.open td { border-bottom-color: var(--s-line2); }
+#coTable td.rk { text-align: right; } /* 순위도 숫자 → 오른쪽(2-13) */
+/* 수집함 표를 화면 폭에 꽉 채움 — 남는 폭은 상품명 칸이 받는다 */
+#coTable { width: 100%; }
+#coTable td.nm { max-width: none; }

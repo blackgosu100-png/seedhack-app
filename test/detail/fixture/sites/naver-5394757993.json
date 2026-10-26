@@ -1,0 +1,65 @@
+{
+ "site": "naver",
+ "id": "5394757993",
+ "note": "web.archive.org 20260117 스냅숏의 실제 __PRELOADED_STATE__ (상품 칸만) — 네이버는 로그인 없는 자동 접속을 로그인 화면으로 돌려 실시간 하네스가 막힘",
+ "page": {
+  "url": "",
+  "title": "현대 무점착 창문시트지 유리시트지 사생활보호 필름 (버티컬브라인드) : 시트광장",
+  "og": {
+   "title": "현대 무점착 창문시트지 유리시트지 사생활보호 필름 (버티컬브라인드) : 시트광장",
+   "image": "https://shop-phinf.pstatic.net/20210213_152/1613198587297oS2JY_JPEG/14334421045347562_1683576748.jpg?type=o1000",
+   "description": "[시트광장] 내손으로 창조되는 DIY 파트너! 3M 인테리어필름 공식 온라인판매점"
+  },
+  "state": {
+   "simpleProductForDetailPage": {
+    "A": {
+     "name": "현대 무점착 창문시트지 유리시트지 사생활보호 필름 (버티컬브라인드)",
+     "dispName": "현대 무점착 창문시트지 유리시트지 사생활보호 필름 (버티컬브라인드)",
+     "representativeImageUrl": "https://shop-phinf.pstatic.net/20210213_152/1613198587297oS2JY_JPEG/14334421045347562_1683576748.jpg",
+     "representativeImageWidth": 640,
+     "representativeImageHeight": 640,
+     "optionalImageUrls": [
+      "https://shop-phinf.pstatic.net/20220531_18/1653975406472IzFgi_JPEG/55111302208299471_702707361.jpeg",
+      "https://shop-phinf.pstatic.net/20220531_187/16539756262569wTu5_JPEG/55111524553666759_218334865.jpg",
+      "https://shop-phinf.pstatic.net/20220531_284/1653978968948Ntri6_JPEG/55114748661576867_1560652959.jpeg",
+      "https://shop-phinf.pstatic.net/20220531_164/1653975497227GXCGH_JPEG/55111280756199027_899307260.jpeg",
+      "https://shop-phinf.pstatic.net/20220604_18/1654322821228GuuIf_JPEG/55458655936469210_1676133889.jpg",
+      "https://shop-phinf.pstatic.net/20220604_25/1654322623752b5I3x_JPEG/55458458588567011_935139701.jpg",
+      "https://shop-phinf.pstatic.net/20220604_144/165432267261819HuE_JPEG/55458507453849781_1791315678.jpeg",
+      "https://shop-phinf.pstatic.net/20220604_64/16543226989842D4ad_JPEG/55458533819884788_375064815.jpg"
+     ],
+     "detailContents": {
+      "detailContentText": "2개이상 구매시 이어서 재단되어 배송합니다 무점착 시트지로 쉽게 꾸미는 창문인테리어 붙였다, 떼었다 마음대로! 상품상세 옵션 버티컬브라인드 간격 2.0cm 와이드버티컬브라인드 간격 4.5cm 추가상품 3M 안전장갑 구매고객 시공사례",
+      "editorType": "SEONE"
+     },
+     "naverShoppingSearchInfo": {
+      "brandId": 18216,
+      "manufacturerName": "현대시트",
+      "brandName": "현대",
+      "modelName": "무점착 창문시트지"
+     },
+     "category": {
+      "wholeCategoryId": "50000004>50000107>50001117>50003696",
+      "wholeCategoryName": "가구/인테리어>DIY자재/용품>시트지>유리용시트지",
+      "categoryId": "50003696",
+      "categoryName": "유리용시트지"
+     },
+     "salePrice": 2800,
+     "dispSalePrice": 2800,
+     "optionStandards": []
+    }
+   },
+   "product": {
+    "A": {
+     "salePrice": 0,
+     "discountedSalePrice": 0
+    }
+   }
+  },
+  "imgs": [],
+  "attrs": [],
+  "options": [],
+  "ld": [],
+  "text": ""
+ }
+}

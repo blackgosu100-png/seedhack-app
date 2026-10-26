@@ -72,3 +72,31 @@ test("유명 브랜드(나이키)는 리뷰가 적어도 틈으로 보지 않고
   assert.equal(only.gap, null);
   assert.equal(only.gapBrandOnly, true);
 });
+
+test("월매출·판매량·리뷰 수는 판매액 상위 10개 합", () => {
+  const items = Array.from({ length: 14 }, (_, i) => ({ name: `헬스 가방 ${i}`, price: 10000, sales: 100 - i, reviews: 10 }));
+  const s = summarize("헬스가방", items);
+  assert.equal(s.n, 10); assert.equal(s.nAll, 14);
+  assert.equal(s.sales, [...Array(10).keys()].reduce((t, i) => t + 100 - i, 0));
+  assert.equal(s.rev, s.sales * 10000); assert.equal(s.reviews, 100);
+});
+
+test("팔아봤어요 지표: 1등 판매량 · 리뷰 500개+ 상품 수 (검색어와 다른 상품은 빼고)", () => {
+  const s = summarize("레오파드에코백", LEOPARD);
+  assert.equal(s.top1Sales, 1099); // 래빗에코백(2,143개)은 빠짐
+  assert.equal(s.big500, 1); // 리뷰 1,580개 1개만(래빗에코백 1,496개는 빠짐)
+});
+
+test("pagePrice: 쿠팡 화면 쿠폰가 — 옵션 같으면 큰 할인도, 옵션 다르거나 너무 싸면 Wing가", async () => {
+  const { pagePrice } = await import("../src/shared/hyoja-core.js");
+  assert.deepEqual(pagePrice({ price: 14900, vid: "1" }, { page: { price: 9900, vid: "1" } }).price, 9900);
+  assert.equal(pagePrice({ price: 63800, vid: "1" }, { page: { price: 12800, vid: "1" } }).src, "page"); // 홀럭스 79% 할인
+  assert.equal(pagePrice({ price: 63800, vid: "1" }, { page: { price: 12800, vid: "" } }).src, "odd"); // 옵션 확인 못 하면 35% 규칙
+  assert.equal(pagePrice({ price: 14900, vid: "1" }, { page: { price: 9900, vid: "2" } }).src, "vid");
+  assert.equal(pagePrice({ price: 14900, vid: "1" }, { page: { price: 900, vid: "1" } }).src, "odd"); // 15% 아래는 단위가격 오독
+  assert.equal(pagePrice({ price: 14900 }, null).price, 14900);
+  // 로그나스: 옵션 번호는 다르지만 카드의 할인 전 가격이 Wing가와 같음 → 88% 할인가 사용
+  assert.equal(pagePrice({ price: 26900, vid: "95864940372" }, { page: { price: 3000, vid: "95864940371", raw: "로그나스 … | 할인 | 26,900원 | 88% | 3,000원 | (1개당 3,000원)" } }).price, 3000);
+  // a2액자: 다른 옵션(2개짜리)이고 할인 전 가격도 다름 → Wing가 유지
+  assert.equal(pagePrice({ price: 16900, vid: "1" }, { page: { price: 33800, vid: "2", raw: "… | 33,800원 | (1개당 16,900원)" } }).src, "vid");
+});

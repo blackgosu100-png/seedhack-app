@@ -5,6 +5,8 @@ import { BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL, fileURLToPath } from "node:url";
+import { colorGrid } from "./image-core.js";
+import { tidySpecUnits } from "./plan-core.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_DIR = path.join(__dirname, "../../renderer/detail-templates");
@@ -135,6 +137,7 @@ export async function renderPlan({ plan, jobDir, templateId, onProgress, log } =
   if (!jobDir) throw new Error("jobDir 가 없습니다");
   const say = (m) => { try { if (typeof log === "function") log("detail", m); } catch {} };
   const prog = (done, total, msg) => { try { onProgress?.({ step: "render", done, total, msg }); } catch {} };
+  plan = { ...plan, sections: plan.sections.map((x) => (x?.type === "spec" && Array.isArray(x.rows) ? { ...x, rows: tidySpecUnits(x.rows) } : x)) }; // 표 값의 斤·한자 정리
   const route = routeTemplate(plan, templateId);
   const tid = route.engine, theme = route.theme;
   if (theme) plan = { ...plan, meta: { ...(plan.meta || {}), theme } }; // card 엔진이 읽는 테마
@@ -305,7 +308,16 @@ function fillUnder(sec, jobDir) {
     for (let k = Math.round(x); k < x + w; k += 2) { add(k, Math.round(y + h / 2)); add(k, Math.round(y + 3)); add(k, Math.round(y + h - 3)); } return n ? hex([r / n, g / n, b / n]) : null; };
   return { ...sec, layers: sec.layers.map((l) => (!l || (l.style && (l.style.under || l.style.bg || l.style.fill)) ? l : { ...l, style: { ...(l.style || {}), under: avg(l.x, l.y, l.w, l.h) || "#ffffff" } })) };
 }
+// 바탕색 격자(24px 칸 평균색): 템플릿이 글자 상자 밑 실제 바탕과 대비를 재고, 글 상자를 옆 빈 바탕으로 넓힐지 판단한다(canvas 는 file:// 보안으로 막힘)
+function withGrid(sec, jobDir) {
+  if (!["image", "hero"].includes(sec.type) || !sec.image || sec.bgGrid) return sec;
+  try { const im = nativeImage.createFromPath(resolveImage(jobDir, sec.image)); const { width: w, height: h } = im.getSize(); if (!w) return sec; return { ...sec, bgGrid: { ...colorGrid({ data: im.toBitmap(), w, h }, 24), w, h } }; } catch { return sec; }
+}
 export function prepareLocalize(plan, jobDir) {
+  const r = prepareLocalize0(plan, jobDir);
+  return { ...r, plan: { ...r.plan, sections: (r.plan.sections || []).map((x) => withGrid(x, jobDir)) } };
+}
+function prepareLocalize0(plan, jobDir) {
   const secs = (plan.sections || []).map((s) => fillUnder({ ...s }, jobDir));
   plan = { ...plan, sections: secs };
   const hi = secs.findIndex((s) => s.type === "hero"); if (hi < 0) return { plan, note: "hero 없음" };
@@ -319,11 +331,13 @@ export function prepareLocalize(plan, jobDir) {
     let ih = Number(s.h || s.ih) || 0, iw = Number(s.w || s.iw) || 0; const ls = (s.layers || []).filter((l) => l && !l.drop);
     if (!ih) { try { const sz = nativeImage.createFromPath(resolveImage(jobDir, s.image)).getSize(); ih = sz.height; iw = sz.width; } catch {} } // 크기 없으면 파일에서
     if (!ih || !ls.length || ls.some((l) => l.y + l.h > ih * 0.3)) continue; // 글자가 위 30% 안에만 있는 장(배너형)
-    const zoneB = Math.max(...ls.map((l) => l.y + l.h)) + 24;
-    let b; try { b = topBusy(resolveImage(jobDir, s.image), { frac: Math.min(0.32, zoneB / ih), exclude: ls }); } catch { b = 1; } // 새 타이틀이 들어갈 띠(원래 글자 자리 + 24px)만 본다
+    // v13 띠 안에 남긴 영문 장식·선(keep)도 새 타이틀 띠에 넣어 덮는다(빨래건조대 d03 "Rock space Custom"이 타이틀 옆으로 비치던 것)
+    const kp = (Array.isArray(s.keep) ? s.keep : []).filter((k) => k && k.y + k.h <= ih * 0.32);
+    const zoneB = Math.max(...ls.map((l) => l.y + l.h), ...kp.map((k) => k.y + k.h)) + 24;
+    let b; try { b = topBusy(resolveImage(jobDir, s.image), { frac: Math.min(0.32, zoneB / ih), exclude: [...ls, ...kp] }); } catch { b = 1; } // 새 타이틀이 들어갈 띠(원래 글자 자리 + 24px)만 본다
     if (b > BUSY_MAX) continue;
     const pill = ls.find((l) => l.style && (l.style.radius === "pill" || l.style.border));
-    const nh = { ...hero, image: s.image, w: iw || undefined, h: ih, text_zone: { y0: 0, y1: Math.max(...ls.map((l) => l.y + l.h)) + 24 },
+    const nh = { ...hero, image: s.image, w: iw || undefined, h: ih, text_zone: { y0: 0, y1: zoneB }, fill_full: true,
       points: hero.points || (pill ? String(pill.ko || "").split(/\s*[|│]\s*/).filter(Boolean).slice(0, 3) : undefined),
       accent: hero.accent || (pill?.style?.border ? (/#[0-9a-f]{6}/i.exec(pill.style.border) || [])[0] : undefined) || (ls[0].style && ls[0].style.color) };
     try { // 새 타이틀 바탕색(대비 점검·글자색 보정용) = 글자 띠 평균

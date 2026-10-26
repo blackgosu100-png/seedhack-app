@@ -1,7 +1,7 @@
 // 패널 화면에 노출하는 최소 API (Node 기능은 넘기지 않음)
 const { contextBridge, ipcRenderer } = require("electron");
 
-const CHANNELS = ["console", "live", "live:refresh", "nav", "exact:progress", "exact:item", "excel:log", "collect:changed", "ctabs", "auth", "update", "version", "listup:fill", "listup:add1688", "chat:count", "detail:progress", "detail:changed", "cattree", "auto:state", "auto:done"];
+const CHANNELS = ["console", "live", "live:refresh", "nav", "exact:progress", "exact:item", "excel:log", "collect:changed", "ctabs", "auth", "update", "version", "listup:fill", "listup:add1688", "chat:count", "detail:progress", "detail:changed", "detail:captureProgress", "cattree", "auto:state", "auto:done"];
 
 contextBridge.exposeInMainWorld("signal", {
   invoke: (ch, data) => ipcRenderer.invoke(ch, data),

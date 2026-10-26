@@ -1,0 +1,984 @@
+{
+ "site": "ohou",
+ "id": "1026292",
+ "savedAt": "2026-10-13",
+ "page": {
+  "url": "https://store.ohou.se/goods/1026292",
+  "title": "식탁보·러너 > 항균 방수 가죽 식탁보 테이블보 식탁 테이블 매트 커버 | 오늘의집 쇼핑",
+  "h1": "",
+  "og": {
+   "title": "항균 방수 가죽 식탁보 테이블보 식탁 테이블 매트 커버",
+   "image": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-415995895439360.jpg?w=720&h=480",
+   "description": "-41% 12,900원. 리뷰 4.8점, 23,994개"
+  },
+  "ld": [],
+  "state": null,
+  "imgs": [
+   {
+    "u": "https://asset.ohousecdn.com/static/AssetOhouseHorizontal/ohouse-horizontal.svg",
+    "w": 481,
+    "h": 136,
+    "rw": 106,
+    "rh": 30,
+    "top": 75,
+    "left": 65,
+    "zone": "skip"
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205219502331700.jpg?w=640&h=640&c=c",
+    "w": 640,
+    "h": 640,
+    "rw": 537,
+    "rh": 537,
+    "top": 261,
+    "left": -406,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-415995895439360.jpg?w=640&h=640&c=c",
+    "w": 640,
+    "h": 640,
+    "rw": 537,
+    "rh": 537,
+    "top": 261,
+    "left": 131,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205212160484679.jpg?w=640&h=640&c=c",
+    "w": 640,
+    "h": 640,
+    "rw": 537,
+    "rh": 537,
+    "top": 261,
+    "left": 667,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-415995895439360.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 261,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205212160484679.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 327,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205213603815524.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 393,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205214406271403.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 459,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205215336940205.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 525,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205216206960355.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 591,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205216859464288.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 657,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/images/167205219502331700.jpg?w=72&h=72&c=c",
+    "w": 72,
+    "h": 72,
+    "rw": 56,
+    "rh": 56,
+    "top": 723,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/store-feed/pdp-promotion-banner/v1-552329413042176.png?w=480",
+    "w": 480,
+    "h": 58,
+    "rw": 473,
+    "rh": 57,
+    "top": 1023,
+    "left": 727,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/video-service-prd-s3-bucket-thumbnail/6616836abfe98f6850508195/6616836abfe98f6850508195.0000001.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1332,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/cards/project/171869026268718308.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1332,
+    "left": 415,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/content/community/v1-388055982014464.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1586,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/content/uploads/cards/project/v1-381676472819776.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1586,
+    "left": 415,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/content/community/v1-422424729329792.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1332,
+    "left": 757,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/content/uploads/cards/project/v1-372690749149248.jpeg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1332,
+    "left": 1107,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/v1-354468827176960.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1586,
+    "left": 757,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/content/community/v1-419018944987200.jpg?w=480&h=480&c=c",
+    "w": 480,
+    "h": 480,
+    "rw": 342,
+    "rh": 246,
+    "top": 1586,
+    "left": 1107,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/uploads/productions/165993759512803274.png?w=180&q=50",
+    "w": 180,
+    "h": 161,
+    "rw": 164,
+    "rh": 164,
+    "top": 2052,
+    "left": 65,
+    "zone": "skip"
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/static/productions/goods-coupon-badge.png?w=36",
+    "w": 36,
+    "h": 36,
+    "rw": 12,
+    "rh": 12,
+    "top": 2417,
+    "left": 69,
+    "zone": "skip"
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-232040618991616.jpg?w=180&q=50",
+    "w": 180,
+    "h": 180,
+    "rw": 164,
+    "rh": 164,
+    "top": 2052,
+    "left": 241,
+    "zone": "skip"
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-326502501265472.png?w=180&q=50",
+    "w": 180,
+    "h": 180,
+    "rw": 164,
+    "rh": 164,
+    "top": 2052,
+    "left": 417,
+    "zone": "skip"
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/any/uploads/productions/v1-346711768596608.jpg?w=180&q=50",
+    "w": 180,
+    "h": 180,
+    "rw": 164,
+    "rh": 164,
+    "top": 2052,
+    "left": 593,
+    "zone": "skip"
+   },
+   {
+    "u": "https://image.ohousecdn.com/i/bucketplace-v2-development/static/productions/goods-coupon-badge.png?w=36",
+    "w": 36,
+    "h": 36,
+    "rw": 12,
+    "rh": 12,
+    "top": 2374,
+    "left": 597,
+    "zone": "skip"
+   },
+   {
+    "u": "https://prs.ohousecdn.com/apne2/commerce/uploads/admins/productions/notice/v1-553740510122048.png?w=720",
+    "w": 720,
+    "h": 131,
+    "rw": 692,
+    "rh": 126,
+    "top": 2601,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205304738265998.gif",
+    "w": 574,
+    "h": 338,
+    "rw": 574,
+    "rh": 338,
+    "top": 2775,
+    "left": 124,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohouse.com/apne2/any/uploads/productions/descriptions/url/v1-361514301247616.jpg",
+    "w": 860,
+    "h": 2975,
+    "rw": 692,
+    "rh": 2394,
+    "top": 3161,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/168416585474632742.jpg",
+    "w": 1194,
+    "h": 554,
+    "rw": 692,
+    "rh": 321,
+    "top": 5578,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-271437826195520.jpg",
+    "w": 860,
+    "h": 1787,
+    "rw": 692,
+    "rh": 1438,
+    "top": 5971,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/163322795301280537.jpg",
+    "w": 800,
+    "h": 765,
+    "rw": 692,
+    "rh": 662,
+    "top": 7457,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-194994904969344.jpg",
+    "w": 860,
+    "h": 1916,
+    "rw": 692,
+    "rh": 1542,
+    "top": 8482,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/168000278517984077.jpg",
+    "w": 860,
+    "h": 3878,
+    "rw": 692,
+    "rh": 3120,
+    "top": 10048,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohouse.com/apne2/any/uploads/productions/descriptions/url/v1-464447448756224.jpg",
+    "w": 860,
+    "h": 890,
+    "rw": 692,
+    "rh": 716,
+    "top": 13216,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-263116640940096.jpg",
+    "w": 860,
+    "h": 2750,
+    "rw": 692,
+    "rh": 2213,
+    "top": 14352,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-263116738396160.jpg",
+    "w": 860,
+    "h": 3150,
+    "rw": 692,
+    "rh": 2535,
+    "top": 16613,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-194992877559872.jpg",
+    "w": 860,
+    "h": 893,
+    "rw": 692,
+    "rh": 719,
+    "top": 19196,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205328021526955.jpg",
+    "w": 860,
+    "h": 2126,
+    "rw": 692,
+    "rh": 1711,
+    "top": 20142,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205329483831984.jpg",
+    "w": 860,
+    "h": 3677,
+    "rw": 692,
+    "rh": 2959,
+    "top": 21853,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205331195817020.jpg",
+    "w": 860,
+    "h": 3410,
+    "rw": 692,
+    "rh": 2744,
+    "top": 24812,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205332781403964.jpg",
+    "w": 860,
+    "h": 1146,
+    "rw": 692,
+    "rh": 922,
+    "top": 27556,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205335810977807.gif",
+    "w": 600,
+    "h": 400,
+    "rw": 600,
+    "rh": 400,
+    "top": 28478,
+    "left": 111,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-263116892487808.jpg",
+    "w": 860,
+    "h": 4980,
+    "rw": 692,
+    "rh": 4007,
+    "top": 28926,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205343181319759.jpg",
+    "w": 860,
+    "h": 624,
+    "rw": 692,
+    "rh": 502,
+    "top": 32957,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205345845307078.gif",
+    "w": 600,
+    "h": 338,
+    "rw": 600,
+    "rh": 338,
+    "top": 33459,
+    "left": 111,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205349907372503.jpg",
+    "w": 860,
+    "h": 626,
+    "rw": 692,
+    "rh": 504,
+    "top": 33845,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205352745142220.gif",
+    "w": 600,
+    "h": 338,
+    "rw": 600,
+    "rh": 338,
+    "top": 34349,
+    "left": 111,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205355032034845.jpg",
+    "w": 860,
+    "h": 1554,
+    "rw": 692,
+    "rh": 1250,
+    "top": 34735,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-194994350940288.jpg",
+    "w": 860,
+    "h": 927,
+    "rw": 692,
+    "rh": 746,
+    "top": 36466,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205362683461957.jpg",
+    "w": 860,
+    "h": 706,
+    "rw": 692,
+    "rh": 568,
+    "top": 37236,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-304010690662528.jpg",
+    "w": 860,
+    "h": 482,
+    "rw": 692,
+    "rh": 388,
+    "top": 37804,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-304010776129664.jpg",
+    "w": 860,
+    "h": 7480,
+    "rw": 692,
+    "rh": 6019,
+    "top": 38192,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohouse.com/apne2/any/uploads/productions/descriptions/url/v1-534609461055488.jpg",
+    "w": 860,
+    "h": 800,
+    "rw": 692,
+    "rh": 644,
+    "top": 44211,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205441314697105.gif",
+    "w": 574,
+    "h": 266,
+    "rw": 574,
+    "rh": 266,
+    "top": 44902,
+    "left": 124,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/168327989605950674.jpg",
+    "w": 860,
+    "h": 7625,
+    "rw": 692,
+    "rh": 6135,
+    "top": 45588,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-247225082077312.jpg",
+    "w": 860,
+    "h": 1862,
+    "rw": 692,
+    "rh": 1498,
+    "top": 51724,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205457684596624.jpg",
+    "w": 860,
+    "h": 1152,
+    "rw": 692,
+    "rh": 927,
+    "top": 53222,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-263117322297408.jpg",
+    "w": 860,
+    "h": 3322,
+    "rw": 692,
+    "rh": 2673,
+    "top": 54149,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-250166649659520.jpg",
+    "w": 860,
+    "h": 1389,
+    "rw": 692,
+    "rh": 1118,
+    "top": 56846,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/163698069805477057.jpg",
+    "w": 860,
+    "h": 780,
+    "rw": 692,
+    "rh": 628,
+    "top": 57964,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746232873024.jpg",
+    "w": 860,
+    "h": 3878,
+    "rw": 692,
+    "rh": 3120,
+    "top": 58591,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746310963328.jpg",
+    "w": 860,
+    "h": 3689,
+    "rw": 692,
+    "rh": 2968,
+    "top": 61712,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746393706560.jpg",
+    "w": 860,
+    "h": 3758,
+    "rw": 692,
+    "rh": 3024,
+    "top": 64680,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205473749588237.jpg",
+    "w": 860,
+    "h": 3405,
+    "rw": 692,
+    "rh": 2740,
+    "top": 67728,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-247225427210240.jpg",
+    "w": 860,
+    "h": 3618,
+    "rw": 692,
+    "rh": 2911,
+    "top": 70468,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746559483968.jpg",
+    "w": 860,
+    "h": 3450,
+    "rw": 692,
+    "rh": 2776,
+    "top": 73403,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746637164608.jpg",
+    "w": 860,
+    "h": 3555,
+    "rw": 692,
+    "rh": 2861,
+    "top": 76179,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://image.ohou.se/i/bucketplace-v2-development/uploads/productions/descriptions/url/167205479866687282.jpg",
+    "w": 860,
+    "h": 2756,
+    "rw": 692,
+    "rh": 2218,
+    "top": 79040,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746722431104.jpg",
+    "w": 860,
+    "h": 3555,
+    "rw": 692,
+    "rh": 2861,
+    "top": 81257,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746802851968.jpg",
+    "w": 860,
+    "h": 4455,
+    "rw": 692,
+    "rh": 3585,
+    "top": 84118,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746883006592.jpg",
+    "w": 860,
+    "h": 4417,
+    "rw": 692,
+    "rh": 3554,
+    "top": 87702,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203746962731072.jpg",
+    "w": 860,
+    "h": 4894,
+    "rw": 692,
+    "rh": 3938,
+    "top": 91257,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203747037749376.jpg",
+    "w": 860,
+    "h": 4248,
+    "rw": 692,
+    "rh": 3418,
+    "top": 95195,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203747109347456.jpg",
+    "w": 860,
+    "h": 3787,
+    "rw": 692,
+    "rh": 3047,
+    "top": 98613,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-304011076673536.jpg",
+    "w": 860,
+    "h": 4602,
+    "rw": 692,
+    "rh": 3703,
+    "top": 101660,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-237100322349056.jpg",
+    "w": 860,
+    "h": 3780,
+    "rw": 692,
+    "rh": 3042,
+    "top": 105363,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-203747313090560.jpg",
+    "w": 860,
+    "h": 2920,
+    "rw": 692,
+    "rh": 2350,
+    "top": 108429,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-247225837142016.jpg",
+    "w": 860,
+    "h": 2776,
+    "rw": 692,
+    "rh": 2234,
+    "top": 110778,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohouse.com/apne2/any/uploads/productions/descriptions/url/v1-464452215373952.jpg",
+    "w": 860,
+    "h": 13966,
+    "rw": 692,
+    "rh": 11238,
+    "top": 113012,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://prs.ohou.se/apne2/any/uploads/productions/descriptions/url/v1-247225631555648.jpg",
+    "w": 860,
+    "h": 2520,
+    "rw": 692,
+    "rh": 2028,
+    "top": 124274,
+    "left": 65,
+    "zone": ""
+   },
+   {
+    "u": "https://assets.ohou.se/design-system/8f5b2c2e98ea1196.png",
+    "w": 64,
+    "h": 64,
+    "rw": 32,
+    "rh": 32,
+    "top": 133094,
+    "left": 682,
+    "zone": "skip"
+   },
+   {
+    "u": "https://assets.ohou.se/design-system/d5fb816a58bb6a06.png",
+    "w": 64,
+    "h": 62,
+    "rw": 32,
+    "rh": 32,
+    "top": 133094,
+    "left": 890,
+    "zone": "skip"
+   },
+   {
+    "u": "https://assets.ohou.se/design-system/ad1cf869a6c58058.png",
+    "w": 64,
+    "h": 64,
+    "rw": 32,
+    "rh": 32,
+    "top": 133093,
+    "left": 1012,
+    "zone": "skip"
+   }
+  ],
+  "attrs": [
+   {
+    "k": "품명 및 모델명",
+    "v": "깐깐공주 방수 가죽 식탁보 테이블보 테이블커버 16color12size"
+   },
+   {
+    "k": "법에 의한 인증ㆍ허가 등을 받았음을 확인할 수 있는 경우 그에 대한 사항",
+    "v": "해당사항 없음"
+   },
+   {
+    "k": "제조국 또는 원산지",
+    "v": "중국"
+   },
+   {
+    "k": "제조자, 수입품의 경우 수입자를 함께 표기",
+    "v": "유진컴퍼니"
+   },
+   {
+    "k": "A/S 책임자와 전화번호 또는 소비자 상담 관련 전화번호",
+    "v": "070-8859-0179"
+   },
+   {
+    "k": "배송",
+    "v": "일반택배"
+   },
+   {
+    "k": "배송비",
+    "v": "3,000원"
+   },
+   {
+    "k": "도서산간 추가 배송비",
+    "v": "3,000원"
+   },
+   {
+    "k": "배송불가 지역",
+    "v": "배송불가 지역이 없습니다."
+   },
+   {
+    "k": "반품배송비",
+    "v": "7,000원 (최초 배송비가 무료인 경우 14,000원 부과)"
+   },
+   {
+    "k": "교환배송비",
+    "v": "6,000원"
+   },
+   {
+    "k": "보내실 곳",
+    "v": "(12982) 경기 하남시 풍산동 618 하남테크노밸리U1센터 C동508호"
+   },
+   {
+    "k": "상호",
+    "v": "주식회사 유진컴퍼니"
+   },
+   {
+    "k": "대표자",
+    "v": "이철민"
+   },
+   {
+    "k": "사업장소재지",
+    "v": "경기 하남시 하남대로 947 씨동 509호"
+   },
+   {
+    "k": "고객센터 전화번호",
+    "v": "070-8859-0179"
+   },
+   {
+    "k": "E-mail",
+    "v": "gg-gongjoo@naver.com"
+   },
+   {
+    "k": "사업자 등록번호",
+    "v": "749-88-02964"
+   },
+   {
+    "k": "통신판매업 신고번호",
+    "v": "2023-경기하남-2715"
+   }
+  ],
+  "options": [
+   "양면-1 (그린+그레이) (12,900 ~ 71,800원)",
+   "양면-2 (브라운+실버) (12,900 ~ 71,800원)",
+   "양면-3 (블랙+와인) (12,900 ~ 71,800원)",
+   "양면-4 (다크그레이+블랙) (12,900 ~ 71,800원)",
+   "양면-5 (크림화이트+펄화이트) (12,900 ~ 71,800원)",
+   "양면-6 (피치+오렌지) (12,900 ~ 71,800원)",
+   "양면-7 (딥블루+딥민트) (12,900 ~ 71,800원)",
+   "양면-8 (민트+에메랄드) (12,900 ~ 71,800원)",
+   "양면-9 (핑크+스카이블루) (12,900 ~ 71,800원)",
+   "양면-10 (아이보리+초코) (12,900 ~ 71,800원)",
+   "양면-11 (올리브+바이올렛) (12,900 ~ 71,800원)",
+   "양면-12 (그레이+라이트골드) (12,900 ~ 71,800원)",
+   "양면-13 (다크브라운+다크골드) (12,900 ~ 71,800원)",
+   "양면-14 (네이비+머스터드) (12,900 ~ 71,800원)",
+   "양면-15 (레몬+크림) (12,900 ~ 71,800원)",
+   "양면-16 (블랙+블랙) (12,900 ~ 71,800원)",
+   "양면-1 (그린+그레이) (12,900 ~ 71,800원)",
+   "양면-2 (브라운+실버) (12,900 ~ 71,800원)",
+   "양면-3 (블랙+와인) (12,900 ~ 71,800원)",
+   "양면-4 (다크그레이+블랙) (12,900 ~ 71,800원)",
+   "양면-5 (크림화이트+펄화이트) (12,900 ~ 71,800원)",
+   "양면-6 (피치+오렌지) (12,900 ~ 71,800원)",
+   "양면-7 (딥블루+딥민트) (12,900 ~ 71,800원)",
+   "양면-8 (민트+에메랄드) (12,900 ~ 71,800원)",
+   "양면-9 (핑크+스카이블루) (12,900 ~ 71,800원)",
+   "양면-10 (아이보리+초코) (12,900 ~ 71,800원)",
+   "양면-11 (올리브+바이올렛) (12,900 ~ 71,800원)",
+   "양면-12 (그레이+라이트골드) (12,900 ~ 71,800원)",
+   "양면-13 (다크브라운+다크골드) (12,900 ~ 71,800원)",
+   "양면-14 (네이비+머스터드) (12,900 ~ 71,800원)",
+   "양면-15 (레몬+크림) (12,900 ~ 71,800원)",
+   "양면-16 (블랙+블랙) (12,900 ~ 71,800원)"
+  ],
+  "text": "",
+  "height": 133365,
+  "clicked": false
+ }
+}

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { store } from "./store.js";
 import { watchWing } from "./wing.js";
-import { runExact, stopExact, lookupOne, gate } from "./exact.js";
+import { runExact, stopExact, lookupOne, gate, sleep } from "./exact.js";
 import { buildXlsx } from "./excel.js";
 import { lookup, recommend, nameLookup } from "./kwdb.js";
 import { buildPool, defaultPicks, buildNames, checkName } from "../shared/name-core.js"; // ✍ 상품명 짓기
@@ -30,6 +30,7 @@ import { runStructured } from "./detail/cli.js";
 import { initChat } from "./chat.js";
 import { initWave } from "./wave.js"; // 🌊 파도타기
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
+import { handleExtAction } from "./dash-ext.js"; // 📊 마진 대시보드의 확장 요청(Wing 정산 받기)을 앱이 대신
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WING_TREND = "https://wing.coupang.com/tenants/rfm-ss/coupang-trends/popularity-search";
@@ -57,6 +58,10 @@ let win, wingView, cleanView = null, active = "wing", current = null;
 let cleanTabs = [], cleanPart = null, tabSeq = 0;
 // 📦 1688 탭: 로그인 유지(persist:1688). 리스트업 행에서 🔍1688 → 이미지 검색 → 상품 페이지에서 "리스트업에 넣기"
 let cnView = null, cnTarget = null, cnPending = null; // cnPending: 1688 첫 화면에서 올릴 사진(한 번 쓰고 비움)
+// 🗂 1688 탭(2026-10-13): 첫 탭 = cnView(🔍 검색 · 고정 — 이미지 검색·판매자 점수·자동 조사가 쓰는 화면), 검색 결과에서 상품을 열면 새 탭(cnTabs)
+//  쿠팡 검색과 같은 탭 줄 · 상품 탭에서도 리스트업에 넣기·문의·번역·상세페이지가 되도록 "1688 화면에서 온 요청" 확인은 isCnWc 로
+let cnTabs = [], cnCur = null; // cnCur = 지금 보이는 1688 화면(첫 탭 또는 상품 탭)
+const isCnWc = (wc) => !!wc && ((cnView && wc === cnView.webContents) || cnTabs.some((t) => t.view.webContents === wc));
 const CN_HOME = "https://www.1688.com/";
 const TAB_H = 32, MAX_TABS = 12;
 
@@ -116,8 +121,9 @@ function layout() {
   // 💬 채팅 화면: 숨겨도 크기는 유지된다(크기를 받은 뒤 숨김) — 창 밖으로 옮기면 크기가 0이 되어 답 확인·입력을 못 한다
   chatV?.setBounds(b);
   chatV?.setVisible(active === "chat");
-  cnView?.setBounds(b);
-  cnView?.setVisible(active === "cn");
+  cnView?.setBounds(bc); // 1688도 위에 탭 줄 자리
+  cnView?.setVisible(active === "cn" && (cnCur || cnView) === cnView);
+  cnTabs.forEach((t) => { t.view.setBounds(bc); t.view.setVisible(active === "cn" && t.view === cnCur); });
   cleanTabs.forEach((t) => { t.view.setBounds(bc); t.view.setVisible(active === "clean" && t.view === cleanView); });
 }
 const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || Object.values(cpBgs).some((o) => o.view?.webContents === wc);
@@ -168,7 +174,7 @@ async function readDetailPrice(pid, vid) {
   return null;
 }
 function sendTabs() {
-  send("ctabs", {
+  send("ctabs", { kind: "clean",
     active: cleanTabs.find((t) => t.view === cleanView)?.id ?? null,
     tabs: cleanTabs.map((t) => { const wc = t.view.webContents; return { id: t.id, title: wc.getTitle() || "불러오는 중…", url: wc.getURL(), loading: wc.isLoading() }; }),
   });
@@ -177,7 +183,7 @@ function openCleanTab(url = COUPANG_HOME, activate = true) {
   if (!cleanPart) cleanPart = `clean-${Date.now()}`;
   // 너무 많으면 가장 오래된(지금 보는 탭이 아닌) 탭부터 닫는다
   while (cleanTabs.length >= MAX_TABS) { const old = cleanTabs.find((t) => t.view !== cleanView); if (!old) break; closeCleanTab(old.id, true); }
-  const view = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  const view = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } }); // 숨겨도 멈추지 않게 — 탭 전환 즉시 표시(2026-10-13)
   const t = { id: ++tabSeq, view };
   cleanTabs.push(t);
   win.contentView.addChildView(view);
@@ -209,9 +215,48 @@ function closeCleanTab(id, quiet) {
   if (active === "clean" && cleanView) send("nav", { tab: "clean", url: cleanView.webContents.getURL() });
 }
 
+// 🗂 1688 탭 줄 — 첫 탭(id 0)은 고정
+function sendCnTabs() {
+  if (!cnView) return;
+  const row = (id, v, fixed) => { const wc = v.webContents; return { id, title: wc.getTitle() || "불러오는 중…", url: wc.getURL(), loading: wc.isLoading(), fixed }; };
+  send("ctabs", { kind: "cn", active: cnCur && cnCur !== cnView ? cnTabs.find((t) => t.view === cnCur)?.id ?? 0 : 0, tabs: [row(0, cnView, true), ...cnTabs.map((t) => row(t.id, t.view, false))] });
+}
+function openCnTab(url, activate = true) {
+  if (!cnView) createCn("about:blank");
+  while (cnTabs.length >= MAX_TABS - 1) { const old = cnTabs.find((t) => t.view !== cnCur); if (!old) break; closeCnTab(old.id, true); }
+  const view = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/cn.cjs") } });
+  const t = { id: ++tabSeq, view };
+  cnTabs.push(t);
+  win.contentView.addChildView(view);
+  hookView(view, "cn");
+  view.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 1688 도우미 스크립트 오류: ${err?.message || err}`));
+  view.webContents.on("did-navigate", (_e, u) => { if (chat.isImUrl(u)) { chat.opened(u); view.webContents.navigationHistory.goBack(); } });
+  ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => view.webContents.on(ev, sendCnTabs));
+  view.webContents.loadURL(url);
+  if (activate) { cnCur = view; active = "cn"; }
+  layout(); sendCnTabs();
+  if (activate) send("nav", { tab: "cn", url });
+}
+function selectCnTab(id) {
+  const v = id === 0 ? cnView : cnTabs.find((x) => x.id === id)?.view;
+  if (!v) return;
+  cnCur = v; active = "cn"; layout(); sendCnTabs();
+  send("nav", { tab: "cn", url: v.webContents.getURL() });
+}
+function closeCnTab(id, quiet) {
+  const i = cnTabs.findIndex((x) => x.id === id);
+  if (i < 0) return; // 첫 탭(검색)은 닫지 않는다
+  const [t] = cnTabs.splice(i, 1);
+  win.contentView.removeChildView(t.view); t.view.webContents.close();
+  if (t.view === cnCur) cnCur = (cnTabs[i] || cnTabs[i - 1])?.view || cnView;
+  if (quiet) return;
+  layout(); sendCnTabs();
+  if (active === "cn") send("nav", { tab: "cn", url: (cnCur || cnView).webContents.getURL() });
+}
+
 function hookView(view, tab) {
   const wc = view.webContents;
-  const report = () => tab === active && (tab !== "clean" || view === cleanView) && send("nav", { tab, url: wc.getURL(), canBack: wc.navigationHistory.canGoBack() });
+  const report = () => tab === active && (tab !== "clean" || view === cleanView) && (tab !== "cn" || view === (cnCur || cnView)) && send("nav", { tab, url: wc.getURL(), canBack: wc.navigationHistory.canGoBack() });
   wc.on("did-navigate", report);
   wc.on("did-navigate-in-page", report);
   wc.on("did-finish-load", report);
@@ -246,6 +291,8 @@ function hookView(view, tab) {
         return { action: "allow", overrideBrowserWindowOptions: { width: 1360, height: 900, title: "🛍 타오바오 — 씨드핵", autoHideMenuBar: true, backgroundColor: "#ffffff" } };
       }
       // (2026-10-08) 예전에 "전체 사진" 뜻으로 region=0,360,0,360 을 붙였으나 1688이 더 이상 받지 않아(썸네일 깨짐·0건) 붙이지 않는다 — 1688 기본(물체 자동 선택)으로 검색
+      // 🗂 상품 페이지(detail.1688.com/offer/…)는 새 1688 탭으로 — 검색 결과는 첫 탭에 그대로 남는다(2026-10-13)
+      if (tab === "cn" && /(^|\.)detail\.1688\.com$/i.test(u.hostname) && /\/offer\//.test(u.pathname)) { openCnTab(u.href, disposition !== "background-tab"); return { action: "deny" }; }
       wc.loadURL(u.href);
     } catch { shell.openExternal(url); }
     return { action: "deny" };
@@ -379,8 +426,8 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   if (tab === "clean" && !cleanTabs.length) createClean();
   if (tab === "cn" && !cnView) createCn();
   if (tab === "chat") chat.show(true); // ⑥ 💬 문의 탭: 채팅 화면(처음이면 마지막 문의 대화를 연다)
-  layout(); sendTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
-  const v = tab === "wing" ? wingView : tab === "clean" ? cleanView : tab === "cn" ? cnView : tab === "chat" ? chat.view() : tab === "dash" ? dashView : null;
+  layout(); sendTabs(); if (tab === "cn") sendCnTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
+  const v = tab === "wing" ? wingView : tab === "clean" ? cleanView : tab === "cn" ? cnCur || cnView : tab === "chat" ? chat.view() : tab === "dash" ? dashView : null;
   send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "reco" ? "💡 키워드 추천" : tab === "name" ? "✍ 상품명 짓기" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
 });
 // 화면(panel.js)이 알려 주는 틀 크기: 왼쪽 사이드바 폭, Wing 오른쪽 칸 폭
@@ -408,14 +455,90 @@ async function dashAutoLogin(wc) {
 // 📊 판매 관리 — 로켓그로스 대시보드의 메뉴(margin·ads·coupons·stock)를 본문에 띄운다
 function openDash(id) {
   if (!dashView) {
-    dashView = new WebContentsView({ webPreferences: { partition: "persist:dash", contextIsolation: true, sandbox: true } });
+    // preload(dash.cjs) = 크롬 확장 대신 대시보드와 대화 · 대시보드 본문은 iframe(legacy.html) 안이라 하위 프레임에도 넣는다(요청은 dash:ext에서 대시보드 주소인지 확인)
+    dashView = new WebContentsView({ webPreferences: { partition: "persist:dash", contextIsolation: true, sandbox: true, backgroundThrottling: false, nodeIntegrationInSubFrames: true, preload: path.join(__dirname, "../preload/dash.cjs") } });
     win.contentView.addChildView(dashView);
     hookView(dashView, "dash");
+    // 대시보드 자체 왼쪽 메뉴(로켓그로스 · 마진 대시보드 · 광고 보고서…)는 숨긴다 — 앱 사이드바 "판매 관리"와 중복(2026-10-13)
+    //  대시보드는 embed=1 을 아직 처리하지 않음 → 앱에서 그 메뉴(aside, 대시보드에 하나뿐)만 가린다. 대시보드가 embed=1 을 처리하게 되면 이 줄은 지워도 됨
+    dashView.webContents.on("dom-ready", () => {
+      if (/[?&]embed=1/.test(dashView.webContents.getURL())) dashView.webContents.insertCSS("aside.w-64.bg-slate-950 { display: none !important; }").catch(() => {});
+    });
   }
   if (dashTab === id && dashView.webContents.getURL()) return;
   dashTab = id;
-  dashView.webContents.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(id)}&embed=1`);
+  const wc = dashView.webContents;
+  // 이미 대시보드 화면이 떠 있으면 페이지를 다시 불러오지 않고 메뉴만 바꾼다(탭 전환 지연 해결, 2026-10-13)
+  //  ① 대시보드에 seedhack-set-tab 메시지(배포 뒤 동작) ② 아직 옛 버전이면 숨겨진 왼쪽 메뉴의 같은 이름 버튼을 눌러 준다
+  if (/\/dashboard(\?|$)/.test(wc.getURL()) && !wc.isLoading()) {
+    const label = DASH_LABEL[id] || "";
+    wc.executeJavaScript(`(() => { window.postMessage({ type: "seedhack-set-tab", tab: ${JSON.stringify(id)} }, "*");
+      const b = [...document.querySelectorAll("aside button")].find((x) => x.textContent.includes(${JSON.stringify(label)})); if (b && !b.disabled) b.click(); return !!b; })()`, true)
+      .then((ok) => { if (!ok) wc.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(id)}&embed=1`); })
+      .catch(() => wc.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(id)}&embed=1`));
+    return;
+  }
+  wc.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(id)}&embed=1`);
 }
+const DASH_LABEL = { margin: "마진 대시보드", ads: "광고 보고서 분석", coupons: "쿠폰 관리", stock: "쿠팡 재고조회", costs: "원가 관리" };
+// 📢 광고센터 화면(광고 보고서 받기용) — Wing과 같은 세션(persist:wing)이라 보통 Wing 로그인으로 바로 들어가진다
+//  평소엔 숨김. 광고센터 로그인이 필요하면 대시보드 자리에 잠깐 보여 주고, 로그인되어 보고서 화면이 열리면 다시 숨기고 이어서 받는다
+const AD_REPORT_URL = "https://advertising.coupang.com/marketing-reporting/billboard/reports/pa";
+let adView = null;
+const adReady = (wc) => /^https:\/\/advertising\.coupang\.com\/marketing-reporting\//.test(wc.getURL());
+async function adPage(log) {
+  if (!adView || adView.webContents.isDestroyed()) {
+    adView = new WebContentsView({ webPreferences: { partition: "persist:wing", contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+    win.contentView.addChildView(adView);
+    adView.setVisible(false);
+    adView.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  }
+  const wc = adView.webContents;
+  if (adReady(wc) && !wc.isLoading()) return wc;
+  await wc.loadURL(AD_REPORT_URL).catch(() => {}); // 로그인 화면으로 넘어가도 오류 없이 계속
+  if (wc.isLoading()) await new Promise((r) => { const t = setTimeout(r, 10000); wc.once("did-stop-loading", () => { clearTimeout(t); r(); }); });
+  if (adReady(wc)) { await sleep(1500); return wc; }
+  log?.("광고센터 로그인이 필요합니다. 화면에 뜬 광고센터에서 로그인하면 자동으로 이어집니다.");
+  adView.setBounds(dashView?.getBounds() || { x: 0, y: 0, width: 1200, height: 800 }); adView.setVisible(true);
+  const t0 = Date.now();
+  while (Date.now() - t0 < 180000 && !adReady(wc)) await sleep(1000);
+  adView.setVisible(false);
+  if (!adReady(wc)) return null;
+  if (wc.isLoading()) await new Promise((r) => { const t = setTimeout(r, 10000); wc.once("did-stop-loading", () => { clearTimeout(t); r(); }); });
+  await sleep(1500);
+  log?.("광고센터 로그인 확인 완료. 광고 보고서 생성을 이어서 진행합니다.");
+  return wc;
+}
+// 📊 대시보드 → 확장 요청을 앱이 처리(Wing 정산 받기 등) — 대시보드 주소의 프레임에서 온 것만
+ipcMain.handle("dash:ext", async (e, message) => {
+  const from = e.senderFrame?.url || "";
+  if (!from.startsWith(DASHBOARD_URL)) return { ok: false, msg: "허용되지 않은 화면" };
+  if (!licensed()) return { ok: false, msg: "씨드핵 사용 승인이 필요해요" };
+  const frame = e.senderFrame;
+  return handleExtAction(message, {
+    wingSession: wingView.webContents.session,
+    adPage,
+    emit: (m) => { try { if (!frame.isDestroyed()) frame.send("dash:ext-event", m); } catch {} },
+    // Wing 화면이 wing.coupang.com(로그인된 화면)이어야 그 안에서 요청할 수 있음 — 로그인 화면이면 null
+    ensureWing: async () => {
+      const wc = wingView.webContents;
+      if (wc.isLoading()) await new Promise((r) => { const t = setTimeout(r, 8000); wc.once("did-stop-loading", () => { clearTimeout(t); r(); }); });
+      return /^https:\/\/wing\.coupang\.com\//.test(wc.getURL()) ? wc : null;
+    },
+    // Wing 로그인 초기화: 앱 Wing 화면의 쿠팡 쿠키를 지우고 Wing 첫 화면(로그인)으로
+    resetWing: async () => {
+      const ses = wingView.webContents.session, all = await ses.cookies.get({}).catch(() => []);
+      let removed = 0;
+      for (const c of all.filter((x) => String(x.domain || "").includes("coupang.com"))) {
+        const url = `https://${String(c.domain).replace(/^\./, "")}${c.path || "/"}`;
+        try { await ses.cookies.remove(url, c.name); removed++; } catch {}
+      }
+      wingView.webContents.loadURL(WING_HOME);
+      log("sys", `▶ 마진 대시보드에서 Wing 로그인 초기화 — 쿠키 ${removed}개 삭제 · Wing 로그인 메뉴에서 다시 로그인하세요`);
+      return { ok: true, removed, msg: `Wing 로그인 정보 초기화 완료 (${removed}개 쿠키 삭제)` };
+    },
+  });
+});
 // 🔎 키워드 분석의 쿠폰가 읽기: ② 쿠팡 탭에서 같은 검색어를 뒤에서 연다(지금 보는 화면은 그대로). coupang.cjs가 카드 가격을 수집함에 넣는다
 ipcMain.handle("kw:coupang", (_e, kw) => openCoupangSearch(kw));
 function openCoupangSearch(kw) {
@@ -436,16 +559,16 @@ async function waitCoupangRows(kw, since, ms) {
     await new Promise((r) => setTimeout(r, 400));
   }
 }
-const curView = () => (active === "wing" ? wingView : active === "cn" ? cnView : active === "chat" ? chat.view() : active === "dash" ? dashView : cleanView);
+const curView = () => (active === "wing" ? wingView : active === "cn" ? cnCur || cnView : active === "chat" ? chat.view() : active === "dash" ? dashView : cleanView);
 ipcMain.handle("nav:back", () => { const v = curView(); if (v?.webContents.navigationHistory.canGoBack()) v.webContents.navigationHistory.goBack(); });
 ipcMain.handle("nav:reload", () => curView()?.webContents.reload());
-ipcMain.handle("nav:home", () => (active === "wing" ? wingView.webContents.loadURL(WING_HOME) : active === "cn" ? cnView?.webContents.loadURL(CN_HOME) : active === "chat" ? null
+ipcMain.handle("nav:home", () => (active === "wing" ? wingView.webContents.loadURL(WING_HOME) : active === "cn" ? (cnCur || cnView)?.webContents.loadURL(CN_HOME) : active === "chat" ? null
   : active === "dash" ? dashView?.webContents.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(dashTab || "margin")}&embed=1`) : cleanView?.webContents.loadURL(COUPANG_HOME)));
 
 // ---------- 📦 1688 ----------
 function createCn(url = CN_HOME) {
   if (!cnView) {
-    cnView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, preload: path.join(__dirname, "../preload/cn.cjs") } });
+    cnView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/cn.cjs") } });
     win.contentView.addChildView(cnView);
     hookView(cnView, "cn");
     cnView.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 1688 도우미 스크립트 오류: ${err?.message || err}`));
@@ -463,8 +586,11 @@ function createCn(url = CN_HOME) {
     cnView.webContents.on("did-create-window", tbWin);
     // 판매자 연락 버튼이 같은 화면에서 채팅으로 넘어간 경우: 채팅은 💬 화면으로 옮기고 상품 화면은 되돌린다
     cnView.webContents.on("did-navigate", (_e, url) => { if (chat.isImUrl(url)) { chat.opened(url); cnView.webContents.navigationHistory.goBack(); } });
+    ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => cnView.webContents.on(ev, sendCnTabs));
   }
   cnView.webContents.loadURL(url);
+  cnCur = cnView; // 첫 탭에 무언가를 열면(🔍1688 이미지 검색 등) 첫 탭을 보여 준다
+  layout(); sendCnTabs();
 }
 // ---------- 💬 1688 판매자 문의 ----------
 const chat = initChat({
@@ -484,9 +610,9 @@ initDetail({
   // 📄 주소 칸의 쿠팡 상품 주소: 쿠팡 탭(사람이 보는 화면)에 새 탭으로 한 번 연다 — 그 화면을 읽고 끝나면 showDetail 로 돌아온다
   openCoupang: (url) => (win ? openCleanTab(url, true).view.webContents : null),
 });
-ipcMain.handle("chat:inquire", (e, p) => (cnView && e.sender === cnView.webContents ? chat.inquire({ offerId: String(p?.offerId || ""), title: String(p?.title || "") }) : { error: "1688 상품 화면에서만 됩니다" }));
+ipcMain.handle("chat:inquire", (e, p) => (isCnWc(e.sender) ? chat.inquire({ offerId: String(p?.offerId || ""), title: String(p?.title || "") }) : { error: "1688 상품 화면에서만 됩니다" }));
 ipcMain.handle("chat:state", () => chat.state());
-ipcMain.handle("cn:trmode", (e, cycle) => (cnView && e.sender === cnView.webContents ? (cycle ? chat.cycleSiteMode() : chat.siteMode()) : null)); // ⑤ 1688 사이트 번역 방식
+ipcMain.handle("cn:trmode", (e, cycle) => (isCnWc(e.sender) ? (cycle ? chat.cycleSiteMode() : chat.siteMode()) : null)); // ⑤ 1688 사이트 번역 방식
 ipcMain.handle("chat:act", (_e, { a, id } = {}) => {
   if (a === "show") chat.show(true);
   else if (a === "back") chat.show(false);
@@ -658,7 +784,7 @@ ipcMain.handle("cp:to1688", (e, p) => {
 });
 ipcMain.handle("cn:target", (e) => (fromCn(e) ? cnTarget : null));
 ipcMain.handle("cn:present", () => true); // 해커 화면이 기본(구 발표 모드) — 1688 화면에도 적용
-const fromCn = (e) => !!(cnView && e.sender === cnView.webContents) || !!(probeView && e.sender === probeView.webContents);
+const fromCn = (e) => !!(isCnWc(e.sender)) || !!(probeView && e.sender === probeView.webContents);
 
 // ---- 결과 목록 → 판매자 추천 TOP ----
 // 카드 글자(판매량·재구매율·연차·최소주문·운송비·배지)로 1차 점수 → "진짜 가격 확인"을 누르면 숨은 창에서 상위 후보의
@@ -688,7 +814,7 @@ function costNow() {
 }
 const pushRank = () => { const r = rankNow(); if (r && cnView) cnView.webContents.send("cn:rankUpdate", r); autoCheck(); return r; };
 ipcMain.handle("cn:rank", async (e, p) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnTarget) return { error: "리스트업에서 🔍1688로 들어온 검색이 아닙니다" };
+  if (!isCnWc(e.sender) || !cnTarget) return { error: "리스트업에서 🔍1688로 들어온 검색이 아닙니다" };
   const cards = (Array.isArray(p?.cards) ? p.cards : []).slice(0, 80).map((c, i) => parseCard(c.lines, { rank: i + 1, offerId: String(c.offerId || ""), img: c.img || "" }))
     .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
   // 1688 원문 제목이 중국어면 "같은 상품인지"(쿠팡 상품명·대표키워드 겹침)를 볼 수 없다 → 제목만 번역해(저장해 둔 번역 재사용) 판단에 쓴다. 8초 넘으면 번역 없이 진행
@@ -710,7 +836,7 @@ ipcMain.handle("cn:rank", async (e, p) => {
 });
 // 카드 하나만 진짜 옵션가 확인(보드의 "옵션가 확인" 버튼)
 ipcMain.handle("cn:probeOne", async (e, offerId) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
+  if (!isCnWc(e.sender) || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
   const id = String(offerId || ""); if (!/^\d{6,15}$/.test(id)) return { error: "상품 번호가 없습니다" };
   try {
     const r = await fastProbe(id);
@@ -721,7 +847,7 @@ ipcMain.handle("cn:probeOne", async (e, offerId) => {
 });
 // 진짜 가격 확인: 가격 모르는 상위 PROBE_MAX개를 숨은 창에서 차례로
 ipcMain.handle("cn:probe", (e) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
+  if (!isCnWc(e.sender) || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
   if (probeCur || probeQueue.length) return { ok: true, already: true };
   cnRank.captcha = false;
   probeQueue = cnRank.ranked.filter((x) => x.realPrice == null && x.offerId).slice(0, PROBE_MAX).map((x) => x.offerId);
@@ -800,7 +926,7 @@ function markProbe(offerId, r) {
 }
 // ---- AI 추천: 서버 중계(강사 키) → Claude. 앱이 읽은 숫자·글자만 보내고, AI는 후보 번호·옵션 번호·이유(한글)만 돌려준다 ----
 ipcMain.handle("cn:ai", async (e) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnRank?.ranked?.length) return { error: "먼저 결과 목록을 읽어야 합니다" };
+  if (!isCnWc(e.sender) || !cnRank?.ranked?.length) return { error: "먼저 결과 목록을 읽어야 합니다" };
   if (cnRank.aiBusy) return { ok: true, already: true };
   // 개발 실행 + Claude CLI 있음 → 구독 CLI로(개발자 시험용). 그 밖(배포판)은 서버 중계(강사 키, 수강생 승인·하루 한도)
   const useCli = !app.isPackaged && process.env.SIGNAL_AI !== "server" && cliAvailable();
@@ -844,8 +970,8 @@ ipcMain.handle("cn:ai", async (e) => {
 // 상품 페이지 상세 글·속성표에서 크기·무게·박스 수량 읽기 (리스트업 🚚 물류 칸 자동 입력용)
 ipcMain.handle("cn:specs", (e, p) => (fromCn(e) ? parseSpecs({ text: String(p?.text || "").slice(0, 20000), attrText: String(p?.attrText || "").slice(0, 4000), optionLabel: p?.optionLabel || "" }) : { found: false }));
 
-ipcMain.on("cn:captcha", (e) => { if (cnView && e.sender === cnView.webContents) { log("stop", "✕ 1688 보안 인증(슬라이더)이 떴습니다 — 1688 탭에서 직접 밀어 주세요. 프로그램은 대신 풀지 않습니다."); autoPause("1688 보안 인증"); } });
-ipcMain.on("cn:noResult", (e, why) => { if (cnView && e.sender === cnView.webContents && cnTarget?.auto) autoFail(String(why || "1688 결과 없음").slice(0, 80)); });
+ipcMain.on("cn:captcha", (e) => { if (isCnWc(e.sender)) { log("stop", "✕ 1688 보안 인증(슬라이더)이 떴습니다 — 1688 탭에서 직접 밀어 주세요. 프로그램은 대신 풀지 않습니다."); autoPause("1688 보안 인증"); } });
+ipcMain.on("cn:noResult", (e, why) => { if (isCnWc(e.sender) && cnTarget?.auto) autoFail(String(why || "1688 결과 없음").slice(0, 80)); });
 
 ipcMain.handle("cn:probeMode", (e) => !!(probeView && e.sender === probeView.webContents));
 ipcMain.on("cn:probeResult", (e, r) => {
@@ -867,13 +993,13 @@ ipcMain.on("cn:probeResult", (e, r) => {
   probeTimer = setTimeout(probeNext, probeGap());
 });
 ipcMain.handle("cn:pending", (e) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnPending || Date.now() - cnPending.ts > 10 * 60 * 1000) return null; // 로그인·인증을 거쳐 돌아와도 이어지게 10분
+  if (!isCnWc(e.sender) || !cnPending || Date.now() - cnPending.ts > 10 * 60 * 1000) return null; // 로그인·인증을 거쳐 돌아와도 이어지게 10분
   return cnPending; // 업로드가 끝났다고 알려 올 때까지 유지(페이지가 한 번 다시 열려도 이어서)
 });
-ipcMain.handle("cn:pendingDone", (e) => { if (cnView && e.sender === cnView.webContents) cnPending = null; });
+ipcMain.handle("cn:pendingDone", (e) => { if (isCnWc(e.sender)) cnPending = null; });
 // ✕ 1688 검색 취소: 잘못 누른 검색(예: 상세페이지 사진)을 멈춘다 — 올릴 사진·대상·옵션가 확인을 모두 비우고 1688 첫 화면으로
 ipcMain.handle("cn:cancel", (e) => {
-  if (!cnView || e.sender !== cnView.webContents) return;
+  if (!isCnWc(e.sender)) return;
   log("stop", `■ 1688 검색 취소 · ${cnTarget?.name || ""}`);
   cnPending = null; cnTarget = null; cnRank = null; probeStop();
   cnView.webContents.loadURL(CN_HOME);
@@ -959,10 +1085,10 @@ ipcMain.handle("cn:sku", async (e, p) => {
   }
   return out;
 });
-ipcMain.on("cn:log", (e, text) => { if (cnView && e.sender === cnView.webContents) log("dim", `  1688 · ${String(text).slice(0, 900)}`); });
+ipcMain.on("cn:log", (e, text) => { if (isCnWc(e.sender)) log("dim", `  1688 · ${String(text).slice(0, 900)}`); });
 // 상품 페이지에서 사람이 옵션을 직접 고르면 그 가격을 "확인됨"으로 — 추천 카드·원가 기준에 바로 반영
 ipcMain.on("cn:optPick", (e, p) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnRank) return;
+  if (!isCnWc(e.sender) || !cnRank) return;
   const c = cnRank.cards.find((o) => o.offerId === String(p?.offerId || "")), price = Number(p?.price);
   if (!c || !(price > 0)) return;
   Object.assign(c, { realPrice: price, priceSure: true, priceHow: "직접 고른 옵션", option: { label: String(p?.label || "").slice(0, 80), ko: "", dist: null } });
@@ -970,7 +1096,7 @@ ipcMain.on("cn:optPick", (e, p) => {
   pushRank();
 });
 ipcMain.handle("cn:pick", (e, p) => {
-  if (!cnView || e.sender !== cnView.webContents || !cnTarget) return { error: "넣을 리스트업 행이 없습니다 — 리스트업에서 🔍1688을 먼저 눌러 주세요" };
+  if (!isCnWc(e.sender) || !cnTarget) return { error: "넣을 리스트업 행이 없습니다 — 리스트업에서 🔍1688을 먼저 눌러 주세요" };
   const yuan = Number(p?.yuan);
   const url = String(p?.url || "");
   if (!/^https:\/\/([\w-]+\.)*1688\.com\//.test(url)) return { error: "1688 상품 주소가 아닙니다" };
@@ -980,9 +1106,10 @@ ipcMain.handle("cn:pick", (e, p) => {
   active = "list"; layout(); send("nav", { tab: "list", url: "리스트업 — 중국 원가·마진 계산" });
   return { ok: true };
 });
-ipcMain.handle("ctab:select", (_e, id) => selectCleanTab(id));
-ipcMain.handle("ctab:close", (_e, id) => closeCleanTab(id));
-ipcMain.handle("ctab:new", () => openCleanTab(COUPANG_HOME, true));
+// 탭 줄 버튼은 지금 보는 화면(쿠팡 검색 / 1688)의 탭에 적용
+ipcMain.handle("ctab:select", (_e, id) => { if (active === "cn") selectCnTab(id); else selectCleanTab(id); });
+ipcMain.handle("ctab:close", (_e, id) => { if (active === "cn") closeCnTab(id); else closeCleanTab(id); });
+ipcMain.handle("ctab:new", () => { if (active === "cn") openCnTab(CN_HOME, true); else openCleanTab(COUPANG_HOME, true); });
 ipcMain.on("cp:log", (e, text) => { if (isClean(e.sender)) log("dim", `  ${String(text).slice(0, 200)}`); });
 // 쿠팡 화면 카드의 "쿠팡 지표" 조회 — 클린 세션 화면에서 온 요청만 받는다. Wing 조회는 로그인된 Wing 화면에서.
 const fromClean = (e) => isClean(e.sender);

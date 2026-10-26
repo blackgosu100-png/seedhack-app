@@ -21,6 +21,7 @@
   "dependencies": {
     "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
+    "onnxruntime-node": "^1.30.0",
     "tesseract.js": "^7.0.0"
   },
   "build": {
@@ -45,6 +46,16 @@
             "x64"
           ]
         }
+      ],
+      "files": [
+        "src/**/*",
+        "package.json",
+        "!test/**",
+        "!dist/**",
+        "tools/ocr-mac/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/darwin/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/linux/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/win32/arm64/**"
       ]
     },
     "nsis": {
@@ -67,7 +78,9 @@
     "asarUnpack": [
       "node_modules/tesseract.js/**",
       "node_modules/tesseract.js-core/**",
-      "tools/ocr-mac/**"
+      "tools/ocr-mac/**",
+      "node_modules/onnxruntime-node/**",
+      "node_modules/onnxruntime-common/**"
     ]
   }
 }

@@ -10,30 +10,33 @@
 <link rel="stylesheet" href="aiscan.css">
 <link rel="stylesheet" href="detail.css">
 <link rel="stylesheet" href="reco.css">
+<link rel="stylesheet" href="name.css">
 </head>
 <body>
 <aside class="side" id="side" aria-label="메뉴">
   <div class="brand" title="씨드핵 — 매일 한 톨, 시스템처럼."><span class="sig"><i></i><i></i><i></i></span><div class="brand-t"><b class="mono">SEED<span class="hk">HACK</span><span class="cursor">_</span></b><span class="sub">씨드핵 <span class="ver" id="appVer"></span></span></div></div>
   <nav class="nav" id="nav" aria-label="화면">
     <div class="nav-sec">분석</div>
-    <button id="tReco" class="nav-item" type="button" data-view="reco" title="무엇을 팔지 막막할 때 — 로켓그로스가 적거나 해외배송이 많은 키워드를 매달 골라 둡니다"><span class="ic">💡</span><span class="lbl">키워드 추천</span></button>
-    <button id="tKw" class="nav-item" type="button" data-view="kw" title="키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"><span class="ic">🔎</span><span class="lbl">키워드 분석</span></button>
-    <button id="tCat" class="nav-item" type="button" data-view="cat" title="카테고리를 고르면 Wing 인기상품으로 판정"><span class="ic">🚦</span><span class="lbl">카테고리 진단</span></button>
+    <button id="tReco" class="nav-item" type="button" data-view="reco" title="무엇을 팔지 막막할 때 — 로켓그로스가 적거나 해외배송이 많은 키워드를 매달 골라 둡니다"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16a5 5 0 1 1 6 0 3.5 3.5 0 0 0-1 3 2 2 0 0 1-4 0 3.5 3.5 0 0 0-1-3M9.7 17h4.6M3 12h1M12 3v1M20 12h1M5.6 5.6l.7.7M18.4 5.6l-.7.7"/></svg></span><span class="lbl">키워드 추천</span></button>
+    <button id="tKw" class="nav-item" type="button" data-view="kw" title="키워드 하나로 쿠팡 상품의 실판매·쿠폰가·광고 가능성을 한 번에"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/></svg></span><span class="lbl">키워드 분석</span></button>
+    <button id="tCat" class="nav-item" type="button" data-view="cat" title="카테고리를 고르면 Wing 인기상품으로 판정"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><circle cx="17" cy="17" r="3"/></svg></span><span class="lbl">카테고리 진단</span></button>
     <div class="nav-sec">모으기</div>
-    <button id="tWing" class="nav-item on" type="button" data-view="wing" title="Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"><span class="ic">🔑</span><span class="lbl">Wing 로그인</span></button>
-    <button id="tClean" class="nav-item" type="button" data-view="clean" title="쿠키·로그인 없는 쿠팡 화면 — 개인화 없는 검색 순위"><span class="ic">🛒</span><span class="lbl">쿠팡 검색</span></button>
+    <button id="tWing" class="nav-item on" type="button" data-view="wing" title="Wing에 로그인해 두면 판매량·조회수를 받아 옵니다"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.9 12.1 19 4M17 6l2 2M14.5 8.5l2 2"/></svg></span><span class="lbl">Wing 로그인</span></button>
+    <button id="tClean" class="nav-item" type="button" data-view="clean" title="쿠키·로그인 없는 쿠팡 화면 — 개인화 없는 검색 순위"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="17" cy="19" r="2"/><path d="M17 17H6V3H4M6 5l14 1-1 7H6"/></svg></span><span class="lbl">쿠팡 검색</span></button>
     <div class="nav-sec">고르기</div>
-    <button id="tCol" class="nav-item" type="button" data-view="collect" title="쿠팡 화면에서 지표를 본 상품이 자동으로 쌓입니다"><span class="ic">📦</span><span class="lbl">수집함</span><b id="ccount" class="cnt gray">0</b></button>
-    <button id="tList" class="nav-item" type="button" data-view="list" title="고른 상품의 1688 원가·마진 계산"><span class="ic">📋</span><span class="lbl">리스트업</span><b id="lcount" class="cnt">0</b></button>
+    <button id="tCol" class="nav-item" type="button" data-view="collect" title="쿠팡 화면에서 지표를 본 상품이 자동으로 쌓입니다"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12 4 7.5M16 5.3l-8 4.5"/></svg></span><span class="lbl">수집함</span><b id="ccount" class="cnt gray">0</b></button>
+    <button id="tList" class="nav-item" type="button" data-view="list" title="고른 상품의 1688 원가·마진 계산"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 5.5 1.5 1.5 2.5-2.5M3.5 11.5 5 13l2.5-2.5M3.5 17.5 5 19l2.5-2.5M11 6h9M11 12h9M11 18h9"/></svg></span><span class="lbl">리스트업</span><b id="lcount" class="cnt">0</b></button>
     <div class="nav-sec">중국 소싱</div>
-    <button id="tCn" class="nav-item" type="button" data-view="cn" title="1688 — 리스트업 행의 🔍1688로 이미지 검색, 상품 페이지에서 '리스트업에 넣기'"><span class="ic">🇨🇳</span><span class="lbl">1688</span></button>
-    <button id="tChat" class="nav-item" type="button" data-view="chat" title="1688 판매자 문의 — 채팅 화면과 진행 상황(답이 오면 다음 질문을 자동으로 이어 보냄)"><span class="ic">💬</span><span class="lbl">판매자 문의</span><b id="chcount" class="cnt gray" hidden>0</b></button>
-    <button id="tDetail" class="nav-item" type="button" data-view="detail" title="1688 상세 이미지 → 한글 상세페이지 자동 생성"><span class="ic">📄</span><span class="lbl">상세페이지</span><b id="dcount" class="cnt gray" hidden>0</b></button>
+    <button id="tCn" class="nav-item" type="button" data-view="cn" title="1688 — 리스트업 행의 🔍1688로 이미지 검색, 상품 페이지에서 '리스트업에 넣기'"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg></span><span class="lbl">1688</span></button>
+    <button id="tChat" class="nav-item" type="button" data-view="chat" title="1688 판매자 문의 — 채팅 화면과 진행 상황(답이 오면 다음 질문을 자동으로 이어 보냄)"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20l1.3-3.9A9 8 0 1 1 7.7 19L3 20M8 10h8M8 14h5"/></svg></span><span class="lbl">판매자 문의</span><b id="chcount" class="cnt gray" hidden>0</b></button>
+    <button id="tDetail" class="nav-item" type="button" data-view="detail" title="1688 상세 이미지 → 한글 상세페이지 자동 생성"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zM9 9h1M9 13h6M9 17h6"/></svg></span><span class="lbl">상세페이지</span><b id="dcount" class="cnt gray" hidden>0</b></button>
+    <div class="nav-sec">상품 등록</div>
+    <button id="tName" class="nav-item" type="button" data-view="name" title="브랜드 + 타겟키워드 + 서브키워드 · 4~6단어로 검색되는 상품명 후보 3개 · 내 상품명 검사"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16v4M13.5 6.5l4 4"/></svg></span><span class="lbl">상품명 짓기</span></button>
     <div class="nav-sec">판매 관리</div>
-    <button id="tMargin" class="nav-item" type="button" data-view="dash" data-dash="margin" title="로켓그로스 마진 대시보드"><span class="ic">📊</span><span class="lbl">마진 대시보드</span></button>
-    <button id="tAds" class="nav-item" type="button" data-view="dash" data-dash="ads" title="쿠팡 광고 보고서 분석"><span class="ic">🎯</span><span class="lbl">광고 보고서</span></button>
-    <button id="tCoupons" class="nav-item" type="button" data-view="dash" data-dash="coupons" title="쿠폰 관리"><span class="ic">🎟️</span><span class="lbl">쿠폰 관리</span></button>
-    <button id="tStock" class="nav-item" type="button" data-view="dash" data-dash="stock" title="쿠팡 재고 조회"><span class="ic">🏬</span><span class="lbl">재고 조회</span></button>
+    <button id="tMargin" class="nav-item" type="button" data-view="dash" data-dash="margin" title="로켓그로스 마진 대시보드"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 16v-4M10 16V8M14 16v-6M18 16V5"/></svg></span><span class="lbl">마진 대시보드</span></button>
+    <button id="tAds" class="nav-item" type="button" data-view="dash" data-dash="ads" title="쿠팡 광고 보고서 분석"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9"/></svg></span><span class="lbl">광고 보고서</span></button>
+    <button id="tCoupons" class="nav-item" type="button" data-view="dash" data-dash="coupons" title="쿠폰 관리"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5v2M15 11v2M15 17v2M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2"/></svg></span><span class="lbl">쿠폰 관리</span></button>
+    <button id="tStock" class="nav-item" type="button" data-view="dash" data-dash="stock" title="쿠팡 재고 조회"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 17h10"/></svg></span><span class="lbl">재고 조회</span></button>
   </nav>
   <div class="side-foot">
     <div class="st" id="sWing" title="Wing 로그인 상태"><span class="dot"></span><span class="lbl" id="sWingT">Wing 확인 중</span></div>
@@ -66,24 +69,33 @@
     <div class="listup collect" id="collect" hidden>
       <div class="lu-bar">
         <b>📦 수집함</b>
-        <span class="muted" id="coInfo"></span>
-        <span class="mode" id="coMode"></span>
         <span class="spacer"></span>
-        <button id="coAdd" class="pri" type="button" disabled>☆ 선택 상품 리스트업 담기</button>
+        <!-- 가끔 쓰는 것(삭제)은 연하게 · 자주 쓰는 "리스트업 담기"는 맨 오른쪽(가독성 매뉴얼 2-14) -->
+        <button id="coDel" class="sec faint" type="button" disabled>선택 삭제</button>
         <button id="coXlsx" class="sec" type="button" title="지금 필터로 보이는 상품을 엑셀로">⬇ 보이는 목록 엑셀</button>
-        <button id="coDel" class="sec" type="button" disabled>선택 삭제</button>
+        <button id="coAdd" class="pri" type="button" disabled>☆ 선택 상품 리스트업 담기</button>
       </div>
-      <div class="co-filter" id="coFilter">
-        <label>검색어 <select id="fQuery"><option value="">전체</option></select></label>
+      <!-- 2026-10-13: 숫자 4개 · 검색어 + 빠른 칩 · 나머지 조건은 접기 -->
+      <div class="lu-top" id="coTop">
+        <div class="lu-nums" id="coNums"></div>
+        <div class="lu-row2">
+          <label class="co-q">검색어 <select id="fQuery"><option value="">전체</option></select></label>
+          <span class="lu-chips" id="coChips"></span>
+          <button id="coMoreT" class="lu-cfgt" type="button" aria-expanded="false" title="판매량 · 전환율 · 가격 · 리뷰 · 광고 · 배송 · 끼워넣기 조건 펼치기/접기"></button>
+          <span class="muted" id="coInfo"></span>
+        </div>
+        <div class="mode co-mode" id="coMode"></div>
+      </div>
+      <div class="co-filter" id="coFilter" hidden>
         <label>판매량 ≥ <input id="fSales" type="number" min="0" step="10" class="num" placeholder="0"></label>
         <label>전환율 ≥ <input id="fCvr" type="number" min="0" step="0.5" class="num" placeholder="0"> %</label>
         <label>가격 <input id="fPmin" type="number" min="0" step="1000" class="num" placeholder="최소"> ~ <input id="fPmax" type="number" min="0" step="1000" class="num" placeholder="최대"></label>
         <label>리뷰 ≤ <input id="fRev" type="number" min="0" step="50" class="num" placeholder="제한 없음"></label>
         <label>광고 <select id="fAd"><option value="">전체</option><option value="go">🟢 여유만</option><option value="gw">🟢🟡 여유·빠듯</option></select></label>
-        <label class="chk" title="순위는 낮은데 그 순위 기대치보다 1.5배 이상 팔리는 상품"><input id="fHidden" type="checkbox"> 🔥 숨은 강자만</label>
+        <label class="chk" hidden title="위쪽 🔥 숨은 강자 칩과 같음"><input id="fHidden" type="checkbox"> 🔥 숨은 강자만</label>
         <label>배송 <select id="fShip"><option value="">전체</option><option value="rocket">로켓 전체</option><option value="로켓배송">로켓배송</option><option value="판매자로켓">판매자로켓</option><option value="일반배송">일반배송</option><option value="해외배송">해외배송</option></select></label>
         <label title="순위에 비해 조회수가 기대치의 30%도 안 되는 상품 — 쿠팡이 중간에 끼워 노출한 자리로 추정">👀 끼워넣기 노출 <select id="fRookie"><option value="">함께 보기</option><option value="hide">제외</option><option value="only">끼워넣기만</option><option value="recent">끼워넣기 · 최근만</option></select></label>
-        <label class="chk" title="쿠팡 화면에서 📦 담기로 직접 담은 상품만"><input id="fPicked" type="checkbox"> 📌 내가 담은 것만</label>
+        <label class="chk" hidden title="위쪽 📌 내가 담은 것 칩과 같음"><input id="fPicked" type="checkbox"> 📌 내가 담은 것만</label>
         <label class="chk"><input id="fMetric" type="checkbox" checked> 지표 있는 상품만</label>
         <label class="chk"><input id="fNoAd" type="checkbox"> 광고 칸 제외</label>
         <label class="chk"><input id="fNoPb" type="checkbox" checked> 쿠팡 PB 제외</label>
@@ -96,15 +108,25 @@
     <div class="listup" id="listup" hidden>
       <div class="lu-bar">
         <b>📋 소싱 리스트업</b>
-        <span class="muted" id="luInfo"></span>
         <span class="lu-auto" id="luAuto" hidden></span>
         <span class="spacer"></span>
-        <label>원가 계수 <input id="cFx" type="number" step="10" class="num"> 원/¥</label>
-        <label>수수료 <select id="cFee"><option value="0.1188">부가세 포함 11.88%</option><option value="0.108">부가세 별도 10.8%</option></select></label>
-        <label>광고비 <input id="cAd" type="number" step="1" class="num"> %</label>
-        <button id="luView" class="sec" type="button" title="간단 보기: 핵심 칸만 / 전체: 대표님 양식 27열">전체 27열 보기</button>
         <button id="luAdd" class="sec" type="button">+ 빈 행</button>
+        <button id="luView" class="sec" type="button" title="간단 보기: 핵심 칸만 / 전체: 대표님 양식 27열">전체 27열 보기</button>
         <button id="luXlsx" class="pri" type="button">⬇ 엑셀로 저장</button>
+      </div>
+      <!-- 2026-10-13: 맨 위 숫자 4개(담은 상품·위안 입력 필요·계산 완료·확인 필요) + 접힌 계산 기준 + 상태 칩 -->
+      <div class="lu-top" id="luTop">
+        <div class="lu-nums" id="luNums"></div>
+        <div class="lu-row2">
+          <button id="luCfgT" class="lu-cfgt" type="button" aria-expanded="false" title="원가 계수 · 수수료 · 광고비 펼치기/접기"></button>
+          <span class="lu-cfg" id="luCfg" hidden>
+            <label>원가 계수 <input id="cFx" type="number" step="10" class="num"> 원/¥</label>
+            <label>수수료 <select id="cFee"><option value="0.1188">부가세 포함 11.88%</option><option value="0.108">부가세 별도 10.8%</option></select></label>
+            <label>광고비 <input id="cAd" type="number" step="1" class="num"> %</label>
+          </span>
+          <span class="lu-chips" id="luChips"></span>
+          <span class="muted" id="luInfo"></span>
+        </div>
       </div>
       <div class="lu-sel" id="luSel" hidden>
         <b id="luSelN"></b>
@@ -122,6 +144,7 @@
     </div>
     <div class="detail" id="detail" hidden></div>
     <div class="reco" id="reco" hidden></div>
+    <div class="namer" id="namer" hidden></div>
   </section>
 
   <aside class="panel" id="panel" aria-label="신호등 패널">
@@ -154,6 +177,8 @@
 
     <!-- 키워드 검색 모드 -->
     <div class="kwbox" id="kwBox">
+      <!-- 시작 화면(결과 없을 때만 보임 · body.p-empty) — 키워드 추천 시작 화면과 같은 검은 상자 -->
+      <div class="hero-t"><span class="hero-kick">SEEDHACK · 키워드 분석</span><h3>키워드 하나로 쿠팡 시장을 한눈에</h3><p>월매출 · 리뷰 적은데 팔리는 상품 · 1688 원가 상한까지 한 번에 보여 드려요</p></div>
       <form class="kwform" id="kwForm">
         <input id="kwInput" type="search" placeholder="상품 키워드 (예: 빨래바구니)" autocomplete="off" aria-label="키워드">
         <select id="kwPages" aria-label="검색 페이지 수" title="페이지마다 Wing 검색 1회(하루 예산 사용)">
@@ -163,10 +188,13 @@
       </form>
       <div class="kwstat" id="kwStat"><span class="dim">키워드를 검색하면 네이버 월검색량·서브키워드 후보와 쿠팡 상품 실지표가 나옵니다.</span></div>
       <div class="subs" id="kwSubs"></div>
+      <div class="kwhist" id="kwHist"></div>
+      <small class="hero-s">검색 1번 = Wing 조회 1번 · 아래 최근 검색은 조회 없이 바로 열려요</small>
     </div>
 
     <!-- 카테고리 인기상품 모드 -->
     <div class="catbox" id="catBox" hidden>
+      <div class="hero-t"><span class="hero-kick">SEEDHACK · 카테고리 진단</span><h3>카테고리 하나를 고르면 시장을 진단해요</h3><p>Wing 인기상품 60개로 시장 크기 · 1위 리뷰 · 원가 여유를 바로 봐요</p></div>
       <div class="catpick">
         <div class="cascade" id="catCascade">
           <select id="catL1" aria-label="1차 카테고리"><option value="">1차</option></select>
@@ -177,6 +205,8 @@
         </div>
         <input id="catQ" type="search" placeholder="또는 이름으로 찾기 · 예: 빨래건조대" autocomplete="off" spellcheck="false">
         <div id="catList" class="catlist" hidden></div>
+        <small class="hero-s">이름으로 찾거나 1차 → 4차를 고른 뒤 ▶ 진단을 누르세요</small>
+        <div class="kwhist" id="catHistBar"></div>
       </div>
       <div class="ctrl">
         <div class="seg" role="group" aria-label="판정 기준">
@@ -197,6 +227,7 @@
     </div>
 
     <div class="ctrl2">
+      <button id="adFold" class="ghost adfold" type="button" aria-expanded="false" title="광고 가정(광고 함/안 함 · 클릭비용 · 광고전환) 펼치기·접기">⚙ 광고 함</button>
       <div class="seg" role="group" aria-label="광고 계획" title="광고를 하려면 마진 30% 이상, 안 하면 20% 이상이 기준입니다. 리스트업 광고비에도 같이 적용됩니다.">
         <button id="adOn" type="button" aria-pressed="true">광고 함</button>
         <button id="adOff" type="button" aria-pressed="false">광고 안 함</button>
@@ -230,7 +261,9 @@
 <script src="rg.js"></script>
 <script src="listup.js"></script>
 <script src="detail.js"></script>
+<script src="thumb.js"></script>
 <script src="reco.js"></script>
+<script src="name.js"></script>
 <script src="collect.js"></script>
 <script src="gate.js"></script>
 </body>

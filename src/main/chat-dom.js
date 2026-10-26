@@ -83,6 +83,7 @@ function chatDom(kind, arg) {
       if (!t || t.length > 400 || !zh.test(t) || /^[\d\s:\-\/.年月日]+$/.test(t)) continue;
       if (/^inline/.test(getComputedStyle(e).display)) continue;
       if ([...e.querySelectorAll(BLOCK)].some((d) => zh.test(d.innerText || ""))) continue; // 더 안쪽 블록이 있으면 그쪽을 쓴다
+      if (r.right <= ir.left + 5) e.setAttribute("data-sg-list", ""); // 입력칸 왼쪽 = 대화 상대 목록(칸 높이가 고정이라 아래 한글을 붙이면 겹침) — 이미 번역한 칸에도 붙임
       if (e.getAttribute("data-sg-src") === t) continue; // 이미 번역함
       if (!e.dataset.sgTr) e.dataset.sgTr = String(++window.__sgTrN);
       out.push({ id: e.dataset.sgTr, text: t });
@@ -109,8 +110,9 @@ function chatDom(kind, arg) {
     return out;
   }
   if (kind === "trapply") {
-    if (!document.getElementById("sg-tr-style")) {
-      const st = document.createElement("style"); st.id = "sg-tr-style";
+    if (document.getElementById("sg-tr-style")?.dataset.v !== "2") { // v2: 대화 상대 목록 규칙 추가 — 예전 규칙이 붙은 화면도 새로 바꿔 끼움
+      document.getElementById("sg-tr-style")?.remove();
+      const st = document.createElement("style"); st.id = "sg-tr-style"; st.dataset.v = "2";
       // 보기 방식은 <html data-sg-tr-mode="below|replace|off"> (문의 도우미 상자의 🌐 버튼이 바꾼다)
       // replace: 중국어 글자를 0 크기로 숨기고 한글만 보인다(마우스를 올리면 원문 말풍선 도움말). 페이지 글자(innerText)는 그대로라 답 읽기엔 영향 없음
       st.textContent = [
@@ -121,6 +123,9 @@ function chatDom(kind, arg) {
         // 사이트: 줄을 늘리지 않게 — 한글로는 제자리(inline), 아래 한글은 작게
         '[data-sg-site][data-sg-ko]::after{margin-top:1px;padding-top:0;border-top:0;font-size:11px;line-height:1.35;font-weight:400;white-space:normal}',
         'html[data-sg-tr-mode="replace"] [data-sg-site][data-sg-ko]::after{display:inline;white-space:normal}',
+        // 대화 상대 목록: "아래 한글"이어도 한 줄 그대로 한글로 바꿔 보여 준다(겹침 방지, 2026-10-13) · 넘치면 … · 마우스를 올리면 중국어
+        'html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko], html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko] *{font-size:0 !important;line-height:0 !important}',
+        'html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko]::after{display:block;margin:0;padding:0;border:0;color:inherit;font-weight:inherit;font-size:var(--sg-fs,13px) !important;line-height:var(--sg-lh,1.5) !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       ].join("\n");
       (document.head || document.documentElement).appendChild(st);
     }

@@ -4,7 +4,7 @@
 .loc-wrap { position: relative; width: 100%; overflow: hidden; }
 .loc-img { width: 100%; height: auto; max-width: none !important; }
 .loc-layer { position: absolute; display: flex; align-items: center; line-height: 1.18; font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; box-sizing: border-box; padding: 0 .12em; word-break: keep-all; overflow-wrap: normal; }
-.loc-layer.role-pill, .loc-layer.role-badge { padding: 0 .5em; }
+.loc-layer.role-pill, .loc-layer.role-badge, .loc-layer.is-boxed { padding: 0 .5em; }
 .loc-text { display: block; max-width: 100%; }
 /* 메인컷 */
 .sec.hero { padding: 0 !important; }
@@ -18,6 +18,7 @@
 .lh-points span { font-size: 24px; font-weight: 600; color: var(--lh-accent-ink); }
 .lh-sep { width: 2px; height: 20px; background: var(--lh-accent); display: inline-block; }
 .lh-fill { position: absolute; left: 0; right: 0; -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 78%, transparent 100%), linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%); -webkit-mask-composite: source-in; }
+.lh-fill.full { -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 85%, transparent 100%); -webkit-mask-composite: source-over; }
 .lh-wrap.band { height: auto !important; }
 .lh-wrap.band .lh-text { position: relative; left: auto; right: auto; top: auto !important; padding: 56px 40px 44px; }
 .lh-wrap.band .lh-img { width: 100%; }
@@ -28,3 +29,7 @@
 .lb-title + .lb-sub { margin-top: .45em; }
 .lh-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .lh-badge { font-size: 22px; font-weight: 800; padding: 6px 16px; border-radius: 999px; background: var(--lh-accent-ink); color: #ffffff; }
+/* v12 히어로: 상품명이 상품 페이지 첫 줄답게 크게(띠 위 64px, 사진 위 60px) — "분쇄기"만 작게 보이던 것 */
+.lh-wrap.band .lh-name { font-size: 64px; margin-top: 14px; }
+.lh-wrap:not(.band) .lh-name { font-size: 60px; }
+.lh-wrap.band .lh-sub { font-size: 26px; margin-top: 16px; }

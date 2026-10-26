@@ -37,18 +37,22 @@
       shipT: o.ex?.ship || o.ship || null, shipSrc: o.ex?.ship ? "wing" : "page" };
   }
 
+  // 열 순서: ☑ → 번호 → 사진(가독성 매뉴얼 2-14) · 머리글은 값과 같은 쪽 정렬(2-13)
   const COLS = [
-    ["sel", "", 34], ["img", "", 52], ["name", "상품명", 260], ["query", "검색어", 110], ["when", "담은 날", 96], ["rank", "노출 순위", 66], ["organic", "실제 순위", 66], ["ri", "순위 대비 판매", 96], ["p", "판매가", 82],
+    ["sel", "", 34], ["no", "No.", 38], ["img", "", 52], ["name", "상품명", 260], ["query", "검색어", 110], ["when", "담은 날", 96], ["rank", "노출 순위", 66], ["organic", "실제 순위", 66], ["ri", "순위 대비 판매", 96], ["p", "판매가", 82],
     ["reviews", "리뷰", 66], ["sales", "28일 판매", 82], ["rev", "판매액", 82], ["views", "28일 조회", 82], ["cvr", "전환율", 66],
     ["ad", "광고 판정", 84], ["shipT", "배송", 84], ["seen", "지표 받은 날", 86],
   ];
   const SORTABLE = new Set(["ri", "name", "query", "when", "rank", "organic", "p", "reviews", "sales", "rev", "views", "cvr", "ad", "seen"]);
+  const ALIGN = { img: "a-c", name: "a-l", query: "a-l", when: "a-l", ad: "a-l", shipT: "a-c", no: "a-r" }; // 나머지(숫자)는 오른쪽
+  let cols = COLS; // 묶음 보기에서는 검색어·담은 날 열을 뺀다(묶음 머리에 있음)
 
   function head() {
-    $("coHead").innerHTML = `<tr>${COLS.map(([k, h, w]) => {
-      if (k === "sel") return `<th class="no" style="width:${w}px"><input type="checkbox" id="coAll" title="보이는 상품 모두 선택"></th>`;
+    $("coHead").innerHTML = `<tr>${cols.map(([k, h, w]) => {
+      if (k === "sel") return `<th class="sel" style="width:${w}px"><input type="checkbox" id="coAll" title="보이는 상품 모두 선택"></th>`;
       const arrow = sort.k === k ? (sort.dir < 0 ? " ▼" : " ▲") : "";
-      return `<th style="min-width:${w}px" class="${SORTABLE.has(k) ? "sortable" : ""}" data-k="${k}">${h}${arrow}</th>`;
+      // 상품명만 남는 폭을 다 받는다(오른쪽 빈칸 없이) · 나머지 열은 정해진 폭 그대로(2026-10-13)
+      return `<th style="${k === "name" ? `min-width:${w}px` : `width:${w}px;min-width:${w}px`}" class="${SORTABLE.has(k) ? "sortable" : ""} ${ALIGN[k] || "a-r"}" data-k="${k}">${h}${arrow}</th>`;
     }).join("")}</tr>`;
   }
 
@@ -136,6 +140,7 @@
       if (noAd && o.adSlot) return false;
       if (!slots && noPb && o.pb) return false; // 순위 보기에서는 PB 칸도 그대로(PB 표시) — 순서가 끊기지 않게
       if ($("fHidden").checked && !(o.ri >= 1.5)) return false;
+      if (chip === "gap" && !(o.sales > 0 && o.reviews != null && o.reviews < 300 && !o.pb)) return false;
       const sh = $("fShip").value;
       if (sh === "rocket" && !(o.shipT === "로켓배송" || o.shipT === "판매자로켓")) return false;
       if (sh && sh !== "rocket" && o.shipT !== sh) return false;
@@ -158,7 +163,7 @@
     });
   }
 
-  function rowHtml(o) {
+  function rowHtml(o, n) {
     const link = `https://www.coupang.com/vp/products/${o.pid}${o.vid ? `?vendorItemId=${o.vid}` : ""}`;
     const ts = o.ex?.ts;
     const days = ts ? Math.floor((Date.now() - ts) / 864e5) : null;
@@ -166,24 +171,29 @@
     const adTag = "";
     const newTag = o.rookie ? `<span class="tag rookie${o.recent ? " recent" : ""}" title="이 순위라면 보통 조회 약 ${won(o.views / o.vi)}인데 실제 ${won(o.views)}(${Math.round(o.vi * 100)}%) — 쿠팡이 중간에 끼워 노출한 자리로 추정${o.recent ? " · 같은 화면에서 최근 등록 쪽 상품" : ""}">👀 끼워넣기${o.recent ? " · 최근" : ""}</span>` : "";
     // (최근 등록 끼워넣기는 rookie recent 클래스로 더 진하게)
-    return `<tr data-pid="${esc(o.pid)}" class="${sel.has(o.pid) ? "sel" : ""}">
-      <td class="no"><input type="checkbox" data-pid="${esc(o.pid)}" ${sel.has(o.pid) ? "checked" : ""}></td>
-      <td class="thumb">${o.img ? `<img loading="lazy" src="${esc(imgUrl(o.img))}" alt="">` : ""}</td>
-      <td class="nm"><a href="${esc(link)}" target="_blank" title="${esc(o.name)}">${esc(o.name || `상품 ${o.pid} (정보 없음)`)}</a> ${pbTag}${adTag}${newTag}</td>
-      <td title="${esc((o.queries || []).join(", "))}">${esc(o.query || "")}${(o.queries || []).length > 1 ? ` <small>+${o.queries.length - 1}</small>` : ""}</td>
-      <td class="when" title="${o.when ? new Date(o.when).toLocaleString("ko-KR") : ""}${o.picked ? " · 📦 담기로 직접 담음" : ""}">${o.picked ? `<span class="pk">📌</span>` : ""}${whenText(o.when)}</td>
-      <td class="num rk" title="${o.rank ? `'${esc(o.rankQ)}' 화면에서 위에서 ${o.rank}번째 (광고 포함)` : "쿠팡 화면에서 본 순위 없음"}">${o.rank ?? ""}</td>
+    const gap = o.sales > 0 && o.reviews != null && o.reviews < 300 && !o.pb; // 틈: 리뷰 300개 미만인데 팔리는 상품
+    const C = {
+      sel: `<td class="sel"><input type="checkbox" data-pid="${esc(o.pid)}" ${sel.has(o.pid) ? "checked" : ""}></td>`,
+      no: `<td class="num rn">${n ?? ""}</td>`,
+      img: `<td class="thumb">${o.img ? `<img loading="lazy" src="${esc(imgUrl(o.img))}" alt="">` : ""}</td>`,
+      name: `<td class="nm"><a href="${esc(link)}" target="_blank" title="${esc(o.name)}">${esc(o.name || `상품 ${o.pid} (정보 없음)`)}</a> ${pbTag}${adTag}${newTag}${o.picked ? ` <span class="tag pk" title="쿠팡 화면에서 📦 담기로 직접 담음">📌 담음</span>` : ""}</td>`,
+      query: `<td title="${esc((o.queries || []).join(", "))}">${esc(o.query || "")}${(o.queries || []).length > 1 ? ` <small>+${o.queries.length - 1}</small>` : ""}</td>`,
+      when: `<td class="when" title="${o.when ? new Date(o.when).toLocaleString("ko-KR") : ""}${o.picked ? " · 📦 담기로 직접 담음" : ""}">${whenText(o.when)}</td>`,
+    };
+    const rest = `<td class="num rk" title="${o.rank ? `'${esc(o.rankQ)}' 화면에서 위에서 ${o.rank}번째 (광고 포함)` : "쿠팡 화면에서 본 순위 없음"}">${o.rank ?? ""}</td>
       <td class="num rk" title="${o.adSlot ? "광고 칸 — 실제 순위에서 제외" : o.organic ? `광고를 뺀 실제 순위 ${o.organic}위` : ""}">${o.adSlot ? `<span class="tag adslot">AD</span>` : o.organic ?? ""}</td>
       <td class="num ${o.ri >= 1.5 ? "good strong" : o.ri != null && o.ri < 0.67 ? "muted" : ""}" title="${o.ri != null ? `같은 검색어 ${o.riN}개 상품의 '순위별 판매 추세'로 보면 이 순위의 기대 판매는 약 ${won(o.sales / o.ri)}개 — 실제 ${won(o.sales)}개` : "같은 검색어에서 순위·판매가 있는 상품이 5개 이상 모이면 계산됩니다"}">${o.ri == null ? "" : `${o.ri >= 1.5 ? "🔥 " : ""}${o.ri.toFixed(1)}배`}</td>
-      <td class="num ${o.page?.price != null && o.p === o.page.price ? "cpt" : ""}" title="${o.page?.price != null && o.p === o.page.price ? "쿠팡 화면 가격(쿠폰·즉시할인 적용)" : "Wing 판매가 — 쿠팡 화면에서 아직 못 읽음"}">${won(o.p)}</td>
-      <td class="num ${o.page?.reviews != null ? "cpt-r" : ""}" title="${o.page?.reviews != null ? "쿠팡 화면 리뷰 수" : "Wing 리뷰 수"}">${won(o.reviews)}</td>
-      <td class="num strong">${won(o.sales)}</td>
+      <td class="num" title="${o.page?.price != null && o.p === o.page.price ? "쿠팡 화면 가격(쿠폰·즉시할인 적용)" : "Wing 판매가 — 쿠팡 화면에서 아직 못 읽음"}">${won(o.p)}</td>
+      <td class="num ${gap ? "good strong" : ""}" title="${gap ? "틈 · 리뷰 300개 미만인데 팔리는 상품 · " : ""}${o.page?.reviews != null ? "쿠팡 화면 리뷰 수" : "Wing 리뷰 수"}">${won(o.reviews)}</td>
+      <td class="num big">${won(o.sales)}</td>
       <td class="num">${man(o.rev)}</td>
       <td class="num">${won(o.views)}</td>
       <td class="num ${o.cvr != null && o.cvr >= 0.08 ? "good" : ""}">${o.cvr == null ? "" : (o.cvr * 100).toFixed(1) + "%"}</td>
       <td class="adj ${o.ad || ""}" title="${o.ad ? `1개 팔 때 광고비 약 ${won(o.cpa)}원 · 1개 마진 약 ${won(o.unitM)}원(판매가×${Math.round(MARGIN * 100)}% 가정) · ${window.AdModel.note()}` : ADS ? "" : "광고 안 함으로 설정됨"}">${o.ad ? AD[o.ad] : !ADS && o.cvr != null ? `<span class="muted">광고 안 함</span>` : ""}</td>
       <td class="c" title="${o.shipSrc === "wing" ? "Wing 조회값(정확)" : o.shipT ? `쿠팡 화면 배지·도착일로 판단${o.shipDays != null ? ` · 도착까지 ${o.shipDays}일` : ""}` : ""}">${o.shipT ? `<span class="tag ship ${SHIPC[o.shipT]}">${o.shipT}</span>` : ""}</td>
-      <td class="num ${days != null && days >= 7 ? "bad" : "muted"}" title="${ts ? new Date(ts).toLocaleString("ko-KR") : "지표를 아직 받지 않음"}">${days == null ? "" : days === 0 ? "오늘" : `${days}일 전`}</td></tr>`;
+      <td class="num ${days != null && days >= 7 ? "bad" : "muted"}" title="${ts ? new Date(ts).toLocaleString("ko-KR") : "지표를 아직 받지 않음"}">${days == null ? "" : days === 0 ? "오늘" : `${days}일 전`}</td>`;
+    const head6 = cols.slice(0, cols.findIndex(([k]) => k === "rank")).map(([k]) => C[k] || "").join("");
+    return `<tr data-pid="${esc(o.pid)}" class="${sel.has(o.pid) ? "sel" : ""}">${head6}${rest}</tr>`;
   }
 
   // 날짜 표시·묶음 (맥 다운로드처럼): 오늘 14:32 · 어제 · 이번 주 요일 · 그 전은 날짜
@@ -203,29 +213,59 @@
     const today = dayStart(Date.now()), day = dayStart(t);
     return day === today ? "오늘" : day === today - DAY ? "어제" : today - day < 7 * DAY ? "이번 주" : today - day < 30 * DAY ? "이번 달" : "이전";
   }
+  // 📂 묶음(2026-10-13 대표님 결정): 날짜 구간(오늘·어제·이번 주…) 안에 검색어 묶음. 검색어는 마지막으로 본 시각의 구간에 한 번만
+  //  묶음 머리를 누르면 접기/펼치기 · 처음엔 "오늘" 구간과 가장 최근 검색어를 펼침 · 묶음 안은 쿠팡 순위 순서
+  const kgOpen = new Map(); // 검색어 → 펼침 여부(사용자가 누른 것만)
+  const isOpen = (kw, sec, first) => (kgOpen.has(kw) ? kgOpen.get(kw) : sec === "오늘" || first); // 기본: 오늘 구간 + 가장 최근 검색어 하나
+  let all = []; // 필터를 통과한 전체(엑셀·숫자용) — view 는 화면에 그린 줄 순서(범위 선택용)
+  const byRank = (a, b) => ((a.organic || a.rank || 1e9) - (b.organic || b.rank || 1e9)) || ((b.sales ?? -1) - (a.sales ?? -1));
+  function groupedHtml(list) {
+    const groups = new Map();
+    list.forEach((o) => { const kw = o.query || "검색어 없음"; if (!groups.has(kw)) groups.set(kw, []); groups.get(kw).push(o); });
+    const gs = [...groups.entries()].map(([kw, arr]) => ({ kw, arr: arr.sort(byRank), t: Math.max(...arr.map((o) => o.when || 0)) })).sort((a, b) => b.t - a.t);
+    let html = "", lastSec = null; view = [];
+    const n = cols.length;
+    gs.forEach((g, gi) => {
+      const sec = dayGroup(g.t);
+      if (sec !== lastSec) { const inSec = gs.filter((x) => dayGroup(x.t) === sec); html += `<tr class="day"><td colspan="${n}"><b>${sec}</b>검색어 ${inSec.length}개 · 상품 ${won(inSec.reduce((a, x) => a + x.arr.length, 0))}개</td></tr>`; lastSec = sec; }
+      const open = isOpen(g.kw, sec, gi === 0 || (gi === 1 && dayGroup(gs[0].t) === "오늘" && gs[0].arr.length < 5)), selN = g.arr.filter((o) => sel.has(o.pid)).length;
+      html += `<tr class="kg ${open ? "open" : ""}" data-kg="${esc(g.kw)}"><td colspan="${n}"><span class="arr">${open ? "▾" : "▸"}</span><b>${esc(g.kw)}</b><small>${g.arr.length}개 · ${esc(whenText(g.t))}${selN ? ` · 선택 ${selN}개` : ""}</small></td></tr>`;
+      if (open) g.arr.forEach((o, i) => { view.push(o); html += rowHtml(o, i + 1); });
+    });
+    return html;
+  }
   function render() {
-    view = sorted(filtered());
+    all = sorted(filtered());
+    const grouped = sort.k === "when" && !$("fQuery").value; // 최근순 + 검색어 전체일 때만 묶음
+    cols = grouped ? COLS.filter(([k]) => k !== "query" && k !== "when") : COLS;
     head();
-    if (sort.k === "when") { // 최근순일 때만 날짜 묶음 줄을 끼운다
-      let last = null, html = "";
-      for (const o of view) {
-        const g = dayGroup(o.when);
-        if (g !== last) { const n = view.filter((x) => dayGroup(x.when) === g).length; html += `<tr class="day"><td colspan="${COLS.length}"><b>${g}</b>${n}개</td></tr>`; last = g; }
-        html += rowHtml(o);
-      }
-      $("coBody").innerHTML = html;
-    } else $("coBody").innerHTML = view.map(rowHtml).join("");
+    if (grouped) $("coBody").innerHTML = groupedHtml(all);
+    else { view = all; $("coBody").innerHTML = view.map((o, i) => rowHtml(o, i + 1)).join(""); }
     $("coEmpty").hidden = items.length > 0;
     $("coTable").hidden = items.length === 0;
-    $("coFilter").hidden = items.length === 0;
-    const withM = items.filter((o) => o.sales != null).length;
-    $("coInfo").textContent = items.length ? `전체 ${items.length}개 (지표 ${withM}개) · 표시 ${view.length}개${sel.size ? ` · 선택 ${sel.size}개` : ""}` : "";
+    $("coTop").hidden = items.length === 0;
+    $("coFilter").hidden = items.length === 0 || !moreOpen;
+    renderTop();
+    $("coInfo").textContent = items.length ? `표시 ${won(all.length)}개${sel.size ? ` · 선택 ${sel.size}개` : ""}` : "";
     $("coAdd").disabled = !sel.size; $("coDel").disabled = !sel.size;
     $("coAdd").textContent = sel.size ? `☆ 선택 ${sel.size}개 리스트업 담기` : "☆ 선택 상품 리스트업 담기";
-    const all = $("coAll");
-    if (all) all.checked = view.length > 0 && view.every((o) => sel.has(o.pid));
+    const ca = $("coAll"); // (이름 all 은 위의 "필터 통과 전체"가 씀)
+    if (ca) ca.checked = view.length > 0 && view.every((o) => sel.has(o.pid));
   }
 
+  // 맨 위 숫자 4개 · 빠른 칩(하나만 고름) · ⚙ 조건 더 보기
+  let moreOpen = false, chip = "all";
+  const CHIPS = [["all", "전체"], ["hot", "🔥 숨은 강자"], ["gap", "틈 · 리뷰 적은데 팔림"], ["picked", "📌 내가 담은 것"]];
+  function renderTop() {
+    const today = dayStart(Date.now());
+    const withM = items.filter((o) => o.sales != null).length, todayN = items.filter((o) => o.when && dayStart(o.when) === today).length, hot = items.filter((o) => o.ri >= 1.5).length;
+    $("coNums").innerHTML = [["수집한 상품", items.length, ""], ["판매량 있는 상품", withM, ""], ["오늘 본 상품", todayN, ""], ["🔥 숨은 강자", hot, "g"]]
+      .map(([l, v, c]) => `<div class="lu-num ${c}"><span>${l}</span><b>${won(v)}</b></div>`).join("");
+    $("coChips").innerHTML = CHIPS.map(([k, l]) => `<button type="button" class="lu-chip ${chip === k ? "on" : ""}" data-chip="${k}">${l}</button>`).join("");
+    const on = ["fSales", "fCvr", "fPmin", "fPmax", "fRev"].filter((id) => $(id).value !== "").length + ($("fAd").value ? 1 : 0) + ($("fShip").value ? 1 : 0) + ($("fRookie").value ? 1 : 0) + ($("fNoAd").checked ? 1 : 0) + (!$("fMetric").checked ? 1 : 0) + (!$("fNoPb").checked ? 1 : 0);
+    $("coMoreT").textContent = `⚙ 조건 더 보기${on ? ` · ${on}개 적용 중` : " · 판매량 · 전환율 · 가격 · 리뷰 · 광고 · 배송"} ${moreOpen ? "▴" : "▾"}`;
+    $("coMoreT").classList.toggle("act", on > 0);
+  }
   function fillQueries() {
     const counts = {}, latest = {};
     items.forEach((o) => (o.queries || []).forEach((q) => { counts[q] = (counts[q] || 0) + 1; latest[q] = Math.max(latest[q] || 0, o.when || 0); }));
@@ -235,7 +275,11 @@
     $("fQuery").value = counts[cur] ? cur : "";
   }
 
-  async function load() {
+  // 탭을 오갈 때마다 5,000개를 다시 받아 그리지 않는다 — 바뀐 게 없으면(dirty 아님) 그대로 둔다(2026-10-13 탭 전환 지연)
+  let dirty = true;
+  async function load({ force = false } = {}) {
+    if (loaded && !dirty && !force) return;
+    dirty = false;
     const st = await api.invoke("settings:get");
     MARGIN = st.ads === false ? 0.2 : 0.3; ADS = st.ads !== false;
     items = (await api.invoke("collect:get")).map(derive);
@@ -250,9 +294,17 @@
 
   // ----- 이벤트 -----
   $("coFilter").addEventListener("input", render);
+  $("fQuery").addEventListener("change", render); // 검색어 칸은 위쪽 줄로 옮김
+  $("coChips").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-chip]"); if (!b) return;
+    chip = chip === b.dataset.chip ? "all" : b.dataset.chip;
+    $("fHidden").checked = chip === "hot"; $("fPicked").checked = chip === "picked";
+    render();
+  });
+  $("coMoreT").addEventListener("click", () => { moreOpen = !moreOpen; $("coMoreT").setAttribute("aria-expanded", String(moreOpen)); render(); });
   $("fReset").addEventListener("click", () => {
     ["fSales", "fCvr", "fPmin", "fPmax", "fRev"].forEach((id) => ($(id).value = ""));
-    $("fQuery").value = ""; $("fAd").value = ""; $("fMetric").checked = true; $("fPicked").checked = false; $("fNoAd").checked = false; $("fNoPb").checked = true; $("fHidden").checked = false; $("fRookie").value = ""; $("fShip").value = ""; lastFq = null;
+    $("fQuery").value = ""; $("fAd").value = ""; $("fMetric").checked = true; $("fPicked").checked = false; $("fNoAd").checked = false; $("fNoPb").checked = true; $("fHidden").checked = false; $("fRookie").value = ""; $("fShip").value = ""; lastFq = null; chip = "all";
     render();
   });
   $("coHead").addEventListener("click", (e) => {
@@ -269,6 +321,8 @@
   let lastIdx = null;
   $("coBody").addEventListener("click", (e) => {
     if (e.target.closest("a")) return;
+    const kg = e.target.closest("tr[data-kg]");
+    if (kg) { const kw = kg.dataset.kg, sec = kg.previousElementSibling ? null : null; kgOpen.set(kw, !kg.classList.contains("open")); lastIdx = null; render(); return; }
     const tr = e.target.closest("tr[data-pid]");
     if (!tr) return;
     const idx = view.findIndex((o) => o.pid === tr.dataset.pid);
@@ -282,8 +336,8 @@
     render();
   });
   $("coXlsx").addEventListener("click", async () => {
-    if (!view.length) return;
-    const rows = view.map((o) => ({ pid: o.pid, name: o.name, query: $("fQuery").value || o.query || "", rank: o.rank, organic: o.organic, adSlot: o.adSlot,
+    if (!all.length) return;
+    const rows = all.map((o) => ({ // 접힌 묶음까지 필터를 통과한 전부 pid: o.pid, name: o.name, query: $("fQuery").value || o.query || "", rank: o.rank, organic: o.organic, adSlot: o.adSlot,
       price: o.p, reviews: o.reviews, rocket: o.rocket, ship: o.shipT, pb: o.pb, sales: o.sales, rev: o.rev, views: o.views, cvr: o.cvr, ad: o.ad, cpa: o.cpa,
       ts: o.ex?.ts || null, img: o.img, url: `https://www.coupang.com/vp/products/${o.pid}${o.vid ? `?vendorItemId=${o.vid}` : ""}` }));
     $("coXlsx").disabled = true;
@@ -297,7 +351,7 @@
     b.classList.remove("arm");
     await api.invoke("collect:remove", [...sel]);
     sel.clear();
-    await load();
+    await load({ force: true });
   });
   $("coAdd").addEventListener("click", async () => {
     const picked = items.filter((o) => sel.has(o.pid));
@@ -338,8 +392,9 @@
   let t = null;
   api.on("collect:changed", ({ count }) => {
     $("ccount").textContent = count;
+    dirty = true; // 숨겨져 있으면 다음에 열 때 한 번만 다시 받는다
     if ($("collect").hidden) return;
-    clearTimeout(t); t = setTimeout(load, 1000);
+    clearTimeout(t); t = setTimeout(() => load(), 1000);
   });
 
   window.Collect = { load };

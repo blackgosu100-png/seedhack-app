@@ -102,7 +102,7 @@
   const descOf = (k) => (k.ai?.desc ? `<small>${esc(k.ai.desc)}</small>` : "");
   const cpUrl = (x) => `https://www.coupang.com/vp/products/${encodeURIComponent(x.pid)}${x.vid ? `?vendorItemId=${encodeURIComponent(x.vid)}` : ""}`; // 앱 안 쿠팡 탭(새 탭)으로 열림 — main setWindowOpenHandler
   const tile = (x, i, gi) => `<a class="rp-p ${i === gi ? "gapon" : ""}" href="${esc(cpUrl(x))}" target="_blank" title="쿠팡 상품 페이지 열기 — ${esc(x.name)}"><img src="${esc(imgUrl(x.img))}" alt="" loading="lazy"><span class="no">${i + 1}위</span>${x.famous ? `<span class="gapb br" title="키워드 DB에서 브랜드 이름으로 많이 검색되는 브랜드 — 리뷰가 적어도 이름값으로 팔려서 틈으로 보지 않아요">브랜드</span>` : i === gi ? `<span class="gapb" title="리뷰 300개 미만인데 팔리는 상품">틈</span>` : ""}
-    <div class="i"><div class="pn" title="${esc(x.name)}">${esc(x.name)}</div><div class="pp">${won(x.price)}원${x.priceSrc === "vid" ? `<small class="nc" title="쿠팡 검색 화면에는 이 상품의 다른 옵션(${won(x.pagePrice)}원)이 떠 있어요. 옵션마다 가격이 달라 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">옵션 다름</small>` : x.priceSrc === "odd" ? `<small class="nc" title="쿠팡 화면에서 읽은 ${won(x.pagePrice)}원이 Wing 판매가와 너무 달라(단위가격 오독 의심) Wing 판매가(쿠폰·즉시할인 전)를 썼어요">확인 필요</small>` : x.priceSrc && x.priceSrc !== "page" ? `<small class="nc" title="이 검색어의 쿠팡 화면을 읽지 못해 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">쿠폰 전</small>` : x.listPrice > x.price ? `<s title="Wing 판매가(할인 전)">${won(x.listPrice)}</s>` : ""}</div><div class="kv"><span>판매</span><b>${won(x.sales)}개</b></div><div class="kv"><span>리뷰</span><span>${won(x.reviews)}</span></div></div><span class="go">↗</span></a>`;
+    <div class="i"><div class="pn" title="${esc(x.name)}">${esc(x.name)}</div><div class="pp">${won(x.price)}원${x.priceSrc === "vid" ? `<small class="nc" title="쿠팡 검색 화면에는 이 상품의 다른 옵션(${won(x.pagePrice)}원)이 떠 있어요. 옵션마다 가격이 달라 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">옵션 다름</small>` : x.priceSrc === "odd" ? `<small class="nc" title="쿠팡 화면에서 읽은 ${won(x.pagePrice)}원이 Wing 판매가와 너무 달라(단위가격 오독 의심) Wing 판매가(쿠폰·즉시할인 전)를 썼어요">확인 필요</small>` : x.priceSrc && x.priceSrc !== "page" && x.priceSrc !== "detail" ? `<small class="nc" title="이 검색어의 쿠팡 화면을 읽지 못해 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">쿠폰 전</small>` : x.listPrice > x.price ? `<s title="Wing 판매가(할인 전)${x.priceSrc === "detail" ? " · 이 옵션의 쿠팡 상품 페이지에서 읽은 가격" : ""}">${won(x.listPrice)}</s>` : ""}</div><div class="kv"><span>판매</span><b>${won(x.sales)}개</b></div><div class="kv"><span>리뷰</span><span>${won(x.reviews)}</span></div></div><span class="go">↗</span></a>`;
   function bigCard(k, i) {
     const h = hy.get(k.kw), m = money(h), w = warnOf(h), g = h.gap;
     const top3 = h.items.slice(0, 3), gi = g ? top3.findIndex((x) => String(x.pid) === String(g.pid) && String(x.vid) === String(g.vid)) : -1;
@@ -384,7 +384,7 @@
     const o = t.closest("[data-open]"); if (o) { open[o.dataset.open] = !open[o.dataset.open]; render(); return; }
     const src = t.closest("button[data-src]"); if (src) { add1688(src.dataset.src); return; }
     const k = t.closest("button[data-kw]");
-    if (k) { $("kwInput").value = k.dataset.kw; $("tKw").click(); $("kwForm").requestSubmit(); } // 🔎 키워드 분석으로 넘겨 쿠팡 실판매·쿠폰가 확인
+    if (k) { $("kwInput").value = k.dataset.kw; $("kwInput").dataset.src = "reco"; $("tKw").click(); $("kwForm").requestSubmit(); } // src=reco: 키워드 분석 최근 검색에 남기지 않음(2026-10-13 대표님 결정) // 🔎 키워드 분석으로 넘겨 쿠팡 실판매·쿠폰가 확인
   });
   root.addEventListener("change", (e) => {
     if (e.target.id === "rcSeason") { opt.noSeason = e.target.checked; refine(); }

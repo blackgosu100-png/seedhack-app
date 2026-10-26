@@ -25,6 +25,7 @@ export const VISION_SYSTEM = `당신은 쿠팡 상세페이지 제작팀의 사�
 - product_visible: 입력 [상품] 본체가 사진에 얼마나 보이는지 — "full"(전체가 잘림 없이), "partial"(일부만, 가장자리에서 잘림·다른 물건에 가려짐), "none"(거의 안 보임). 다른 가전·소품만 크게 보이면 none.
 - product_bbox: 상품 본체가 차지하는 영역 {x,y,w,h}(이미지 기준 0~1, 왼쪽 위 0,0). 안 보이면 {x:0,y:0,w:0,h:0}.
 - other_brand_prominent: 다른 회사 제품·브랜드 로고(가전·정수기 등)가 상품보다 눈에 띄면 true.
+- endorser: 연예인·운동선수(메달·국가대표 옷)·유명 모델이 홍보대사처럼 상품과 함께 나오거나(서명·"代言人" 글 포함) 얼굴이 크게 나오는 광고 사진이면 true. 손만 나오거나 얼굴이 작게 일반 사용 장면이면 false. — 초상권 문제로 상세페이지에서 뺀다.
 - any_logo_visible: 크기와 상관없이 브랜드 로고·상표 글자가 하나라도 보이면 true(스피커·가전·포장의 작은 로고 포함).
 - callout_points: product_only 가 true 인 사진에서만, 배경을 지운 누끼(같은 크기) 기준 0~1 좌표(x 가로, y 세로)로 눈에 띄는 부품·특징 지점 3~5개와 그 이름(한국어 10자 이내, 예: "접이 관절", "미끄럼 방지 발"). 사진에 실제로 보이는 지점만. product_only 가 아니면 빈 배열.
 - text_pos: has_text 가 true 일 때 글자가 사진의 어느 가장자리 20% 안에 있는지 — "top"|"bottom"|"left"|"right", 가운데에 있으면 "center"(그 사진은 쓰기 어려움), 글자가 없으면 null.
@@ -48,6 +49,7 @@ export const VISION_SCHEMA = {
       product_bbox: item({ x: { type: "number" }, y: { type: "number" }, w: { type: "number" }, h: { type: "number" } }),
       other_brand_prominent: { type: "boolean", description: "다른 회사 제품·로고가 상품보다 눈에 띄는가" },
       any_logo_visible: { type: "boolean", description: "작게라도 브랜드 로고·상표 글자가 보이는가" },
+      endorser: { type: "boolean", description: "연예인·운동선수·유명 모델이 홍보대사처럼 나오는 광고 사진인가(초상권)" },
       callout_points: { type: "array", maxItems: 5, items: item({ x: { type: "number" }, y: { type: "number" }, label: { type: "string", description: "부품 이름 10자 이내" } }), description: "product_only 사진의 부품 지점(누끼 기준 0~1). 아니면 빈 배열" },
       shows: { type: "string", description: "사진에 보이는 것 한 줄, 30자 이내" },
       caption_title: { type: "string", description: "18자 이내" },
@@ -86,7 +88,7 @@ export function normalizeVisionItem(r, id) {
   const product_bbox = vis && vis !== "none" ? { x: c01(bb.x), y: c01(bb.y), w: c01(bb.w), h: c01(bb.h) } : null;
   const callout_points = product_only ? (Array.isArray(r?.callout_points) ? r.callout_points : []).map((p) => ({ x: Math.min(1, Math.max(0, Number(p?.x) || 0)), y: Math.min(1, Math.max(0, Number(p?.y) || 0)), label: clip(p?.label, 12) })).filter((p) => p.label).slice(0, 5) : [];
   const badCap = BAD_CAPTION_RE.test(`${r?.caption_title || ""} ${r?.caption_desc || ""}`);
-  return { id: S(id ?? r?.id), usable, score, has_text: !!r?.has_text, has_logo: !!r?.has_logo, text_pos, subject, product_only, callout_points, ...(vis ? { product_visible: vis, product_bbox, other_brand_prominent: !!r?.other_brand_prominent } : {}), ...(typeof r?.any_logo_visible === "boolean" ? { any_logo_visible: r.any_logo_visible } : {}), shows: clip(r?.shows, 40),
+  return { id: S(id ?? r?.id), usable, score, has_text: !!r?.has_text, has_logo: !!r?.has_logo, text_pos, subject, product_only, callout_points, ...(vis ? { product_visible: vis, product_bbox, other_brand_prominent: !!r?.other_brand_prominent } : {}), ...(r?.endorser === true ? { endorser: true } : {}), ...(typeof r?.any_logo_visible === "boolean" ? { any_logo_visible: r.any_logo_visible } : {}), shows: clip(r?.shows, 40),
     caption_title: usable && !badCap ? clip(r?.caption_title, 24) : "", caption_desc: usable && !badCap ? clip(r?.caption_desc, 60) : "", role: usable ? role : "skip", ...(badCap ? { caption_dropped: true } : {}) };
 }
 
@@ -99,7 +101,7 @@ export async function reviewPhotos({ items = [], product = {}, log = () => {}, m
   for (let i = 0; i < list.length; i += batch) {
     const part = list.slice(i, i + batch);
     log("dim", `  👁 사진 검수 ${i + 1}~${i + part.length}/${list.length} (Claude CLI·${model}·Read)`);
-    const r = await runStructured({ system: VISION_SYSTEM, schema: VISION_SCHEMA, text: renderVisionInput(part, product), model, timeoutMs, allowedTools: ["Read"] });
+    const r = await runStructured({ purpose: "vision", system: VISION_SYSTEM, schema: VISION_SCHEMA, text: renderVisionInput(part, product), model, timeoutMs, allowedTools: ["Read"] });
     calls++;
     if (r?.error) { error = r.error; log("dim", `  👁 사진 검수 실패 · ${r.error}`); break; }
     costUsd += Number(r.costUsd) || 0;
@@ -125,7 +127,7 @@ export async function locateCallouts({ file, labels = [], product = {}, box = nu
   if (!cliAvailable()) return { ok: false, error: "Claude CLI가 없습니다", points: [] };
   const text = [`[상품] ${product.title_ko || ""}`, `[사진] ${file}`, `[부품 라벨] ${labels.map((l, i) => `${i + 1}. ${l}`).join(" / ")}`, ...(box ? [`[제품 영역] x ${box.x.toFixed(2)}~${(box.x + box.w).toFixed(2)}, y ${box.y.toFixed(2)}~${(box.y + box.h).toFixed(2)} — 모든 점은 이 영역 안, 실제 그 부품 위에 찍을 것(빈 배경 금지)`] : []), "각 라벨의 위치를 찍어 주세요."].join("\n");
   log("dim", `  👁 지시선 좌표 요청 (Claude CLI·${model}·Read) · 라벨 ${labels.length}개`);
-  const r = await runStructured({ system: CALLOUT_SYSTEM, schema: { type: "object", additionalProperties: false, required: ["callout_points"], properties: CALLOUT_SCHEMA_PART }, text, model, timeoutMs, allowedTools: ["Read"] });
+  const r = await runStructured({ purpose: "callout", system: CALLOUT_SYSTEM, schema: { type: "object", additionalProperties: false, required: ["callout_points"], properties: CALLOUT_SCHEMA_PART }, text, model, timeoutMs, allowedTools: ["Read"] });
   if (r?.error) return { ok: false, error: r.error, points: [], elapsedMs: Date.now() - t0 };
   const points = (r.result.callout_points || []).map((p) => ({ x: Math.min(1, Math.max(0, Number(p.x) || 0)), y: Math.min(1, Math.max(0, Number(p.y) || 0)), part: clip(p.part, 20) })).filter((p) => p.part);
   return { ok: true, points, costUsd: r.costUsd ?? null, elapsedMs: Date.now() - t0, model: r.model };
@@ -148,7 +150,7 @@ export async function reviewScenes({ items = [], product = {}, log = () => {}, m
   const schema = { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: item({ id: { type: "string" }, ...SCENE_CHECK_PART, note: { type: "string" } }) } } };
   const text = [`[상품] ${product.title_ko || ""}`, ...list.map((x, i) => `${i + 1}. id=${x.id} · 경로: ${x.file}`), "모든 사진을 열어 보고 id 마다 판정해 주세요."].join("\n");
   log("dim", `  👁 장면 ${list.length}장 상품 보임 검수 (Claude CLI·${model}·Read)`);
-  const r = await runStructured({ system: SCENE_CHECK_SYSTEM, schema, text, model, timeoutMs, allowedTools: ["Read"] });
+  const r = await runStructured({ purpose: "scene-check", system: SCENE_CHECK_SYSTEM, schema, text, model, timeoutMs, allowedTools: ["Read"] });
   if (r?.error) return { ok: false, items: [], error: r.error, elapsedMs: Date.now() - t0 };
   const c01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
   const out = (r.result.items || []).map((x) => ({ id: String(x.id), product_visible: ["full", "partial", "none"].includes(x.product_visible) ? x.product_visible : "partial", product_bbox: x.product_bbox ? { x: c01(x.product_bbox.x), y: c01(x.product_bbox.y), w: c01(x.product_bbox.w), h: c01(x.product_bbox.h) } : null, other_brand_prominent: !!x.other_brand_prominent, any_logo_visible: !!x.any_logo_visible, note: clip(x.note, 60) }));

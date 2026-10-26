@@ -738,6 +738,7 @@ export function groupTextBlocks(boxes, { gapK = 1.2 } = {}) {
       const gap = Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w);
       if (gap > gapK * Math.max(a.h, b.h)) continue;
       if (isNumberText(a.text) !== isNumberText(b.text)) continue; // 숫자 상자는 따로(그대로 둘 것이라)
+      { const ta = String(a.text || "").trim(), tb = String(b.text || "").trim(); let k = 0; while (k < Math.min(ta.length, tb.length) && ta[ta.length - 1 - k] === tb[tb.length - 1 - k]) k++; if (k >= 2 && a.members.length === 1 && b.members.length === 1) continue; } // 끝말이 같은 나란한 라벨(3.2毫米大葱碎 / 4毫米大葱碎)은 각각 따로 — 그릇마다 하나씩인 캡션
       const [l, r] = a.x <= b.x ? [a, b] : [b, a];
       const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
       items[i] = { ...a, x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y, text: `${l.text} ${r.text}`, conf: Math.min(a.conf ?? 1, b.conf ?? 1), members: [...a.members, ...b.members] };
@@ -769,6 +770,49 @@ export function assignRoles(blocks, { imgH = 1000 } = {}) {
   });
 }
 
+// v13 정렬·역할을 배치로(2026-10-13 일반화 검증 — 탄소강 풀아웃 아이콘 표 오른쪽 칸 라벨이 "이미지 오른쪽 절반 → 오른쪽 정렬"로 잡혀 칸 테두리 밖으로 넘친 것)
+//  · 한 줄에 나란히 놓인 비슷한 크기의 짧은 글(아이콘 표·칸 라벨, 2개 이상) → 가운데 정렬. 그 줄들이 장에서 가장 큰 글이라 title 이 됐으면 label(제목이 아니라 칸 이름)
+//  · 세로로 쌓인 줄(가로 겹침, 줄 간격 < 1.5줄) → 왼쪽 끝·가운데·오른쪽 끝 중 가장 잘 맞는 쪽(흩어짐 < 이미지 폭 3%)
+//  · 혼자인 줄은 textStyle 추정 그대로. 기울어진 글·숫자는 건드리지 않는다
+// blocks: [{ x,y,w,h, th?, text, role, angle?, style:{ align } }] → 같은 배열(새 객체)
+export function inferLayout(blocks, { imgW = 1000 } = {}) {
+  const H_ = (b) => b.th ?? b.h, cy = (b) => b.y + b.h / 2;
+  const out = blocks.map((b) => ({ ...b, style: { ...(b.style || {}) } }));
+  const ok = out.filter((b) => !b.angle && !b.vertical && b.role !== "number" && b.style);
+  const short = (b) => Array.from(String(b.text || "").replace(/\s/g, "")).length <= 10;
+  const rowOf = new Set();
+  for (const a of ok) {
+    if (rowOf.has(a) || !short(a)) continue;
+    const row = ok.filter((b) => short(b) && Math.abs(cy(b) - cy(a)) < Math.min(H_(a), H_(b)) * 0.5 && Math.max(H_(a), H_(b)) <= Math.min(H_(a), H_(b)) * 1.3);
+    // 서로 가로로 떨어져 있어야 한 줄의 여러 칸(같은 줄을 OCR 이 둘로 자른 것은 붙어 있다 — 글자 높이보다 넓게 떨어진 것만)
+    const sorted = [...row].sort((p, q) => p.x - q.x), apart = sorted.every((b, i) => !i || b.x - (sorted[i - 1].x + sorted[i - 1].w) > Math.max(H_(b), H_(sorted[i - 1])));
+    if (row.length < 2 || !apart) continue;
+    for (const b of row) { rowOf.add(b); b.style.align = "center"; if (b.role === "title") b.role = "label"; }
+  }
+  const used = new Set();
+  const sorted = ok.filter((b) => !rowOf.has(b)).sort((p, q) => p.y - q.y);
+  for (const a of sorted) {
+    if (used.has(a)) continue;
+    const st = [a];
+    for (const b of sorted) { if (used.has(b) || st.includes(b)) continue; const p = st[st.length - 1]; const ov = Math.min(p.x + p.w, b.x + b.w) - Math.max(p.x, b.x); if (b.y >= p.y && b.y - (p.y + p.h) < Math.max(H_(p), H_(b)) * 1.5 && ov > Math.min(p.w, b.w) * 0.3) st.push(b); }
+    if (st.length < 2) continue;
+    st.forEach((b) => used.add(b));
+    const spread = (f) => { const v = st.map(f); return Math.max(...v) - Math.min(...v); };
+    const cand = [["left", spread((b) => b.x)], ["center", spread((b) => b.x + b.w / 2)], ["right", spread((b) => b.x + b.w)]].sort((p, q) => p[1] - q[1]);
+    if (cand[0][1] < imgW * 0.03) st.forEach((b) => { b.style.align = cand[0][0]; });
+    // 같은 높이(±25%) 줄이 3개 이상 쌓인 목록(사양 칸·설명 줄) → 역할·크기·굵기 하나로(글자 높이 몇 px 차이로 한 줄만 제목·굵게 되던 것 — 탄소강 풀아웃 d11 사양 칸)
+    const hs = st.map(H_).sort((p, q) => p - q);
+    if (st.length >= 3 && hs[hs.length - 1] <= hs[0] * 1.25) {
+      const med = (a) => [...a].sort((p, q) => p - q)[a.length >> 1], cnt = {};
+      st.forEach((b) => { cnt[b.role] = (cnt[b.role] || 0) + (b.role === "title" ? 0.5 : 1); });
+      const role = Object.entries(cnt).sort((p, q) => q[1] - p[1])[0][0];
+      const size = med(st.map((b) => Number(b.style.fontSizePx) || Math.round(H_(b) * 0.92))), weight = med(st.map((b) => Number(b.style.fontWeight) || 400));
+      st.forEach((b) => { b.role = role; b.style.fontSizePx = size; b.style.fontWeight = weight; b.list = true; });
+    }
+  }
+  return out;
+}
+
 const dist3 = (a, b) => (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])) / 3;
 const pxc = (bm, x, y) => { const i = (y * bm.w + x) * 4; return [bm.data[i], bm.data[i + 1], bm.data[i + 2]]; };
 const hexOf = (c) => toHex(c);
@@ -795,7 +839,20 @@ export function textStyle(bm, rect, { imgW = bm.w } = {}) {
   // 글자색: 잉크 픽셀 중 배경에서 가장 먼 쪽 절반의 평균(안티앨리어싱 가장자리 제외)
   ink.sort((a, b) => dist3(b, bg) - dist3(a, bg));
   const core = ink.slice(0, Math.max(1, Math.floor(ink.length / 2)));
-  const color = core.length ? avg(core) : [34, 34, 34];
+  let color = core.length ? avg(core) : [34, 34, 34], outline = null;
+  // 외곽선·그림자 글자(주황 채움 + 두꺼운 검은 테두리, 대파 d17): 잉크가 서로 먼 두 색 무리로 갈리면, 바탕과 맞닿은 비율이 낮은 쪽(안쪽 = 채움)을 글자색으로
+  // — 테두리가 더 많아도 테두리는 바깥(바탕 옆)에 있다
+  if (ink.length >= 40) {
+    let a = ink[0], b = ink[ink.length - 1], A = [], B = [];
+    for (let it = 0; it < 8; it++) { A = []; B = []; for (const c of ink) (dist3(c, a) <= dist3(c, b) ? A : B).push(c); if (!A.length || !B.length) break; a = avg(A); b = avg(B); }
+    if (A.length && B.length && dist3(a, b) > 80 && Math.min(A.length, B.length) > ink.length * 0.12) {
+      const edgeFrac = (m) => { let n = 0, e = 0; for (let y = y0 + 1; y < y1 - 1; y++) for (let x = x0 + 1; x < x1 - 1; x++) { const c = pxc(bm, x, y); if (dist3(c, bg) <= 60 || dist3(c, m) > dist3(c, m === a ? b : a)) continue; n++; if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => dist3(pxc(bm, x + dx, y + dy), bg) <= 60)) e++; } return n ? e / n : 1; };
+      const chroma = (c) => Math.max(...c) - Math.min(...c);
+      outline = null;
+      const ea = edgeFrac(a), eb = edgeFrac(b); // v13 둘 다 무채색이고 경계 비율 차이가 작으면(얇은 테두리) 픽셀이 많은 쪽이 채움 — 어두운 판 위 흰 글이 "어두운 글 + 흰 테두리"로 뒤집히던 것(컵홀더 d09)
+      color = chroma(a) - chroma(b) > 60 ? a : chroma(b) - chroma(a) > 60 ? b : Math.abs(ea - eb) < 0.15 ? (A.length >= B.length ? a : b) : ea <= eb ? a : b; outline = color === a ? b : a; // 색 있는 채움 + 무채색 테두리면 색 쪽(경계 비율은 반쯤 섞인 가장자리 픽셀 때문에 흔들린다)
+    }
+  }
   runs.sort((a, b) => a - b);
   const stroke = runs.length ? runs[Math.floor(runs.length / 2)] : 0;
   const h = y1 - y0;
@@ -803,7 +860,7 @@ export function textStyle(bm, rect, { imgW = bm.w } = {}) {
   const fontWeight = strokeRatio >= 0.14 ? 800 : strokeRatio >= 0.1 ? 700 : strokeRatio >= 0.075 ? 500 : 400;
   const cx = (x0 + x1) / 2;
   const align = Math.abs(cx - imgW / 2) < imgW * 0.06 ? "center" : cx < imgW / 2 ? "left" : "right";
-  return { color: hexOf(color), colorBGR: color, bg: hexOf(bg), fontWeight, fontSizePx: Math.round(h * 0.92), align, strokeRatio: +strokeRatio.toFixed(3), inkRatio: total ? +(inkN / total).toFixed(3) : 0 };
+  return { color: hexOf(color), colorBGR: color, ...(outline ? { outline: hexOf(outline) } : {}), bg: hexOf(bg), fontWeight, fontSizePx: Math.round(h * 0.92), align, strokeRatio: +strokeRatio.toFixed(3), inkRatio: total ? +(inkN / total).toFixed(3) : 0 };
 }
 
 // 알약 배너·테두리 감지: 글자 상자 위·아래로 나가며 "가로로 길게 같은 색인 줄"(테두리 선 또는 채움 경계)을 찾고, 좌우로도 같은 색 테두리를 찾는다.
@@ -1030,8 +1087,699 @@ export function fillPatch(bm, rect, { mode = "interp", color = null, stats = nul
     const t = out === 0 ? 1 : feather > 0 ? Math.max(0, 1 - out / feather) : 0;
     if (t <= 0) continue;
     const m = model(x, y), i = (y * W + x) * 4;
-    for (let c = 0; c < 3; c++) bm.data[i + c] = Math.round(bm.data[i + c] * (1 - t) + m[c] * t);
+    for (let c = 0; c < 3; c++) bm.data[i + c] = Math.max(0, Math.min(255, Math.round(bm.data[i + c] * (1 - t) + m[c] * t))); // Coons 면은 0~255 를 넘을 수 있다 — 안 자르면 Buffer 가 감싸서 하늘색 얼룩(커피 랙 d07)
     bm.data[i + 3] = 255; n++;
   }
   return { seam: sn ? seam / sn : 0, n, undo() { for (let y = fy0; y < fy1; y++) backup.copy(bm.data, (y * W + fx0) * 4, (y - fy0) * (fx1 - fx0) * 4, (y - fy0 + 1) * (fx1 - fx0) * 4); } };
+}
+
+
+// ─────────── localize v11: 지우기 품질(2026-10-12 대표님 "총체적 난국" — 흐린 사각형·잔상) ───────────
+// 원칙: ① 평평한 바탕 = 둘레 스포이드 색으로 딱 떨어지게(페더·흐림 없음) ② 매끈한 그라데이션 = 둘레로 1·2차 면을 맞춰 그대로 채움
+//       ③ 그 밖(벽지 결·사진) = 질감 복제(옆 자리 같은 크기 조각) 또는 AI 결과를 "글자 모양 마스크"에만, 둘레에 맞춘 색 보정 후 붙임
+//       ④ 지운 뒤 잔상 검사(경계 단차·색 얼룩·흐림·글자 남음) → 떨어지면 다른 방법으로 다시
+const lumOf = (d, i) => 0.114 * d[i] + 0.587 * d[i + 1] + 0.299 * d[i + 2]; // BGRA
+const inRect = (r, x, y, g = 0) => x >= r.x - g && x < r.x + r.w + g && y >= r.y - g && y < r.y + r.h + g;
+const clipRect = (r, W, H) => { const x = Math.max(0, Math.round(r.x)), y = Math.max(0, Math.round(r.y)); return { x, y, w: Math.max(0, Math.min(W, Math.round(r.x + r.w)) - x), h: Math.max(0, Math.min(H, Math.round(r.y + r.h)) - y) }; };
+
+// rect 바깥 [gap, gap+ring) 띠 픽셀 [{x,y,c:[b,g,r]}]. skip(x,y) 참이면 뺀다(옆 글자 영역 등)
+export function ringPixels(bm, rect, { ring = 6, gap = 1, step = 1, skip = null } = {}) {
+  const out = [];
+  const x0 = Math.max(0, rect.x - gap - ring), y0 = Math.max(0, rect.y - gap - ring), x1 = Math.min(bm.w, rect.x + rect.w + gap + ring), y1 = Math.min(bm.h, rect.y + rect.h + gap + ring);
+  for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) {
+    if (inRect(rect, x, y, gap)) continue;
+    if (skip && skip(x, y)) continue;
+    const i = (y * bm.w + x) * 4; out.push({ x, y, c: [bm.data[i], bm.data[i + 1], bm.data[i + 2]] });
+  }
+  return out;
+}
+// 작은 연립방정식(가우스 소거, n ≤ 6)
+function solveLin(A, b) {
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    if (Math.abs(M[p][c]) < 1e-9) return null;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c] / M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+  }
+  return M.map((r, i) => r[n] / r[i]);
+}
+// 둘레 픽셀로 면 맞추기: order 1 = 평면(가로·세로 그라데이션), 2 = 2차(완만한 비네팅). robust: 크게 벗어난 픽셀(옆 글자·선)은 빼고 다시
+// 반환 { order, rmse(채널 평균 잔차), inliers(남은 비율), at(x,y)→[b,g,r] }
+export function fitSurface(px, rect, { order = 1, robust = true } = {}) {
+  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2, sx = Math.max(1, rect.w / 2 + 8), sy = Math.max(1, rect.h / 2 + 8);
+  const basis = (x, y) => { const u = (x - cx) / sx, v = (y - cy) / sy; return order === 2 ? [1, u, v, u * u, u * v, v * v] : [1, u, v]; };
+  const n = order === 2 ? 6 : 3;
+  let use = px, coef = null, rmse = Infinity;
+  const pred = (cf, x, y) => { const B = basis(x, y); return [0, 1, 2].map((ch) => B.reduce((s, v, k) => s + v * cf[ch][k], 0)); };
+  for (let pass = 0; pass < (robust ? 3 : 1); pass++) {
+    if (use.length < n * 4) break;
+    const A = Array.from({ length: n }, () => new Array(n).fill(0)), bs = [0, 1, 2].map(() => new Array(n).fill(0));
+    for (const p of use) { const B = basis(p.x, p.y); for (let i = 0; i < n; i++) { for (let j = 0; j < n; j++) A[i][j] += B[i] * B[j]; for (let ch = 0; ch < 3; ch++) bs[ch][i] += B[i] * p.c[ch]; } }
+    const cf = bs.map((b) => solveLin(A, b)); if (cf.some((c) => !c)) break;
+    coef = cf;
+    let s = 0; const res = use.map((p) => { const m = pred(cf, p.x, p.y); const e = (Math.abs(m[0] - p.c[0]) + Math.abs(m[1] - p.c[1]) + Math.abs(m[2] - p.c[2])) / 3; s += e * e; return e; });
+    rmse = Math.sqrt(s / use.length);
+    if (!robust) break;
+    const thr = Math.max(5, rmse * 2.5), next = use.filter((_, i) => res[i] <= thr);
+    if (next.length === use.length) break;
+    use = next;
+  }
+  return { order, rmse: coef ? +rmse.toFixed(3) : Infinity, inliers: px.length ? use.length / px.length : 0, at: coef ? (x, y) => pred(coef, x, y) : () => [255, 255, 255] };
+}
+// 둘레 대표색(5비트 양자화 최빈 → 그 근처 평균)·비율·흔들림(sd)·두 번째 색 비율
+function dominant(px, tol = 8) {
+  const cnt = new Map();
+  for (const p of px) { const k = (p.c[0] >> 3) * 1024 + (p.c[1] >> 3) * 32 + (p.c[2] >> 3); cnt.set(k, (cnt.get(k) || 0) + 1); }
+  let best = 0, bn = -1; for (const [k, n] of cnt) if (n > bn) { bn = n; best = k; }
+  const seed = [((best >> 10) & 31) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4];
+  const near = px.filter((p) => dist3(p.c, seed) <= tol + 6).map((p) => p.c);
+  const color = avg(near) || seed;
+  let sd = 0; for (const c of near) sd += dist3(c, color) ** 2; sd = near.length ? Math.sqrt(sd / near.length) : 0;
+  const rest = px.filter((p) => dist3(p.c, seed) > tol + 6).map((p) => p.c);
+  let frac2 = 0; if (rest.length) { const m2 = avg(rest); frac2 = rest.filter((c) => dist3(c, m2) <= 30).length / px.length; }
+  return { color, frac: px.length ? near.length / px.length : 0, sd, frac2 };
+}
+// 지우기 방식 결정(둘레 링을 잰다):
+//  solid    — 둘레의 flatFrac(90%) 이상이 한 색이고 흔들림 ≤ flatSd → 그 색 그대로(스포이드)
+//  gradient — 1차(평면) 또는 2차 면이 둘레를 잔차 ≤ maxRmse 로 설명(인쇄 그라데이션·완만한 조명)
+//  texture  — 고른 결(벽지·천): 넓은 허용 안에 둘레 85% 이상 + 네 변 평균이 비슷 → 질감 복제 후보(AI 도 함께 비교)
+//  complex  — 그 밖(사진·제품 위·무늬) → AI(없으면 복제·보간 중 잔상 검사 통과하는 것)
+export function decideFill(bm, rect, { ring = 6, skip = null, flatFrac = 0.9, flatSd = 2.5, maxRmse = 2.2, minInliers = 0.9 } = {}) {
+  const step = rect.w * rect.h > 60000 ? 2 : 1;
+  const px = ringPixels(bm, rect, { ring, gap: 1, step, skip });
+  if (px.length < 24) return { mode: "complex", why: "둘레 부족" };
+  const d = dominant(px);
+  const base = { frac: +d.frac.toFixed(3), sd: +d.sd.toFixed(2) };
+  if (d.frac >= flatFrac && d.sd <= flatSd) return { mode: "solid", color: d.color, ...base };
+  base.color = d.color; // texture·complex 도 둘레 대표색(글자 마스크 기준)
+  if (d.frac >= 0.5 && d.frac + d.frac2 >= 0.95 && d.sd <= flatSd) return { mode: "solid", color: d.color, line: true, ...base }; // 한 색 바탕 + 선(지울 영역은 선 앞에서 멈춘 상태)
+  for (const order of [1, 2]) {
+    const s = fitSurface(px, rect, { order });
+    if (s.rmse <= maxRmse && s.inliers >= minInliers) return { mode: "gradient", surface: s, rmse: s.rmse, order, ...base };
+  }
+  const tol = Math.max(20, d.sd * 3.5);
+  const fracT = px.filter((p) => dist3(p.c, d.color) <= tol).length / px.length;
+  const side = (f) => avg(px.filter(f).map((p) => p.c));
+  const sides = [side((p) => p.y < rect.y), side((p) => p.y >= rect.y + rect.h), side((p) => p.x < rect.x), side((p) => p.x >= rect.x + rect.w)].filter(Boolean);
+  let spread = 0; for (const a of sides) for (const b of sides) spread = Math.max(spread, dist3(a, b));
+  if (fracT >= 0.85 && spread <= 14) return { mode: "texture", color: d.color, tol, spread: +spread.toFixed(1), ...base };
+  return { mode: "complex", spread: +spread.toFixed(1), ...base };
+}
+// 단색·면으로 사각형을 딱 떨어지게 채운다(페더 없음). 반환 { n, undo() }
+// clip(x, y): 참인 픽셀만 칠한다(v13 — 원·알약 안 글을 지울 때 도형 밖으로 사각형이 튀어나오지 않게)
+export function fillSurface(bm, rect, { color = null, surface = null, clip = null } = {}) {
+  const r = clipRect(rect, bm.w, bm.h);
+  const backup = snapshot(bm, r);
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+    if (clip && !clip(x, y)) continue;
+    const m = surface ? surface.at(x, y) : color, i = (y * bm.w + x) * 4;
+    bm.data[i] = Math.round(Math.max(0, Math.min(255, m[0]))); bm.data[i + 1] = Math.round(Math.max(0, Math.min(255, m[1]))); bm.data[i + 2] = Math.round(Math.max(0, Math.min(255, m[2]))); bm.data[i + 3] = 255;
+  }
+  return { n: r.w * r.h, undo: () => restore(bm, backup) };
+}
+export function snapshot(bm, rect) {
+  const r = clipRect(rect, bm.w, bm.h), buf = Buffer.alloc(r.w * r.h * 4);
+  for (let y = 0; y < r.h; y++) bm.data.copy(buf, y * r.w * 4, ((r.y + y) * bm.w + r.x) * 4, ((r.y + y) * bm.w + r.x + r.w) * 4);
+  return { r, buf };
+}
+export function restore(bm, { r, buf }) { for (let y = 0; y < r.h; y++) buf.copy(bm.data, ((r.y + y) * bm.w + r.x) * 4, y * r.w * 4, (y + 1) * r.w * 4); }
+
+// 마스크(rect 기준 Uint8Array) 를 r px 넓힌다(정사각 팽창, 가로·세로 분리)
+export function dilateMask(m, w, h, r) {
+  if (r <= 0) return m;
+  const t = new Uint8Array(w * h), o = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) { let last = -1e9; for (let x = 0; x < w; x++) { if (m[y * w + x]) last = x; if (x - last <= r) t[y * w + x] = 1; } last = 1e9; for (let x = w - 1; x >= 0; x--) { if (m[y * w + x]) last = x; if (last - x <= r) t[y * w + x] = 1; } }
+  for (let x = 0; x < w; x++) { let last = -1e9; for (let y = 0; y < h; y++) { if (t[y * w + x]) last = y; if (y - last <= r) o[y * w + x] = 1; } last = 1e9; for (let y = h - 1; y >= 0; y--) { if (t[y * w + x]) last = y; if (last - y <= r) o[y * w + x] = 1; } }
+  return o;
+}
+// 글자 모양 마스크: rect 안에서 바탕 예측(bgAt 또는 color)과 tol 넘게 다른 픽셀(글자 획·그림자·외곽선) → dilate px 넓힘
+// soft(px): 옅은 그림자·번짐도 잡는다 — soft×soft 상자 평균 밝기가 바탕보다 softTol 넘게 다르면 글자 쪽(결 잡음은 평균에서 사라지고 넓은 그림자만 남는다)
+export function inkMask(bm, rect, { color = null, bgAt = null, tol = 24, dilate = 2, soft = 0, softTol = 4 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h), m = new Uint8Array(r.w * r.h);
+  let n = 0;
+  const dl = soft ? new Float32Array(r.w * r.h) : null;
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+    const i = ((r.y + y) * bm.w + r.x + x) * 4, c = [bm.data[i], bm.data[i + 1], bm.data[i + 2]], b = bgAt ? bgAt(r.x + x, r.y + y) : color;
+    if (dist3(c, b) > tol) { m[y * r.w + x] = 1; n++; }
+    if (dl) dl[y * r.w + x] = lumOf(bm.data, i) - (0.114 * b[0] + 0.587 * b[1] + 0.299 * b[2]);
+  }
+  if (dl) { // 적분 영상으로 상자 평균
+    const I = new Float64Array((r.w + 1) * (r.h + 1));
+    for (let y = 0; y < r.h; y++) { let row = 0; for (let x = 0; x < r.w; x++) { row += dl[y * r.w + x]; I[(y + 1) * (r.w + 1) + x + 1] = I[y * (r.w + 1) + x + 1] + row; } }
+    const h = Math.max(1, Math.floor(soft / 2));
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+      const x0 = Math.max(0, x - h), x1 = Math.min(r.w, x + h + 1), y0 = Math.max(0, y - h), y1 = Math.min(r.h, y + h + 1);
+      const sum = I[y1 * (r.w + 1) + x1] - I[y0 * (r.w + 1) + x1] - I[y1 * (r.w + 1) + x0] + I[y0 * (r.w + 1) + x0];
+      if (Math.abs(sum / ((x1 - x0) * (y1 - y0))) > softTol) m[y * r.w + x] = 1;
+    }
+  }
+  return { rect: r, mask: dilateMask(m, r.w, r.h, dilate), ink: n / Math.max(1, r.w * r.h) };
+}
+// 마스크 → 붙이기 가중치(마스크 안 1, 바깥 f px 에 걸쳐 1→0). rect 를 f 만큼 넓힌 영역 기준
+export function maskWeights(mask, rect, f = 2, W = Infinity, H = Infinity) {
+  const R = clipRect({ x: rect.x - f, y: rect.y - f, w: rect.w + f * 2, h: rect.h + f * 2 }, W, H);
+  const big = new Uint8Array(R.w * R.h);
+  for (let y = 0; y < rect.h; y++) for (let x = 0; x < rect.w; x++) if (mask[y * rect.w + x]) { const X = rect.x + x - R.x, Y = rect.y + y - R.y; if (X >= 0 && Y >= 0 && X < R.w && Y < R.h) big[Y * R.w + X] = 1; }
+  const wt = new Float32Array(R.w * R.h);
+  for (let i = 0; i < big.length; i++) if (big[i]) wt[i] = 1;
+  let cur = big;
+  for (let d = 1; d <= f; d++) { const nx = dilateMask(cur, R.w, R.h, 1); const v = 1 - d / (f + 1); for (let i = 0; i < nx.length; i++) if (nx[i] && !wt[i]) wt[i] = v; cur = nx; }
+  return { rect: R, w: wt };
+}
+// 색 맞춤 계수: 둘레 띠(rect 바깥 ring px, skip 제외)에서 dst ≈ a·src + b (채널별 최소제곱, a 0.75~1.33)
+export function colorFit(dst, src, rect, { ring = 8, skip = null } = {}) {
+  const px = ringPixels(dst, rect, { ring, gap: 2, step: rect.w * rect.h > 60000 ? 2 : 1, skip });
+  const fit = [0, 1, 2].map(() => ({ a: 1, b: 0 }));
+  if (px.length < 16) return { fit, n: px.length, rms: null };
+  let rms = 0;
+  for (let ch = 0; ch < 3; ch++) {
+    let sx = 0, sy = 0, sxx = 0, sxy = 0; const n = px.length;
+    for (const p of px) { const i = (p.y * src.w + p.x) * 4, x = src.data[i + ch], y = p.c[ch]; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+    const vx = sxx / n - (sx / n) ** 2, cxy = sxy / n - (sx / n) * (sy / n);
+    let a = vx > 4 ? cxy / vx : 1; a = Math.max(0.75, Math.min(1.33, a));
+    const b = sy / n - a * (sx / n);
+    fit[ch] = { a, b };
+    for (const p of px) { const i = (p.y * src.w + p.x) * 4; rms += (a * src.data[i + ch] + b - p.c[ch]) ** 2; }
+  }
+  return { fit, n: px.length, rms: +Math.sqrt(rms / (px.length * 3)).toFixed(2) };
+}
+// 가중치 붙이기: dst = dst·(1−w) + (a·src(x+dx,y+dy) + b)·w
+export function pasteWeighted(dst, src, { rect, w }, fit = null, dx = 0, dy = 0) {
+  const F = fit || [0, 1, 2].map(() => ({ a: 1, b: 0 }));
+  for (let y = 0; y < rect.h; y++) for (let x = 0; x < rect.w; x++) {
+    const t = w[y * rect.w + x]; if (!t) continue;
+    const X = rect.x + x, Y = rect.y + y, sX = X + dx, sY = Y + dy;
+    if (sX < 0 || sY < 0 || sX >= src.w || sY >= src.h) continue;
+    const i = (Y * dst.w + X) * 4, j = (sY * src.w + sX) * 4;
+    for (let c = 0; c < 3; c++) dst.data[i + c] = Math.round(Math.max(0, Math.min(255, dst.data[i + c] * (1 - t) + (F[c].a * src.data[j + c] + F[c].b) * t)));
+    dst.data[i + 3] = 255;
+  }
+}
+// AI 결과 붙이기(v11): ① 둘레 띠로 채널별 gain·offset 맞춤 ② 붙일 곳 = 원본과 (보정한) AI 가 다른 픽셀(= AI 가 지운 글자·그림자) ∪ 글자 마스크, 조금 넓힘
+// ③ 마스크 가장자리만 f px 부드럽게. 반환 { fit, coverage(영역 중 바뀐 비율), undo }
+// near(px): ink 를 주면 바뀐 픽셀도 글자 획에서 이 거리 안만 붙인다(v13 — AI 가 벽 결을 뭉개거나 글 옆 장식(주황 곡선)까지 지운 것을 영역 사각형째 붙여
+//   흐린 사각형·잘린 장식이 남던 것, 컵홀더 d03). 0 이면 예전처럼 바뀐 픽셀 전부
+export function pasteAiPatch(dst, ai, area, { ring = 8, skip = null, diffTol = 22, dilate = 3, feather = 2, ink = null, near = 0 } = {}) {
+  const r = clipRect(area, dst.w, dst.h);
+  const cf = colorFit(dst, ai, r, { ring, skip });
+  const m = new Uint8Array(r.w * r.h); let n = 0;
+  const zone = ink && near ? dilateMask(ink, r.w, r.h, near) : null;
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+    const i = ((r.y + y) * dst.w + r.x + x) * 4; let d = 0;
+    for (let c = 0; c < 3; c++) d += Math.abs(dst.data[i + c] - (cf.fit[c].a * ai.data[i + c] + cf.fit[c].b));
+    if ((d / 3 > diffTol && (!zone || zone[y * r.w + x])) || (ink && ink[y * r.w + x])) { m[y * r.w + x] = 1; n++; }
+  }
+  const mk = dilateMask(m, r.w, r.h, dilate);
+  const wts = maskWeights(mk, r, feather, dst.w, dst.h);
+  const back = snapshot(dst, wts.rect);
+  pasteWeighted(dst, ai, wts, cf.fit);
+  return { fit: cf, coverage: +(n / Math.max(1, r.w * r.h)).toFixed(3), undo: () => restore(dst, back) };
+}
+// 질감 복제: 같은 크기 조각을 위·아래·옆에서 찾아(둘레 띠가 가장 닮은 곳, 다른 글자 영역은 피함) 글자 마스크에만 붙인다(평균 색 차이 보정).
+// avoid: 피할 사각형들(모든 글자 영역). 반환 { ok, score, dx, dy, undo }
+// bgColor·tol 을 주면 가져올 조각 안에 바탕과 다른 픽셀(선·아이콘·글자)이 1.5% 넘게 있는 자리는 쓰지 않는다
+// ringAvoid: 둘레 비교에서 뺄 사각형(기본 avoid — 조각 복제는 자기 영역 안 칸의 둘레도 쓰도록 다른 글 영역만 넘긴다)
+// meanAt(x,y): 이 자리에 있어야 할 바탕 평균색(둘레 면) — 주면 가져온 조각의 평균을 그 색에 맞춘다(칸 복제: 조명 기울기 때문에 칸마다 밝기가 달라 보이는 것 방지)
+export function cloneFill(bm, rect, { avoid = [], ringAvoid = null, mask = null, feather = 2, ring = 4, maxCand = 900, bgColor = null, tol = 28, emptyRingOk = false, meanAt = null } = {}) {
+  const r = clipRect(rect, bm.w, bm.h);
+  if (!r.w || !r.h) return { ok: false };
+  const ra = ringAvoid || avoid;
+  const T = ringPixels(bm, r, { ring, gap: 1, step: r.w * r.h > 40000 ? 3 : 2, skip: (x, y) => ra.some((a) => a !== rect && inRect(a, x, y, 1)) });
+  if (T.length < 12 && !(emptyRingOk && bgColor)) return { ok: false }; // 조각(칸) 복제의 안쪽 칸은 둘레가 다 글 영역 — 바탕색 깨끗한 가까운 조각이면 된다
+  const sy = Math.max(2, Math.round(r.h / 3)), sx = Math.max(3, Math.round(r.w / 8));
+  const cands = [];
+  const ry = Math.max(r.h * 4, 160), rx = Math.max(r.w * 2, 160); // 작은 조각도 160px 안은 찾아본다
+  for (let dy = -ry; dy <= ry; dy += sy) for (let dx = -rx; dx <= rx; dx += sx) {
+    if (Math.abs(dx) < r.w + ring * 2 && Math.abs(dy) < r.h + ring * 2) continue; // 자기 자신과 겹침
+    const S = { x: r.x + dx - ring - 1, y: r.y + dy - ring - 1, w: r.w + ring * 2 + 2, h: r.h + ring * 2 + 2 };
+    if (S.x < 0 || S.y < 0 || S.x + S.w > bm.w || S.y + S.h > bm.h) continue;
+    if (avoid.some((a) => a.x < S.x + S.w + 2 && S.x < a.x + a.w + 2 && a.y < S.y + S.h + 2 && S.y < a.y + a.h + 2)) continue;
+    cands.push({ dx, dy, d: Math.abs(dx) + Math.abs(dy) });
+  }
+  if (!cands.length) return { ok: false };
+  cands.sort((a, b) => a.d - b.d);
+  let best = null;
+  const cs = r.w * r.h > 20000 ? 3 : 2;
+  const dirty = (c) => { if (!bgColor) return false; let n = 0, bad = 0; for (let y = r.y; y < r.y + r.h; y += cs) for (let x = r.x; x < r.x + r.w; x += cs) { const i = ((y + c.dy) * bm.w + x + c.dx) * 4; n++; if (dist3([bm.data[i], bm.data[i + 1], bm.data[i + 2]], bgColor) > tol) bad++; } return bad / n > 0.015; };
+  for (const c of cands.slice(0, maxCand)) {
+    if (dirty(c)) continue;
+    const off = [0, 0, 0]; let s = 0;
+    for (const p of T) { const i = ((p.y + c.dy) * bm.w + p.x + c.dx) * 4; for (let ch = 0; ch < 3; ch++) off[ch] += p.c[ch] - bm.data[i + ch]; }
+    for (let ch = 0; ch < 3; ch++) off[ch] /= Math.max(1, T.length);
+    for (const p of T) { const i = ((p.y + c.dy) * bm.w + p.x + c.dx) * 4; s += (Math.abs(p.c[0] - bm.data[i] - off[0]) + Math.abs(p.c[1] - bm.data[i + 1] - off[1]) + Math.abs(p.c[2] - bm.data[i + 2] - off[2])) / 3; }
+    const score = s / Math.max(1, T.length) + (Math.abs(off[0]) + Math.abs(off[1]) + Math.abs(off[2])) / 3 * 0.3 + c.d / Math.max(r.w, r.h) * 0.15; // 가까울수록 조금 유리
+    if (!best || score < best.score) best = { ...c, off, score };
+  }
+  if (!best) return { ok: false };
+  if (meanAt) { // 밝기 맞춤: 이 칸 안 글자 아닌 픽셀(원래 바탕)이 충분하면 그 자리의 원본 ↔ 가져올 조각 같은 자리 평균 차이로(국소 얼룩까지 맞음), 모자라면 둘레 면 예측으로
+    const a = [0, 0, 0], b = [0, 0, 0]; let n = 0, tot = 0;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { tot++; if (mask && mask[(y - r.y) * r.w + (x - r.x)]) continue; const i = (y * bm.w + x) * 4, j = ((y + best.dy) * bm.w + x + best.dx) * 4; for (let c = 0; c < 3; c++) { a[c] += bm.data[i + c]; b[c] += bm.data[j + c]; } n++; }
+    if (mask && n >= Math.max(30, tot * 0.15)) best.off = a.map((v, c) => (v - b[c]) / n);
+    else {
+      const want = meanAt(r.x + r.w / 2, r.y + r.h / 2), m = [0, 0, 0]; let k = 0;
+      for (let y = r.y; y < r.y + r.h; y += 2) for (let x = r.x; x < r.x + r.w; x += 2) { const i = ((y + best.dy) * bm.w + x + best.dx) * 4; m[0] += bm.data[i]; m[1] += bm.data[i + 1]; m[2] += bm.data[i + 2]; k++; }
+      if (k) best.off = want.map((v, c) => v - m[c] / k);
+    }
+  }
+  const mk = mask || new Uint8Array(r.w * r.h).fill(1);
+  const wts = maskWeights(mk, r, feather, bm.w, bm.h);
+  const src = { data: Buffer.from(bm.data), w: bm.w, h: bm.h }; // 복사본에서 읽는다
+  const back = snapshot(bm, wts.rect);
+  pasteWeighted(bm, src, wts, best.off.map((b) => ({ a: 1, b })), best.dx, best.dy);
+  return { ok: true, score: +best.score.toFixed(2), dx: best.dx, dy: best.dy, undo: () => restore(bm, back) };
+}
+// 잔상 검사(지운 뒤 최종 그림에서): 눈에 보이는 사각형·얼룩·흐림·남은 글자를 수치로.
+//  edge  — 사각형 경계 안쪽 1~3px 와 바깥 1~3px 평균색 차이(8px 구간마다, 상위 10%) − 바깥끼리 자연 차이  → 단차(밝은/어두운 상자)
+//  tone  — 안쪽을 칸으로 나눠 둘레 면(평면) 예측과의 최대 차이 → 색 얼룩(허용 = 6 + 0.5·둘레 잔차)
+//  hf    — 안쪽 결(밝기 기울기 중앙값) ÷ 둘레 결: 둘레가 결 있는데 안이 매끈하면(< 0.6) 흐림, 훨씬 거칠면 글자 잔상
+// strict: 결 있는 바탕(복제 후보) — 칸 평균이 아주 정확하므로 색 얼룩 허용을 좁힌다
+export function residueCheck(bm, rect, { ring = 10, skip = null, strict = false } = {}) {
+  const r = clipRect(rect, bm.w, bm.h), W = bm.w, H = bm.h, d = bm.data;
+  if (r.w < 4 || r.h < 4) return { pass: true, edge: 0, tone: 0, hf: 1, why: "" };
+  const g = (x, y) => { if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return null; const i = (y * W + x) * 4; return Math.abs(lumOf(d, i + 4) - lumOf(d, i - 4)) + Math.abs(lumOf(d, i + W * 4) - lumOf(d, i - W * 4)); };
+  const med = (a) => { if (!a.length) return 0; const b = Float32Array.from(a).sort(); return b[Math.floor(b.length / 2)]; };
+  const gIn = [], gOut = [];
+  const st = r.w * r.h > 40000 ? 2 : 1;
+  for (let y = r.y + 2; y < r.y + r.h - 2; y += st) for (let x = r.x + 2; x < r.x + r.w - 2; x += st) { const v = g(x, y); if (v != null) gIn.push(v); }
+  const ringPx = ringPixels(bm, r, { ring, gap: 2, step: st, skip });
+  for (const p of ringPx) { const v = g(p.x, p.y); if (v != null) gOut.push(v); }
+  const inG = med(gIn), outG = med(gOut), hf = +((inG + 0.5) / (outG + 0.5)).toFixed(2);
+  // 경계 단차
+  const meanBand = (x0, y0, x1, y1) => { let s0 = 0, s1 = 0, s2 = 0, n = 0; for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) { if (skip && skip(x, y)) continue; const i = (y * W + x) * 4; s0 += d[i]; s1 += d[i + 1]; s2 += d[i + 2]; n++; } return n >= 4 ? [s0 / n, s1 / n, s2 / n] : null; };
+  const steps = [], nat = [], L = 8;
+  const side = (horiz, pos, dirOut) => { // horiz: 위/아래 변(pos = y 경계), dirOut = −1(위·왼) / +1(아래·오른)
+    const len = horiz ? r.w : r.h, o = horiz ? r.x : r.y;
+    for (let k = 0; k + L <= len; k += L) {
+      const a = o + k, b = a + L;
+      const band = (d0, d1) => (horiz ? (dirOut < 0 ? meanBand(a, pos - d1, b, pos - d0) : meanBand(a, pos + d0, b, pos + d1)) : (dirOut < 0 ? meanBand(pos - d1, a, pos - d0, b) : meanBand(pos + d0, a, pos + d1, b)));
+      const inner = horiz ? (dirOut < 0 ? meanBand(a, pos + 1, b, pos + 4) : meanBand(a, pos - 4, b, pos - 1)) : (dirOut < 0 ? meanBand(pos + 1, a, pos + 4, b) : meanBand(pos - 4, a, pos - 1, b));
+      const out1 = band(1, 4), out2 = band(4, 7);
+      if (inner && out1) steps.push(dist3(inner, out1));
+      if (out1 && out2) nat.push(dist3(out1, out2));
+    }
+  };
+  side(true, r.y, -1); side(true, r.y + r.h, 1); side(false, r.x, -1); side(false, r.x + r.w, 1);
+  const p90 = (a) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length * 0.9)]; };
+  const edge = +Math.max(0, p90(steps) - p90(nat)).toFixed(2);
+  // 색 얼룩: 안쪽 칸 평균을 세 가지 "있을 법한 바탕"과 비교해 가장 잘 맞는 것으로 판단 — 평면(그라데이션) · 세로 결(칸 위·아래 둘레 직선 보간, 커튼 주름) · 가로 결(왼·오른 둘레)
+  //   셋 다 안 맞으면(밝은/어두운 상자·남은 글자) 색 얼룩
+  let tone = 0, tonThr = 99;
+  const cs = Math.max(8, Math.min(24, Math.round(r.h / 2)));
+  const cells = [];
+  for (let cy = r.y; cy < r.y + r.h; cy += cs) for (let cx = r.x; cx < r.x + r.w; cx += cs) { const x1 = Math.min(r.x + r.w, cx + cs), y1 = Math.min(r.y + r.h, cy + cs), m = meanBand(cx, cy, x1, y1); if (m) cells.push({ cx, cy, x1, y1, m }); }
+  const preds = [];
+  if (ringPx.length >= 24) { const s = fitSurface(ringPx, r, { order: 1 }); preds.push({ thr: strict ? 4.5 + 0.25 * Math.min(20, s.rmse) : 6 + 0.5 * Math.min(20, s.rmse), at: (c) => s.at((c.cx + c.x1) / 2, (c.cy + c.y1) / 2) }); } // 칸 평균은 픽셀 잡음을 거의 지우므로 둘레 잔차는 조금만 봐준다
+  // 둘레가 다른 글자 영역(skip)이면 그 너머(최대 글 높이 3배)까지 가서 잰다 — 위치(pos)도 함께 돌려 직선 보간
+  const far = (f) => { for (let d = 2; d <= Math.max(12, r.h * 3); d += 5) { const m = f(d); if (m) return { m, d }; } return null; };
+  const lerpAt = (a, b, pa, pb, p) => (a && b ? a.m.map((v, i) => v + (b.m[i] - v) * ((p - pa) / Math.max(1, pb - pa))) : a ? a.m : b ? b.m : null);
+  preds.push({ thr: 8, at: (c) => { const a = far((d) => meanBand(c.cx, r.y - d - 5, c.x1, r.y - d)), b = far((d) => meanBand(c.cx, r.y + r.h + d, c.x1, r.y + r.h + d + 5)); return lerpAt(a, b, r.y - (a?.d || 0) - 2.5, r.y + r.h + (b?.d || 0) + 2.5, (c.cy + c.y1) / 2); } });
+  preds.push({ thr: 8, at: (c) => { const a = far((d) => meanBand(r.x - d - 5, c.cy, r.x - d, c.y1)), b = far((d) => meanBand(r.x + r.w + d, c.cy, r.x + r.w + d + 5, c.y1)); return lerpAt(a, b, r.x - (a?.d || 0) - 2.5, r.x + r.w + (b?.d || 0) + 2.5, (c.cx + c.x1) / 2); } });
+  let bestGap = Infinity;
+  for (const p of preds) {
+    let dev = 0, ok = cells.length > 0;
+    for (const c of cells) { const q = p.at(c); if (!q) { ok = false; break; } dev = Math.max(dev, dist3(c.m, q)); }
+    if (ok && dev - p.thr < bestGap) { bestGap = dev - p.thr; tone = dev; tonThr = p.thr; }
+  }
+  tone = +tone.toFixed(2);
+  // 조각 얼룩(blk): 12px 칸 평균 밝기의 흔들림(둘레 면 기울기를 뺀 것)을 안쪽과 바깥 띠에서 비교 — 칸 복제·AI 조각의 밝기가 칸마다 달라 "옅은 사각형"이 보이는 것.
+  //  결 있는 바탕(strict)에서만 본다(사진은 원래 얼룩덜룩) — 2026-10-12 d01 제목 자리: 64px 칸 복제 1.47·2.32(눈에 보임), 결 합성 0.31·0.22
+  let blk = 0, blkIn = 0, blkOut = 0;
+  if (ringPx.length >= 24) {
+    const sf = fitSurface(ringPx, r, { order: 1 }), c2 = 12, E = 24, ins = [], outs = [];
+    const lumAt = (c) => 0.114 * c[0] + 0.587 * c[1] + 0.299 * c[2];
+    for (let cy = r.y - E; cy < r.y + r.h + E; cy += c2) for (let cx = r.x - E; cx < r.x + r.w + E; cx += c2) {
+      const x1 = cx + c2, y1 = cy + c2, inside = cx >= r.x && cy >= r.y && x1 <= r.x + r.w && y1 <= r.y + r.h, outside = x1 <= r.x || cx >= r.x + r.w || y1 <= r.y || cy >= r.y + r.h;
+      if (!inside && !outside) continue;
+      const m = meanBand(cx, cy, x1, y1); if (!m) continue;
+      if (outside && skip) { let sk = 0; for (let y = cy; y < y1; y += 4) for (let x = cx; x < x1; x += 4) if (skip(x, y)) sk++; if (sk) continue; }
+      (inside ? ins : outs).push(lumAt(m) - lumAt(sf.at(cx + c2 / 2, cy + c2 / 2)));
+    }
+    const sd = (a) => { if (a.length < 4) return null; const md = (b) => { const q = [...b].sort((x, y) => x - y); return q[Math.floor(q.length / 2)]; }; const m0 = md(a); return 1.4826 * md(a.map((v) => Math.abs(v - m0))); }; // 중앙값 절대편차(바깥의 선·커튼 칸 같은 튀는 칸에 흔들리지 않게)
+    const si = sd(ins), so = sd(outs);
+    if (si != null && so != null) { blkIn = +si.toFixed(2); blkOut = +so.toFixed(2); blk = +(si - so).toFixed(2); }
+  }
+  const why = [];
+  if (strict && blkIn > 1.0 && blkIn > blkOut * 0.6) why.push(`조각 얼룩 ${blkIn}/${blkOut}`); // 실측: 칸 복제 얼룩 1.5~2.3, 결 합성·같은 조각 복제 0.2~0.9(바깥 띠는 선·커튼이 섞여 크게 나와 0.6배만 비교)
+  if (edge > 5) why.push(`경계 단차 ${edge}`);
+  if (tone > tonThr) why.push(`색 얼룩 ${tone}`);
+  if (outG >= 3 && hf < 0.6) why.push(`흐림 ${hf}`);
+  if (inG > outG * 2.5 + 4) why.push(`글자 잔상 ${hf}`);
+  return { pass: !why.length, edge, tone, toneMax: +tonThr.toFixed(1), hf, outG: +outG.toFixed(2), blkIn, blkOut, why: why.join(" · ") };
+}
+// 바탕색 격자(렌더 때 글자 밑 실제 바탕 대비·글 상자 넓히기 판단용): cell px 칸마다 평균색 → { cell, cols, rows, c: "rrggbb…"(칸마다 6자리) }
+// s: 칸마다 밝기 흔들림(표준편차, 0~35 → base36 한 글자) — 글자·제품 윤곽이 있는 칸은 커서 "빈 바탕"이 아니다
+export function colorGrid(bm, cell = 24) {
+  const cols = Math.ceil(bm.w / cell), rows = Math.ceil(bm.h / cell);
+  let c = "", sd = "";
+  for (let gy = 0; gy < rows; gy++) for (let gx = 0; gx < cols; gx++) {
+    let s0 = 0, s1 = 0, s2 = 0, n = 0, l1 = 0, l2 = 0;
+    for (let y = gy * cell; y < Math.min(bm.h, (gy + 1) * cell); y += 2) for (let x = gx * cell; x < Math.min(bm.w, (gx + 1) * cell); x += 2) { const i = (y * bm.w + x) * 4; s0 += bm.data[i]; s1 += bm.data[i + 1]; s2 += bm.data[i + 2]; const L = lumOf(bm.data, i); l1 += L; l2 += L * L; n++; }
+    c += toHex(n ? [s0 / n, s1 / n, s2 / n] : [255, 255, 255]).slice(1);
+    sd += Math.min(35, Math.round(n ? Math.sqrt(Math.max(0, l2 / n - (l1 / n) ** 2)) : 0)).toString(36);
+  }
+  return { cell, cols, rows, c, s: sd };
+}
+// 조각 나눠 복제: 큰 글자 영역은 같은 크기의 깨끗한 조각을 찾기 어렵다 → 글자 높이 정도의 칸으로 나눠 칸마다 cloneFill(글자 마스크가 있는 칸만)
+export function cloneTiles(bm, rect, { avoid = [], mask = null, bgColor = null, tol = 28, tile = 0, feather = 2 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h); if (!r.w || !r.h) return { ok: false };
+  if (!tile && r.h > 32) { const a = cloneTiles(bm, rect, { avoid, mask, bgColor, tol, tile: Math.min(64, r.h), feather }); if (a.ok) return a; return cloneTiles(bm, rect, { avoid, mask, bgColor, tol, tile: 32, feather }); } // 큰 칸이 안 되면 작은 칸(32px)으로
+  const ts = tile || Math.max(24, Math.min(64, r.h));
+  const back = snapshot(bm, expandRect(r, feather + 1, bm.w, bm.h));
+  const others = avoid.filter((a) => a !== rect);
+  const rp = ringPixels(bm, r, { ring: 8, gap: 2, step: 2, skip: (x, y) => others.some((a) => inRect(a, x, y, 1)) }), sf = rp.length >= 24 ? fitSurface(rp, r, { order: 1 }) : null; // 칸마다 맞출 바탕 밝기(조명 기울기)
+  let n = 0, miss = 0, score = 0;
+  for (let y = r.y; y < r.y + r.h; y += ts) for (let x = r.x; x < r.x + r.w; x += ts) {
+    const t = { x, y, w: Math.min(ts, r.x + r.w - x), h: Math.min(ts, r.y + r.h - y) };
+    let sub = null;
+    if (mask) { sub = new Uint8Array(t.w * t.h); let any = 0; for (let yy = 0; yy < t.h; yy++) for (let xx = 0; xx < t.w; xx++) { const v = mask[(t.y - r.y + yy) * r.w + (t.x - r.x + xx)]; sub[yy * t.w + xx] = v; any |= v; } if (!any) continue; }
+    const c = cloneFill(bm, t, { avoid: [...others, rect], mask: sub, bgColor, tol, feather, maxCand: 600, emptyRingOk: true, meanAt: sf ? (x, y) => sf.at(x, y) : null });
+    if (c.ok) { n++; score += c.score; } else miss++;
+  }
+  if (!n || miss) { restore(bm, back); return { ok: false, miss }; } // 한 칸이라도 못 찾으면 쓰지 않는다(글자 일부가 남는다)
+  return { ok: true, tiles: n, score: +(score / n).toFixed(2), undo: () => restore(bm, back) };
+}
+// 결 방향 채움: 세로 결(커튼 주름·세로 줄)은 열마다 위·아래 둘레를, 가로 결은 행마다 왼·오른 둘레를 직선 보간 — 결을 가로지르는 흐림이 없다.
+// 둘레가 다른 글자 영역(skip)이면 그 너머까지 가서 잰다. mask 가 있으면 글자 픽셀에만(가장자리 feather px)
+export function lineFill(bm, rect, { dir = "v", skip = null, band = 3, mask = null, feather = 2 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h), W = bm.w, H = bm.h; if (!r.w || !r.h) return { ok: false };
+  const at = (x, y) => { const i = (y * W + x) * 4; return [bm.data[i], bm.data[i + 1], bm.data[i + 2]]; };
+  const side = (fixed, from, step, lim) => { // fixed: 열(세로) 또는 행(가로) 위치, from 에서 step 방향으로 skip 밖 첫 band 줄 평균
+    let p = from; while (p >= 0 && p < lim && skip && (dir === "v" ? skip(fixed, p) : skip(p, fixed))) p += step;
+    const got = []; for (let k = 0; k < band && p >= 0 && p < lim; k++, p += step) got.push(dir === "v" ? at(fixed, p) : at(p, fixed));
+    return got.length ? avg(got) : null;
+  };
+  const len = dir === "v" ? r.w : r.h, span = dir === "v" ? r.h : r.w;
+  const A = [], B = [];
+  for (let k = 0; k < len; k++) { const f = (dir === "v" ? r.x : r.y) + k; A.push(side(f, (dir === "v" ? r.y : r.x) - 2, -1, dir === "v" ? H : W)); B.push(side(f, (dir === "v" ? r.y + r.h : r.x + r.w) + 1, 1, dir === "v" ? H : W)); }
+  if (A.filter(Boolean).length + B.filter(Boolean).length < len) return { ok: false };
+  // 결 방향 확인: 양쪽 둘레 단면이 서로 닮아야(같은 줄무늬가 위·아래로 이어짐) 하고 단면에 무늬가 있어야 한다 — 아니면 이 방향으로 끌면 줄이 생긴다
+  if (len >= 12) {
+    const la = A.map((c) => (c ? 0.114 * c[0] + 0.587 * c[1] + 0.299 * c[2] : null)), lb = B.map((c) => (c ? 0.114 * c[0] + 0.587 * c[1] + 0.299 * c[2] : null));
+    const idx = la.map((_, i) => i).filter((i) => la[i] != null && lb[i] != null);
+    if (idx.length < 8) return { ok: false, why: "한쪽 둘레 없음" };
+    const ma = idx.reduce((t, i) => t + la[i], 0) / idx.length, mb = idx.reduce((t, i) => t + lb[i], 0) / idx.length;
+    let sab = 0, saa = 0, sbb = 0; for (const i of idx) { sab += (la[i] - ma) * (lb[i] - mb); saa += (la[i] - ma) ** 2; sbb += (lb[i] - mb) ** 2; }
+    const sdA = Math.sqrt(saa / idx.length), sdB = Math.sqrt(sbb / idx.length), corr = saa && sbb ? sab / Math.sqrt(saa * sbb) : 0;
+    if (Math.max(sdA, sdB) >= 4 && corr < 0.6) return { ok: false, why: `결 방향 아님(상관 ${corr.toFixed(2)})` };
+  }
+  // 가로지르는 쪽 둘레(세로 채움이면 왼·오른 열, 가로 채움이면 위·아래 행)는 양 끝 직선 보간으로 설명돼야 한다 — 줄무늬를 가로질러 끌면 번진다
+  {
+    const cross = []; // [위치, 밝기] 들
+    for (let s = 0; s < span; s += 2) { const p = (dir === "v" ? r.y : r.x) + s; for (const q of dir === "v" ? [r.x - 3, r.x + r.w + 2] : [r.y - 3, r.y + r.h + 2]) { const x = dir === "v" ? q : p, y = dir === "v" ? p : q; if (x < 0 || y < 0 || x >= W || y >= H || (skip && skip(x, y))) continue; const c = at(x, y); cross.push([s, q, 0.114 * c[0] + 0.587 * c[1] + 0.299 * c[2]]); } }
+    for (const q of new Set(cross.map((c) => c[1]))) {
+      const line = cross.filter((c) => c[1] === q); if (line.length < 6) continue;
+      const a = line[0][2], b = line[line.length - 1][2], s0 = line[0][0], s1 = line[line.length - 1][0] || 1;
+      const rmse = Math.sqrt(line.reduce((t, c) => t + (c[2] - (a + (b - a) * (c[0] - s0) / Math.max(1, s1 - s0))) ** 2, 0) / line.length);
+      if (rmse > 10) return { ok: false, why: `가로지르는 결(잔차 ${rmse.toFixed(1)})` };
+    }
+  }
+  const src = { data: Buffer.alloc(W * H * 4), w: W, h: H }; // 채움 그림(마스크 붙이기용)
+  for (let k = 0; k < len; k++) {
+    const a = A[k] || B[k], b = B[k] || A[k]; if (!a) continue;
+    for (let s = 0; s < span; s++) { const t = span > 1 ? s / (span - 1) : 0.5, x = dir === "v" ? r.x + k : r.x + s, y = dir === "v" ? r.y + s : r.y + k, i = (y * W + x) * 4; for (let c = 0; c < 3; c++) src.data[i + c] = Math.round(a[c] * (1 - t) + b[c] * t); src.data[i + 3] = 255; }
+  }
+  const mk = mask || new Uint8Array(r.w * r.h).fill(1);
+  const wts = maskWeights(mk, r, feather, W, H);
+  for (let y = 0; y < wts.rect.h; y++) for (let x = 0; x < wts.rect.w; x++) if (!inRect(r, wts.rect.x + x, wts.rect.y + y)) wts.w[y * wts.rect.w + x] = 0; // 채움 그림은 사각형 안만
+  const back = snapshot(bm, wts.rect);
+  pasteWeighted(bm, src, wts);
+  return { ok: true, undo: () => restore(bm, back) };
+}
+// AI 결과 위치 맞춤: 이미지 모델은 화면비를 자기 크기(예: 768×1376)로 바꿔 돌려줘서, 원본 크기로 늘리면 1% 안팎 늘어나고 밀린다(가장자리에서 5~10px)
+// → 글자 영역 밖의 가로·세로 밝기 단면(열 평균·행 평균)을 맞춰 축마다 배율·이동을 찾고(1차원 탐색) 그대로 다시 그린다(양선형).
+// 반환 { bm, sx, tx, sy, ty } — ai(원본 크기로 늘린 것) 의 (x−tx)/sx 를 원본 x 자리에 놓는다
+export function alignAi(orig, ai, masks = [], { maxScale = 0.04, maxShift = 24 } = {}) {
+  const W = orig.w, H = orig.h;
+  const inMask = (x, y) => masks.some((m) => x >= m.x && x < m.x + m.w && y >= m.y && y < m.y + m.h);
+  const prof = (bm, axis) => { // axis "x": 열마다 평균 밝기, "y": 행마다
+    const n = axis === "x" ? W : H, s = new Float64Array(n), c = new Float64Array(n);
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { if (inMask(x, y)) continue; const v = lumOf(bm.data, (y * W + x) * 4), k = axis === "x" ? x : y; s[k] += v; c[k]++; }
+    const out = []; for (let k = 0; k < n; k++) out.push(c[k] ? s[k] / c[k] : null);
+    for (let k = 0; k < n; k++) if (out[k] == null) out[k] = out[k - 1] ?? out.find((v) => v != null) ?? 0;
+    return out;
+  };
+  const fit1 = (po, pa) => {
+    const n = po.length, at = (p, u) => { if (u < 0 || u > n - 1) return null; const i = Math.floor(u), f = u - i; return p[i] * (1 - f) + p[Math.min(n - 1, i + 1)] * f; };
+    const cost = (s, t) => { let e = 0, m = 0; for (let x = 0; x < n; x += 2) { const v = at(pa, (x - t) / s); if (v == null) continue; e += Math.abs(po[x] - v); m++; } return m > n * 0.3 ? e / m : Infinity; };
+    let best = { s: 1, t: 0, e: cost(1, 0) };
+    for (let s = 1 - maxScale; s <= 1 + maxScale + 1e-9; s += 0.004) for (let t = -maxShift; t <= maxShift; t += 2) { const e = cost(s, t); if (e < best.e) best = { s, t, e }; }
+    const c0 = best; // 미세 조정
+    for (let s = c0.s - 0.004; s <= c0.s + 0.004 + 1e-9; s += 0.001) for (let t = c0.t - 2; t <= c0.t + 2; t += 0.5) { const e = cost(s, t); if (e < best.e) best = { s, t, e }; }
+    return { ...best, e0: cost(1, 0) };
+  };
+  const fx = fit1(prof(orig, "x"), prof(ai, "x")), fy = fit1(prof(orig, "y"), prof(ai, "y"));
+  const out = { data: Buffer.alloc(W * H * 4), w: W, h: H };
+  for (let y = 0; y < H; y++) {
+    const v = Math.max(0, Math.min(H - 1, (y - fy.t) / fy.s)), y0 = Math.floor(v), y1 = Math.min(H - 1, y0 + 1), b = v - y0;
+    for (let x = 0; x < W; x++) {
+      const u = Math.max(0, Math.min(W - 1, (x - fx.t) / fx.s)), x0 = Math.floor(u), x1 = Math.min(W - 1, x0 + 1), a = u - x0, o = (y * W + x) * 4;
+      for (let c = 0; c < 3; c++) out.data[o + c] = Math.round((ai.data[(y0 * W + x0) * 4 + c] * (1 - a) + ai.data[(y0 * W + x1) * 4 + c] * a) * (1 - b) + (ai.data[(y1 * W + x0) * 4 + c] * (1 - a) + ai.data[(y1 * W + x1) * 4 + c] * a) * b);
+      out.data[o + 3] = 255;
+    }
+  }
+  return { bm: out, sx: +fx.s.toFixed(4), tx: +fx.t.toFixed(1), sy: +fy.s.toFixed(4), ty: +fy.t.toFixed(1) };
+}
+// 결 합성(synth): 큰 제목 자리처럼 같은 크기 깨끗한 조각이 없을 때 — 밝기는 둘레로 맞춘 매끈한 면(2차, 다른 글 영역 제외)에서, 결(잔무늬)만 가까운 깨끗한 조각에서 가져와 더한다.
+// 칸 복제처럼 칸마다 밝기가 달라 사각형이 보이는 일이 없다(2026-10-12 안경 세척기 d01 제목 실측). 반환 { ok, undo }
+// ringAvoid: 둘레 재기에서 뺄 영역(아직 안 지운 다른 글 — 이미 지운 윗줄 자리는 바탕으로 써도 된다)
+export function synthFill(bm, rect, { avoid = [], ringAvoid = null, mask = null, bgColor = null, tol = 28, feather = 2, ring = 8, blur = 3 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h); if (!r.w || !r.h || !bgColor) return { ok: false };
+  const others = ringAvoid || avoid.filter((a) => a !== rect);
+  const px = ringPixels(bm, r, { ring, gap: 2, step: 2, skip: (x, y) => others.some((a) => inRect(a, x, y, 1)) });
+  if (px.length < 40) return { ok: false };
+  // 둘레가 세 변 이상 있어야 면을 믿는다(위·아래가 다 다른 글이면 좌우만으로 2차 면을 맞추다 엉뚱하게 밝아진다 — d07 모래 실측)
+  const sides = [px.some((p) => p.y < r.y), px.some((p) => p.y >= r.y + r.h), px.some((p) => p.x < r.x), px.some((p) => p.x >= r.x + r.w)].filter(Boolean).length;
+  if (sides < 3) return { ok: false, why: "둘레 부족" };
+  let low = fitSurface(px, r, { order: 2 }); const l1 = fitSurface(px, r, { order: 1 }); if (!(low.rmse < Infinity) || l1.rmse <= low.rmse + 0.2) low = l1;
+  { // 면이 둘레 밝기 범위를 벗어나면(외삽 폭주) 포기
+    const L = px.map((p) => lumOf([p.c[0], p.c[1], p.c[2]], 0)).sort((a, b) => a - b), lo = L[Math.floor(L.length * 0.05)] - 8, hi = L[Math.floor(L.length * 0.95)] + 8;
+    for (const [x, y] of [[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1], [r.x + r.w / 2, r.y + r.h / 2]]) { const m = low.at(x, y), v = 0.114 * m[0] + 0.587 * m[1] + 0.299 * m[2]; if (v < lo || v > hi) return { ok: false, why: "면 범위 밖" }; }
+  }
+  // 결 조각: 가까운 깨끗한 사각형(최대 160×96px)
+  const sw = Math.min(r.w, 160), sh = Math.min(r.h, 96), W = bm.w, H = bm.h; // 넓은 조각일수록 거울 반복이 덜 보인다
+  let src = null;
+  // 깨끗한 조각: 다른 글 영역과 안 겹치고, 잔무늬보다 뚜렷한 선·점(5×5 주변 평균과 밝기 차 > 40)이 거의 없을 것 — 바탕색과의 차이로 거르면 모래 물결·조명 얼룩까지 걸러져 조각을 못 찾는다(d07 실측)
+  const clean = (sx, sy) => { if (sx < 0 || sy < 0 || sx + sw > W || sy + sh > H) return false; if (avoid.some((a) => a.x < sx + sw + 3 && sx < a.x + a.w + 3 && a.y < sy + sh + 3 && sy < a.y + a.h + 3)) return false; let n = 0, bad = 0; for (let y = sy + 2; y < sy + sh - 2; y += 2) for (let x = sx + 2; x < sx + sw - 2; x += 2) { let m = 0; for (let yy = -2; yy <= 2; yy += 2) for (let xx = -2; xx <= 2; xx += 2) m += lumOf(bm.data, ((y + yy) * W + x + xx) * 4); n++; if (Math.abs(lumOf(bm.data, (y * W + x) * 4) - m / 9) > 40) bad++; } return n > 0 && bad / n <= 0.005; };
+  const cands = []; for (let dy = -320; dy <= 320; dy += 16) for (let dx = -320; dx <= 320; dx += 16) cands.push([r.x + dx, r.y + dy, Math.abs(dx) + Math.abs(dy)]);
+  cands.sort((a, b) => a[2] - b[2]);
+  for (const [sx, sy] of cands) if (clean(sx, sy)) { src = { x: sx, y: sy }; break; }
+  if (!src) return { ok: false };
+  // 조각의 고주파(원 − blur×2+1 상자 평균)
+  const hf = new Float32Array(sw * sh * 3);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) for (let c = 0; c < 3; c++) {
+    let s = 0, n = 0; for (let yy = Math.max(0, y - blur); yy <= Math.min(sh - 1, y + blur); yy++) for (let xx = Math.max(0, x - blur); xx <= Math.min(sw - 1, x + blur); xx++) { s += bm.data[((src.y + yy) * W + src.x + xx) * 4 + c]; n++; }
+    hf[(y * sw + x) * 3 + c] = bm.data[((src.y + y) * W + src.x + x) * 4 + c] - s / n;
+  }
+  { let q = 0; for (let i = 0; i < hf.length; i++) q += hf[i] * hf[i]; const lim = 2.5 * Math.sqrt(q / hf.length) + 1; for (let i = 0; i < hf.length; i++) hf[i] = Math.max(-lim, Math.min(lim, hf[i])); } // 튀는 점은 잘라 결만
+  const mir = (v, n) => { const p = v % (2 * n); return p < n ? p : 2 * n - 1 - p; }; // 거울 반복(이음새 없게)
+  const out = { data: Buffer.alloc(W * H * 4), w: W, h: H };
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const m = low.at(x, y), k = (mir(y - r.y, sh) * sw + mir(x - r.x, sw)) * 3, o = (y * W + x) * 4; for (let c = 0; c < 3; c++) out.data[o + c] = Math.max(0, Math.min(255, Math.round(m[c] + hf[k + c]))); out.data[o + 3] = 255; }
+  const mk = mask || new Uint8Array(r.w * r.h).fill(1);
+  const wts = maskWeights(mk, r, feather, W, H);
+  for (let y = 0; y < wts.rect.h; y++) for (let x = 0; x < wts.rect.w; x++) if (!inRect(r, wts.rect.x + x, wts.rect.y + y)) wts.w[y * wts.rect.w + x] = 0;
+  const back = snapshot(bm, wts.rect);
+  pasteWeighted(bm, out, wts);
+  return { ok: true, src, rmse: low.rmse, undo: () => restore(bm, back) };
+}
+
+// 지울 글인가: 한자(중국어)가 한 글자라도 있어야 한다. 영문·숫자·기호만 있는 글(곡선 영문 장식 "OMNIBEARING" 을 OCR 이 "O4NIBEARIN。" 로 읽은 것 등)은 디자인 장식이라 그대로 둔다
+// (2026-10-12 안경 세척기 d02: 끝의 "。" 때문에 latin 이 아니라고 보고 지워 흐린 얼룩이 남았다)
+export const HAN_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+export const isEraseTarget = (t) => HAN_RE.test(String(t || ""));
+// 한 글자 + 낮은 확신(< 0.5)은 그림 아이콘을 글자로 잘못 읽은 것(빗 아이콘 → "甲", 원형 아이콘 → "圓")이 많다 — 지우면 아이콘이 사라진다(안경 세척기 d10 실측). 확신 1 인 큰 한 글자("净")는 지운다
+export const isIconGuess = (b) => { const t = String(b?.text || "").replace(/\s/g, ""); return Array.from(t).length === 1 && b?.conf != null && b.conf < 0.5; };
+// 글 방향 채움(dir): 글자 마스크의 픽셀마다 글 기울기 방향(angle°)으로 양쪽을 걸어 나가 마스크 밖 첫 픽셀 색 두 개를 거리로 보간.
+// 사선 판·띠(커피 랙 d07 층 라벨)처럼 바탕 무늬가 글줄과 나란할 때 판 경계를 흐리지 않는다. 가장자리는 feather 로 섞음. 반환 { ok, undo }
+export function dirFill(bm, rect, { mask = null, angle = 0, feather = 2, maxRun = 400 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h); if (!r.w || !r.h || !mask) return { ok: false };
+  const W = bm.w, H = bm.h, th = (angle * Math.PI) / 180, dx = Math.cos(th), dy = Math.sin(th);
+  const inM = (x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h && mask[(y - r.y) * r.w + (x - r.x)];
+  const src = { data: Buffer.from(bm.data), w: W, h: H };
+  const walk = (x, y, sgn) => { for (let t = 1; t <= maxRun; t++) { const X = Math.round(x + dx * t * sgn), Y = Math.round(y + dy * t * sgn); if (X < 0 || Y < 0 || X >= W || Y >= H) return null; if (!inM(X, Y)) { const i = (Y * W + X) * 4; return { t, c: [bm.data[i], bm.data[i + 1], bm.data[i + 2]] }; } } return null; };
+  let n = 0;
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+    if (!inM(x, y)) continue;
+    const a = walk(x, y, -1), b = walk(x, y, 1); if (!a && !b) continue;
+    const o = (y * W + x) * 4, c = a && b ? a.c.map((v, k) => (v * b.t + b.c[k] * a.t) / (a.t + b.t)) : (a || b).c;
+    for (let k = 0; k < 3; k++) src.data[o + k] = Math.round(c[k]); n++;
+  }
+  if (!n) return { ok: false };
+  const wts = maskWeights(mask, r, feather, W, H);
+  const back = snapshot(bm, wts.rect);
+  pasteWeighted(bm, src, wts);
+  return { ok: true, undo: () => restore(bm, back) };
+}
+// 획 마스크: 글자색(textColor)에 가까운 픽셀(+ 안티앨리어싱 반쯤 섞인 것) → dilate px 팽창. poly(기울어진 글 네 꼭짓점)를 주면 그 안만(판 모서리 선을 글자로 잡지 않게)
+// localThr 를 주면 색 대신 "주변(15px 평균)보다 그만큼 어둡거나(글자가 어두우면)/밝은" 픽셀 — 그라데이션 판 위에선 글자색 추정이 판 색과 섞여 빗나가므로(커피 랙 d07 실측) 이 방식을 쓴다
+export function strokeMask(bm, rect, { textColor, tol = 60, dilate = 2, poly = null, localThr = 0, win = 7 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h), m = new Uint8Array(r.w * r.h); let n = 0;
+  let L = null, I = null, dark = true;
+  if (localThr) {
+    L = new Float32Array(r.w * r.h); let s = 0;
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) { const v = lumOf(bm.data, ((r.y + y) * bm.w + r.x + x) * 4); L[y * r.w + x] = v; s += v; }
+    dark = 0.114 * textColor[0] + 0.587 * textColor[1] + 0.299 * textColor[2] < s / L.length;
+    I = new Float64Array((r.w + 1) * (r.h + 1));
+    for (let y = 0; y < r.h; y++) { let row = 0; for (let x = 0; x < r.w; x++) { row += L[y * r.w + x]; I[(y + 1) * (r.w + 1) + x + 1] = I[y * (r.w + 1) + x + 1] + row; } }
+  }
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+    if (poly && polyDist(poly, r.x + x + 0.5, r.y + y + 0.5) < 0) continue;
+    const i = ((r.y + y) * bm.w + r.x + x) * 4;
+    let hit;
+    if (L) { const x0 = Math.max(0, x - win), x1 = Math.min(r.w, x + win + 1), y0 = Math.max(0, y - win), y1 = Math.min(r.h, y + win + 1); const mean = (I[y1 * (r.w + 1) + x1] - I[y0 * (r.w + 1) + x1] - I[y1 * (r.w + 1) + x0] + I[y0 * (r.w + 1) + x0]) / ((x1 - x0) * (y1 - y0)); const dv = mean - L[y * r.w + x]; hit = dark ? dv > localThr : -dv > localThr; }
+    else hit = dist3([bm.data[i], bm.data[i + 1], bm.data[i + 2]], textColor) <= tol;
+    if (hit) { m[y * r.w + x] = 1; n++; }
+  }
+  return { rect: r, mask: dilateMask(m, r.w, r.h, dilate), ink: n / Math.max(1, r.w * r.h) };
+}
+// 획 인페인팅(Telea 식 바깥→안 순서 채움, 순수 JS): 마스크 픽셀만, 경계에서 가까운 순서로 반지름 radius 안의 아는 이웃을 거리 가중 평균.
+// 판 경계를 넘어 끌어오지 않게: 이웃 색들의 중앙값에서 먼 이웃(다른 판)은 가중치를 크게 낮춘다(σ = sigma). 사각형을 칠하지 않으므로 바탕 모양이 원본 그대로 남는다.
+export function inpaintMask(bm, rect, mask, { radius = 4, sigma = 18, maxPx = 60000 } = {}) {
+  const r = clipRect(rect, bm.w, bm.h), W = bm.w, N = r.w * r.h;
+  const unknown = new Uint8Array(N); let left = 0;
+  for (let i = 0; i < N; i++) if (mask[i]) { unknown[i] = 1; left++; }
+  if (!left || left > maxPx) return { ok: false };
+  // 바깥(아는 픽셀)에서 가까운 순서: 다중 시작 BFS 한 번(O(N)) — 그 순서대로 채우면 Telea 의 바깥→안 진행과 같다
+  const order = [], seen = new Uint8Array(N), q = [];
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) { const i = y * r.w + x; if (!unknown[i]) continue; let edge = x === 0 || y === 0 || x === r.w - 1 || y === r.h - 1; for (let d = 0; d < 4 && !edge; d++) { const X = x + [1, -1, 0, 0][d], Y = y + [0, 0, 1, -1][d]; if (!unknown[Y * r.w + X]) edge = true; } if (edge) { seen[i] = 1; q.push(i); } }
+  for (let h = 0; h < q.length; h++) { const i = q[h]; order.push(i); const x = i % r.w, y = (i / r.w) | 0; for (let d = 0; d < 4; d++) { const X = x + [1, -1, 0, 0][d], Y = y + [0, 0, 1, -1][d]; if (X < 0 || Y < 0 || X >= r.w || Y >= r.h) continue; const j = Y * r.w + X; if (unknown[j] && !seen[j]) { seen[j] = 1; q.push(j); } } }
+  const back = snapshot(bm, r);
+  const known = new Uint8Array(N); for (let i = 0; i < N; i++) known[i] = unknown[i] ? 0 : 1;
+  const nb = [];
+  for (const i of order) {
+    const x = i % r.w, y = (i / r.w) | 0; nb.length = 0;
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      const d2 = dx * dx + dy * dy; if (!d2 || d2 > radius * radius) continue;
+      const X = x + dx, Y = y + dy, gx = r.x + X, gy = r.y + Y; if (gx < 0 || gy < 0 || gx >= W || gy >= bm.h) continue;
+      if (X >= 0 && Y >= 0 && X < r.w && Y < r.h && !known[Y * r.w + X]) continue;
+      const k = (gy * W + gx) * 4; nb.push(bm.data[k], bm.data[k + 1], bm.data[k + 2], d2);
+    }
+    if (!nb.length) continue;
+    const m = nb.length / 4, med = [0, 1, 2].map((c) => { const a = []; for (let t = 0; t < m; t++) a.push(nb[t * 4 + c]); a.sort((p, q) => p - q); return a[a.length >> 1]; });
+    let s0 = 0, s1 = 0, s2 = 0, ws = 0;
+    for (let t = 0; t < m; t++) { const c0 = nb[t * 4], c1 = nb[t * 4 + 1], c2 = nb[t * 4 + 2], dc = (Math.abs(c0 - med[0]) + Math.abs(c1 - med[1]) + Math.abs(c2 - med[2])) / 3, w = Math.exp(-(dc * dc) / (2 * sigma * sigma)) / nb[t * 4 + 3]; s0 += c0 * w; s1 += c1 * w; s2 += c2 * w; ws += w; }
+    const o = ((r.y + y) * W + r.x + x) * 4; bm.data[o] = Math.round(s0 / ws); bm.data[o + 1] = Math.round(s1 / ws); bm.data[o + 2] = Math.round(s2 / ws); bm.data[o + 3] = 255; known[i] = 1;
+  }
+  return { ok: true, undo: () => restore(bm, back) };
+}
+// 장식 도형 찾기(v12): 글자가 알약·배지 같은 닫힌 색 도형 안에 있는지 — seed(글 영역) 안의 도형 색(color) 픽셀에서 같은 색으로 번져 나가
+// limit(글 영역 + pad) 경계에 닿지 않으면 닫힌 도형. 반환 null | { rect(도형 상자), mask(rect 기준), n }
+// v13 글자색 픽셀만: 바탕색(bgAt(x,y))↔글자색·테두리색 사이 선분에 가까운 픽셀(글자 획·가장자리 번짐)만 참 — 단색 채움이 글 옆 장식(주황 곡선·타원)을
+//   직선으로 자르던 것(컵홀더 d09·d10). 색은 비트맵 순서(BGR) 그대로 [b,g,r]
+export function inkColorClip(bm, bgAt, inks = [], tol = 40) {
+  const segD = (p, a, b) => { const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]], L = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2; const t = L ? Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / L)) : 0; return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t); };
+  const cs = inks.filter(Boolean);
+  // 바탕색에 이미 가까운 픽셀(≤ 12)은 칠하지 않는다 — 그라데이션 바탕을 한 색으로 눌러 사각형이 보이던 것(대파 d18)
+  return (x, y) => { const i = (y * bm.w + x) * 4, p = [bm.data[i], bm.data[i + 1], bm.data[i + 2]], bg = bgAt(x, y), d0 = Math.hypot(p[0] - bg[0], p[1] - bg[1], p[2] - bg[2]); if (d0 <= 12) return false; if (d0 <= tol) return true; for (let a = 0; a < cs.length; a++) { if (segD(p, bg, cs[a]) <= tol) return true; for (let b = a + 1; b < cs.length; b++) if (segD(p, cs[a], cs[b]) <= tol) return true; } return false; };
+}
+// v13 그림에 남은 가로 선(제목 밑줄·구분선) 찾기 → [{ x,y,w,h }] — 템플릿이 장애물로 써서 글이 선을 덮지 않게(탄소강 풀아웃 d07: 커진 제목이 본문을 밑줄 위로 밀어 취소선처럼 보이던 것)
+// 줄마다: 위·아래 off px 떨어진 픽셀보다 같은 쪽으로 thr 넘게 어둡거나 밝은 픽셀(가는 선 — 계단 모양 경계는 한쪽만 달라 빠진다)이 gap 이하로 끊기며 minLen 이상 이어지면 선. 붙은 줄은 하나로(두께 ≤ off)
+export function findRules(bm, { minLen = 0, thr = 35, off = 6, gap = 3 } = {}) {
+  const W = bm.w, H = bm.h, need = minLen || Math.round(W * 0.18), L = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) L[i] = lumOf(bm.data, i * 4);
+  const segs = [];
+  for (let y = off; y < H - off; y++) {
+    let run0 = -1, last = -10;
+    const flush = () => { if (run0 >= 0 && last - run0 + 1 >= need) segs.push({ x: run0, y, w: last - run0 + 1, h: 1 }); run0 = -1; };
+    for (let x = 0; x < W; x++) {
+      const v = L[y * W + x], a = v - L[(y - off) * W + x], b = v - L[(y + off) * W + x];
+      if ((a > thr && b > thr) || (a < -thr && b < -thr)) { if (run0 < 0 || x - last > gap) { flush(); run0 = x; } last = x; }
+    }
+    if (run0 >= 0) { last = Math.min(last, W - 1); flush(); }
+  }
+  const out = [];
+  for (const sg of segs) { const r = out.find((o) => sg.y <= o.y + o.h + 1 && Math.min(o.x + o.w, sg.x + sg.w) - Math.max(o.x, sg.x) > Math.min(o.w, sg.w) * 0.5); if (r) { const x0 = Math.min(r.x, sg.x), x1 = Math.max(r.x + r.w, sg.x + sg.w); r.x = x0; r.w = x1 - x0; r.h = sg.y - r.y + 1; } else out.push({ ...sg }); }
+  return out.filter((r) => r.h <= off + 2);
+}
+// v13 지울 사각형이 그 글을 담은 닫힌 도형(원·알약·띠) 밖으로 나가면 도형 안만 칠하는 판정 함수 → (x,y)=>bool | null(도형 없음·사각형이 도형 안)
+// 2026-10-13 탄소강 풀아웃 d04 "承重25kg": 글이 원 테두리에 닿아 지울 사각형이 원 밖까지 → 흰 막대가 원 테두리를 끊고 튀어나옴
+export function shapeClip(bm, area, color, { maxRatio = 12 } = {}) {
+  const sh = findShape(bm, area, color) || findShape(bm, area, color, { tol: 10 });
+  if (!sh) return null;
+  const R = sh.rect, A = area.w * area.h;
+  if (R.w * R.h > A * maxRatio || R.w >= bm.w * 0.95) return null; // 너무 크면 바탕
+  const out = area.x < R.x - 1 || area.y < R.y - 1 || area.x + area.w > R.x + R.w + 1 || area.y + area.h > R.y + R.h + 1;
+  if (!out) return null;
+  return (x, y) => x >= R.x && y >= R.y && x < R.x + R.w && y < R.y + R.h && sh.mask[(y - R.y) * R.w + (x - R.x)] === 1;
+}
+export function findShape(bm, seed, color, { tol = 26, pad = 0 } = {}) {
+  const p = pad || Math.max(60, Math.round(seed.h * 2.5));
+  const px0 = Math.max(p, seed.w); // 띠는 옆으로 길다 — 가로 한계는 글 폭만큼 더
+  const L = clipRect({ x: seed.x - px0, y: seed.y - p, w: seed.w + px0 * 2, h: seed.h + p * 2 }, bm.w, bm.h), W = bm.w;
+  const inL = (x, y) => x >= L.x && y >= L.y && x < L.x + L.w && y < L.y + L.h;
+  const near = (x, y) => { const i = (y * W + x) * 4; return dist3([bm.data[i], bm.data[i + 1], bm.data[i + 2]], color) <= tol; };
+  const seen = new Uint8Array(L.w * L.h), q = [];
+  const S0 = clipRect(seed, bm.w, bm.h);
+  for (let y = S0.y; y < S0.y + S0.h; y++) for (let x = S0.x; x < S0.x + S0.w; x++) if (near(x, y)) { const k = (y - L.y) * L.w + (x - L.x); if (!seen[k]) { seen[k] = 1; q.push(k); } }
+  if (q.length < 20) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+  for (let h = 0; h < q.length; h++) {
+    const k = q[h], x = L.x + (k % L.w), y = L.y + ((k / L.w) | 0);
+    const atImg = x === 0 || y === 0 || x === bm.w - 1 || y === bm.h - 1; // 이미지 끝에 붙은 띠(하단 주황 바 등)는 닫힌 도형으로 본다
+    if ((x === L.x || y === L.y || x === L.x + L.w - 1 || y === L.y + L.h - 1) && !atImg) return null; // 한계에 닿음 = 바탕(열린 영역)
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Y = y + dy; if (!inL(X, Y)) continue; const j = (Y - L.y) * L.w + (X - L.x); if (seen[j] || !near(X, Y)) continue; seen[j] = 1; q.push(j); }
+  }
+  const rect = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }, mask = new Uint8Array(rect.w * rect.h);
+  for (const k of q) { const x = L.x + (k % L.w), y = L.y + ((k / L.w) | 0); mask[(y - rect.y) * rect.w + (x - rect.x)] = 1; }
+  // 도형 안 구멍(지운 글 자리·아이콘)도 채운다: 줄마다 처음~끝 사이
+  for (let y = 0; y < rect.h; y++) { let a = -1, b = -1; for (let x = 0; x < rect.w; x++) if (mask[y * rect.w + x]) { if (a < 0) a = x; b = x; } for (let x = a; x >= 0 && x <= b; x++) mask[y * rect.w + x] = 1; }
+  const at = (fx, fy) => mask[Math.min(rect.h - 1, Math.round(rect.h * fy)) * rect.w + Math.min(rect.w - 1, Math.round(rect.w * fx))];
+  const round = [[0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]].every(([a, b]) => !at(a, b)); // 네 귀퉁이가 비면 원·알약(둥근 도형)
+  return { rect, mask, n: q.length, round };
+}
+
+// ── v13.2 세로쓰기 글 찾기(가로 OCR 이 못 읽는 위→아래로 쌓인 글자 — 슬라이서 d16 "一切成片", d02 "品牌形象代言人") ──
+// verticalColumns(bm, boxes) → [{ x,y,w,h, cells:[{x,y,w,h}] }]
+//  1) 잉크 = 15px 평균 밝기보다 thr 넘게 다른 픽셀(이미 읽은 OCR 상자 둘레는 뺌) → 3px 팽창 뒤 연결 덩어리
+//  2) 글자 크기 덩어리(가로 10~90px, 세로 2~90px 또는 가늘고 긴 덩어리)를 가운데 x 가 맞고(열 폭 30% 안) 세로로 이어진(간격 < 열 폭) 것끼리 한 열
+//  3) 열 = 높이 ≥ 폭 2.5배, 덩어리 ≥ 3, 양옆 띠가 평평(사진 위 무늬가 아님)
+//  4) 글자 칸 = 열 안 가로 투영의 빈 줄로 자르고, 위아래로 붙은 조각(二·三 같은 획)은 높이가 열 폭 1.15배 안이면 한 칸으로
+export function verticalColumns(bm, boxes = [], { thr = 40, minChars = 3 } = {}) {
+  const W = bm.w, H = bm.h, L = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) L[i] = lumOf(bm.data, i * 4);
+  const I = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { row += L[y * W + x]; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + row; } }
+  const mean = (x, y, r) => { const x0 = Math.max(0, x - r), x1 = Math.min(W, x + r + 1), y0 = Math.max(0, y - r), y1 = Math.min(H, y + r + 1); return (I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0]) / ((x1 - x0) * (y1 - y0)); };
+  const known = new Uint8Array(W * H); for (const b of boxes) { const x0 = Math.max(0, Math.round(b.x - 4)), y0 = Math.max(0, Math.round(b.y - 4)), x1 = Math.min(W, Math.round(b.x + b.w + 4)), y1 = Math.min(H, Math.round(b.y + b.h + 4)); for (let y = y0; y < y1; y++) known.fill(1, y * W + x0, y * W + x1); }
+  const ink = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!known[i] && Math.abs(L[i] - mean(x, y, 7)) > thr) ink[i] = 1; }
+  const dl = dilateMask(ink, W, H, 3), lab = new Int32Array(W * H), comps = [];
+  for (let s = 0; s < W * H; s++) { if (!dl[s] || lab[s]) continue; const q = [s]; lab[s] = comps.length + 1; let x0 = W, y0 = H, x1 = 0, y1 = 0, n = 0;
+    for (let h = 0; h < q.length; h++) { const k = q[h], x = k % W, y = (k / W) | 0; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (q.length > 40000) break;
+      for (const d of [1, -1, W, -W]) { const j = k + d; if (j < 0 || j >= W * H || lab[j] || !dl[j] || (d === 1 && x === W - 1) || (d === -1 && x === 0)) continue; lab[j] = comps.length + 1; q.push(j); } }
+    comps.push({ x: x0 + 3, y: y0 + 3, w: x1 - x0 + 1 - 6, h: y1 - y0 + 1 - 6, n }); }
+  const ch = comps.filter((c) => c.w >= 10 && c.w <= 90 && c.h >= 2 && (c.h <= 90 || c.h >= c.w * 2)); // 세로로 붙은 글자들은 한 덩어리(가늘고 긴)로 잡히기도 한다
+  ch.sort((a, b) => a.y - b.y);
+  const used = new Set(), cols = [];
+  for (const a of ch) {
+    if (used.has(a)) continue;
+    const col = [a]; let cx = a.x + a.w / 2, cw = a.w;
+    for (const b of ch) { if (used.has(b) || col.includes(b) || b.y < a.y) continue; const last = col[col.length - 1], bw = Math.max(cw, b.w); if (Math.abs(b.x + b.w / 2 - cx) < bw * 0.3 && b.y - (last.y + last.h) < bw * 1.0 && b.y - (last.y + last.h) > -2) { col.push(b); cw = Math.max(cw, b.w); cx = col.reduce((s, c) => s + c.x + c.w / 2, 0) / col.length; } }
+    const x0 = Math.min(...col.map((c) => c.x)), x1 = Math.max(...col.map((c) => c.x + c.w)), y0 = Math.min(...col.map((c) => c.y)), y1 = Math.max(...col.map((c) => c.y + c.h)), cwid = x1 - x0;
+    if (y1 - y0 < cwid * 2.5) continue; // 글자 수는 아래 칸 나누기로 센다(붙은 글자는 한 덩어리)
+    // 양옆 띠(열 폭만큼)가 평평해야 — 사진 속 세로 무늬 제외
+    let busy = 0, tot = 0; for (let y = y0; y < y1; y += 2) for (const x of [x0 - Math.round(cwid * 0.6), x1 + Math.round(cwid * 0.6)]) { if (x < 0 || x >= W) continue; tot++; if (Math.abs(L[y * W + x] - mean(x, y, 7)) > thr * 0.6) busy++; }
+    if (tot && busy / tot > 0.12) continue;
+    col.forEach((c) => used.add(c));
+    // 글자 칸: 가로 투영으로 자르고 조각 합치기
+    const prof = []; for (let y = y0; y < y1; y++) { let n = 0; for (let x = x0; x < x1; x++) n += ink[y * W + x]; prof.push(n); }
+    const segs = []; let st = -1; prof.forEach((n, i) => { if (n && st < 0) st = i; if (!n && st >= 0) { segs.push([st, i]); st = -1; } }); if (st >= 0) segs.push([st, prof.length]);
+    let cells = []; for (const sg of segs) { const last = cells[cells.length - 1]; if (last && sg[1] - last[0] <= cwid * 1.15 && sg[0] - last[1] <= cwid * 0.45) last[1] = sg[1]; else cells.push([...sg]); }
+    // 글자 사이가 거의 붙어 빈 줄이 없으면: 글자 높이 ≈ 열 폭으로 글자 수를 어림해 가장 잉크가 적은 줄에서 자른다
+    const n = Math.max(1, Math.round((y1 - y0) / (cwid * 0.9)));
+    if (cells.length < n) { const pitch = (y1 - y0) / n, cuts = [0]; for (let k = 1; k < n; k++) { const c0 = Math.round(k * pitch), r = Math.round(pitch * 0.25); let best = c0; for (let t = c0 - r; t <= c0 + r; t++) if (t > 0 && t < prof.length && prof[t] < prof[best]) best = t; cuts.push(best); } cuts.push(prof.length); cells = cuts.slice(1).map((c, k) => [cuts[k], c]); }
+    if (cells.length < minChars) continue;
+    cols.push({ x: x0, y: y0, w: cwid, h: y1 - y0, cells: cells.map(([a2, b2]) => ({ x: x0, y: y0 + a2, w: cwid, h: b2 - a2 })) });
+  }
+  return cols;
+}
+// 세로 열을 가로 줄로 다시 놓은 비트맵(가로 OCR 용): 칸마다 정사각형(열 폭 + 여백)에 가운데로, 바탕은 열 둘레 최빈색. 반환 { bm, cellAt: [{ x0, x1 }] (새 그림의 칸 가로 범위) }
+export function restackColumn(bm, col, { gap = 0.25, margin = 0.6 } = {}) {
+  const S = Math.round(Math.max(col.w, ...col.cells.map((c) => c.h)) * 1.15), G = Math.round(S * gap), M = Math.round(S * margin);
+  const bg = ringMode(bm, col, 4).color || [255, 255, 255];
+  const w = M * 2 + col.cells.length * S + (col.cells.length - 1) * G, h = S + M * 2, out = makeBitmap(w, h, bg);
+  col.cells.forEach((c, k) => { const ox = M + k * (S + G) + Math.round((S - c.w) / 2), oy = M + Math.round((S - c.h) / 2);
+    for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) { const sx = c.x + x, sy = c.y + y; if (sx < 0 || sy < 0 || sx >= bm.w || sy >= bm.h) continue; const si = (sy * bm.w + sx) * 4, di = ((oy + y) * w + ox + x) * 4; out.data[di] = bm.data[si]; out.data[di + 1] = bm.data[si + 1]; out.data[di + 2] = bm.data[si + 2]; out.data[di + 3] = 255; } });
+  return { bm: out, cellAt: col.cells.map((c, k) => ({ x0: M + k * (S + G), x1: M + k * (S + G) + S })) };
 }

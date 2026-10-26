@@ -23,7 +23,14 @@ const REAL = !!FOLDER && process.argv.includes("--real");
 // UI 캡처: `--ui "<작업 폴더>" --out "<png 폴더>" [--tag before|after]` — 실제 panel.html·preload 로 결과 화면을 1440×1080 에서 찍는다(작업 폴더는 임시 userData 로 복제)
 const UII = process.argv.indexOf("--ui");
 const UI_JOB = UII >= 0 ? process.argv[UII + 1] : null;
-const USER = REAL ? path.join(app.getPath("appData"), "씨드핵") : path.join(os.tmpdir(), "seedhack-detail-test", UI_JOB ? "ui" : FOLDER ? "folder" : REPLAY ? "replay" : "e2e");
+// 원본 한글화 앱 내 검수 실측: `--locqa "<작업 폴더>" [--no-qa] [--ai] [--out <png 폴더>] [--tag 이름]` — 작업 폴더를 임시 userData 로 복제(원본은 읽기만) → 원본 한글화만 생성
+//   → 결과가 뜨는 시각(done) · 뒤 검수 끝 시각 · 비용 · 장별 결과 · 결과 화면 캡처(검수 중 / 끝 / 확인 필요만). --no-qa 는 검수 끈 비교용
+// 장별 고치기 실측: `--locedit "<작업 폴더>" --out <png 폴더> [--ai]` — 복제본에서 다시 검수 → ⚠ 장마다 오른쪽 칸 단추·글 고치기·요청을 실제로 눌러 ⚠ 가 풀리는지 + 빼기/되돌리기
+const LEI = process.argv.indexOf("--locedit");
+const LE_JOB = LEI >= 0 ? process.argv[LEI + 1] : null;
+const LQI = process.argv.indexOf("--locqa");
+const LQ_JOB = LQI >= 0 ? process.argv[LQI + 1] : null;
+const USER = REAL ? path.join(app.getPath("appData"), "씨드핵") : path.join(os.tmpdir(), "seedhack-detail-test", LE_JOB ? "locedit" : LQ_JOB ? `locqa-${path.basename(LQ_JOB)}${process.argv.includes("--no-qa") ? "-noqa" : ""}` : UI_JOB ? "ui" : FOLDER ? "folder" : REPLAY ? "replay" : "e2e");
 // --keep-vision: 지난 재생 결과의 vision.json(사진 검수, ≈$1)을 다시 쓴다 — 누끼·구성·렌더만 바꿔 볼 때
 const KEEP_VISION = process.argv.includes("--keep-vision");
 let stashedVision = null;
@@ -270,8 +277,18 @@ async function uiCapture() {
   const ta = await js(`[...document.querySelectorAll("#seTexts textarea")].map((t) => ({ k: t.dataset.k, clipped: t.scrollHeight > t.clientHeight + 2 || t.scrollWidth > t.clientWidth + 2, len: t.value.length }))`);
   const ed = await js(`(() => { const r = document.getElementById("drSedit").getBoundingClientRect(); return { right: Math.round(r.right), W: document.documentElement.clientWidth, fits: r.right <= document.documentElement.clientWidth + 1 }; })()`);
   console.log("글 칸:", JSON.stringify(ta), "· 편집 칸:", JSON.stringify(ed), "→", await shot("sedit"));
+  // 원본 한글화 탭: 목록이 그 탭의 실제 섹션이고, 눌러서 이동하는지
+  const locId = await js(`window.signal.invoke("detail:get", { jobId: ${JSON.stringify(jobId)} }).then((r) => (r.renders || []).find((x) => x.templateId !== "card")?.id || "")`);
+  if (locId) {
+    await js(`window.Detail.showResult(${JSON.stringify(jobId)}, ${JSON.stringify(locId)})`); await wait(2500);
+    await js(`document.querySelectorAll("#drSecList li")[5]?.click()`); await wait(1200);
+    const g = await js(`(() => { const L = [...document.querySelectorAll("#drSecList li")]; const fl = document.querySelector("#drSlices .sec-flash"); return { items: L.length, shots: L.filter((l) => l.querySelector(".shot")).length, first: L.slice(0, 3).map((l) => l.querySelector("b").textContent), tags: L.slice(0, 3).map((l) => l.querySelector(".src-tag")?.textContent), flashTop: fl ? Math.round(fl.getBoundingClientRect().top) : null, sedit: !document.getElementById("drSedit").hidden }; })()`);
+    console.log("원본 한글화 탭:", JSON.stringify(g), "→", await shot("loc-go"));
+    await js(`window.Detail.showResult(${JSON.stringify(jobId)})`); await wait(2000);
+  }
   // 목록 클릭 → 그 섹션으로 이동: 섹션 윗변이 고정 줄 바로 아래(±30px)에 오는지
-  for (const k of [7, 10]) {
+  const nLi = await js(`document.querySelectorAll("#drSecList li").length`);
+  for (const k of [7, nLi - 1]) {
     await js(`document.querySelectorAll("#drSecList li")[${k}]?.click()`); await wait(1200);
     const g = await js(`(() => { const p = window.Detail && document.querySelectorAll("#drSlices figure"); const li = document.querySelectorAll("#drSecList li")[${k}]; const fl = document.querySelector("#drSlices .sec-flash"); const hd = document.querySelector(".dt-rhead").getBoundingClientRect().bottom; return { sec: li.querySelector("b").textContent, flashTop: fl ? Math.round(fl.getBoundingClientRect().top) : null, headBottom: Math.round(hd) }; })()`);
     console.log("섹션 이동:", JSON.stringify(g), "→", await shot(`go-${k}`));
@@ -301,7 +318,143 @@ async function uiCapture() {
   console.log("UI_OK");
 }
 
+async function locqaRun() {
+  const { BrowserWindow, ipcMain } = await import("electron");
+  const { initDetail } = await import(pathToFileURL(path.join(__dirname, "../../src/main/detail/index.js")).href);
+  const NOQA = process.argv.includes("--no-qa");
+  const OI = process.argv.indexOf("--out"), OUT = OI >= 0 ? process.argv[OI + 1] : path.join(USER, "shots"); fs.mkdirSync(OUT, { recursive: true });
+  const TG = process.argv.indexOf("--tag"), TAG = TG >= 0 ? process.argv[TG + 1] : path.basename(LQ_JOB);
+  const jobId = path.basename(LQ_JOB), dst = path.join(USER, "detail", jobId); fs.mkdirSync(path.dirname(dst), { recursive: true });
+  const { execFileSync } = await import("node:child_process"); execFileSync("cp", ["-Rc", LQ_JOB, dst]); // APFS 복제 — 원본 폴더는 건드리지 않음
+  { const src = JSON.parse(fs.readFileSync(path.join(dst, "source.json"), "utf8")); src.images = (src.images || []).map((im) => ({ ...im, file: im.file ? path.join(dst, "raw", path.basename(im.file)) : im.file })); fs.writeFileSync(path.join(dst, "source.json"), JSON.stringify(src, null, 1)); } // 원본 raw 경로 → 복제본 raw
+  if (NOQA) store.set("settings", { detailLocQa: false });
+  let win = null; const qaEv = [];
+  const ipc2 = { handle: (ch, fn) => { handlers[ch] = fn; ipcMain.handle(ch, fn); }, on: (ch, fn) => { handlers[ch] = fn; ipcMain.on(ch, fn); } };
+  const send2 = (ch, d) => { send(ch, d); if (ch === "detail:changed" && d?.locQa) qaEv.push({ t: Date.now(), ...d.locQa }); try { win?.webContents.send(ch, d); } catch {} };
+  initDetail({ ipcMain: ipc2, app, getWin: () => win, store, log, translate: async (t) => t, getCnSession: () => null, getCnView: () => null, send: send2, showDetail: () => {} });
+  call("detail:info:set", { jobId, patch: { mode: "localize" } });
+  win = new BrowserWindow({ show: false, width: 1440, height: 1080, useContentSize: true, webPreferences: { preload: path.join(__dirname, "../../src/preload/panel.cjs"), contextIsolation: true } });
+  await win.loadFile(path.join(__dirname, "../../src/renderer/panel.html"));
+  const js = (c) => win.webContents.executeJavaScript(c, true), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await wait(800); await js(`(() => { const b = document.getElementById("tDetail"); b.disabled = false; b.click(); })()`); await wait(800);
+  const shot = async (name) => { const f = path.join(OUT, `${TAG}-${name}.png`); fs.writeFileSync(f, (await win.webContents.capturePage()).toPNG()); return f; };
+  console.log(`원본 한글화 실측: ${LQ_JOB}\n  검수 ${NOQA ? "끔" : "켬"} · AI ${process.argv.includes("--ai") ? "켬" : "끔(규칙 번역·JS 지우기)"}`);
+  const t0 = Date.now();
+  const r = call("detail:confirm", { jobId, review: false }); // 앱의 "생성하기"와 같은 길(방식 = 원본 한글화)
+  if (r?.error) { console.log("LOCQA_FAIL", r.error); process.exitCode = 1; return; }
+  const end = await waitEnd(jobId, 3600000); const tDone = Date.now() - t0;
+  if (end.step !== "done") { console.log("LOCQA_FAIL", end.msg); process.exitCode = 1; return; }
+  console.log(`  결과 표시(done) ${(tDone / 1000).toFixed(1)}초`);
+  const res0 = JSON.parse(fs.readFileSync(path.join(dst, "result.json"), "utf8")); const rid = res0.current;
+  await js(`window.Detail.showResult(${JSON.stringify(jobId)}, ${JSON.stringify(rid)})`); await wait(1500);
+  if (!NOQA) console.log("  검수 중 화면 →", await shot("1-running"));
+  let fin = null; const tw = Date.now();
+  while (!NOQA && Date.now() - tw < 900000) { fin = qaEv.find((e) => e.status === "done" || e.status === "failed"); if (fin) break; await wait(500); }
+  const tQa = fin ? fin.t - t0 : null;
+  await wait(2500);
+  const res = JSON.parse(fs.readFileSync(path.join(dst, "result.json"), "utf8")); const rd = (res.renders || []).find((x) => x.id === rid) || {}, q = rd.locQa || null;
+  console.log(`  뒤 검수 끝 ${tQa ? ((tQa - tDone) / 1000).toFixed(1) + "초(결과 표시 뒤)" : "-"} · 전체 ${tQa ? (tQa / 1000).toFixed(1) : (tDone / 1000).toFixed(1)}초`);
+  console.log(`  단계별: ${JSON.stringify(res.timings || {})}`);
+  console.log(`  비용: ${JSON.stringify(res.costs || {})} 합계 $${Number(res.costUsd || 0).toFixed(3)}`);
+  if (q) { console.log(`  검수: ${q.status} · ${q.checked}장 · 고침 ${q.fixed} · 확인 필요 ${q.flagged} · ${((q.ms || 0) / 1000).toFixed(0)}초 · $${q.costUsd}${q.limitHit ? " · 상한 " + q.limitHit : ""}`);
+    for (const [id, x] of Object.entries(q.sections || {})) if (!x.pass || x.fixed) console.log(`    ${x.pass ? "🔧" : "⚠"} ${id} (${x.tries}회) ${x.pass ? "고침" : x.issues.map((i) => i.why).join(" / ")}`);
+    (q.steps || []).slice(0, 25).forEach((t) => console.log("     ·", t)); }
+  if (!NOQA) {
+    console.log("  검수 끝 화면 →", await shot("2-done"));
+    const n = await js(`(() => { const b = document.getElementById("drQaOnly"); if (!b || b.hidden) return 0; b.click(); return document.querySelectorAll("#drSecList li:not([hidden])").length; })()`);
+    await wait(500); if (n) { await js(`document.querySelector("#drSecList li:not([hidden])")?.click()`); await wait(1200); console.log(`  확인 필요만(${n}장) →`, await shot("3-flagged")); }
+    const c = await js(`(() => { const e = document.querySelector("#drSecList .qa-tag"); if (!e) return null; const r = e.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+    if (c) { win.webContents.sendInputEvent({ type: "mouseMove", x: 5, y: 5 }); await wait(120); win.webContents.sendInputEvent({ type: "mouseMove", x: c.x, y: c.y }); await wait(500); console.log("  ⚠ 꼬리표 말풍선 →", await shot("4-tip")); }
+  }
+  fs.writeFileSync(path.join(OUT, `${TAG}-locqa.json`), JSON.stringify({ job: LQ_JOB, noQa: NOQA, ai: process.argv.includes("--ai"), doneMs: tDone, qaEndMs: tQa, timings: res.timings, costs: res.costs, costUsd: res.costUsd, locQa: q, events: qaEv.map((e) => ({ dt: e.t - t0, status: e.status, msg: e.msg })) }, null, 1));
+  console.log(`작업 폴더: ${dst}`); console.log("LOCQA_OK");
+}
+
+async function loceditRun() {
+  const { BrowserWindow, ipcMain } = await import("electron");
+  const { initDetail } = await import(pathToFileURL(path.join(__dirname, "../../src/main/detail/index.js")).href);
+  const OI = process.argv.indexOf("--out"), OUT = OI >= 0 ? process.argv[OI + 1] : path.join(USER, "shots"); fs.mkdirSync(OUT, { recursive: true });
+  const jobId = path.basename(LE_JOB), dst = path.join(USER, "detail", jobId); fs.mkdirSync(path.dirname(dst), { recursive: true });
+  const { execFileSync } = await import("node:child_process"); execFileSync("cp", ["-Rc", LE_JOB, dst]); // 복제 — 원본 폴더는 읽기만
+  { const src = JSON.parse(fs.readFileSync(path.join(dst, "source.json"), "utf8")); src.images = (src.images || []).map((im) => ({ ...im, file: im.file ? path.join(dst, "raw", path.basename(im.file)) : im.file })); fs.writeFileSync(path.join(dst, "source.json"), JSON.stringify(src, null, 1)); }
+  let win = null;
+  const ipc2 = { handle: (ch, fn) => { handlers[ch] = fn; ipcMain.handle(ch, fn); }, on: (ch, fn) => { handlers[ch] = fn; ipcMain.on(ch, fn); } };
+  initDetail({ ipcMain: ipc2, app, getWin: () => win, store, log, translate: async (t) => t, getCnSession: () => null, getCnView: () => null, send: (ch, d) => { send(ch, d); try { win?.webContents.send(ch, d); } catch {} }, showDetail: () => {} });
+  const RES = () => JSON.parse(fs.readFileSync(path.join(dst, "result.json"), "utf8"));
+  const rid = (RES().renders || []).filter((x) => x.templateId === "localize").sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).at(-1)?.id;
+  if (!rid) { console.log("LOCEDIT_FAIL 한글화 렌더 없음"); return; }
+  console.log(`장별 고치기 실측: ${LE_JOB} · 렌더 ${rid} · AI ${process.argv.includes("--ai") ? "켬" : "끔"}`);
+  const t0 = Date.now(); const rq = await call("detail:loc:recheck", { jobId, renderId: rid });
+  console.log(`  다시 검수 ${((Date.now() - t0) / 1000).toFixed(0)}초 · ${JSON.stringify(rq.summary || rq)}`);
+  win = new BrowserWindow({ show: false, width: 1440, height: 1080, useContentSize: true, webPreferences: { preload: path.join(__dirname, "../../src/preload/panel.cjs"), contextIsolation: true } });
+  await win.loadFile(path.join(__dirname, "../../src/renderer/panel.html"));
+  const js = (c) => win.webContents.executeJavaScript(c, true), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await wait(800); await js(`(() => { const b = document.getElementById("tDetail"); b.disabled = false; b.click(); })()`); await wait(800);
+  await js(`window.Detail.showResult(${JSON.stringify(jobId)}, ${JSON.stringify(rid)})`); await wait(2500);
+  let n = 0; const shot = async (name) => { const f = path.join(OUT, `${String(++n).padStart(2, "0")}-${name}.png`); fs.writeFileSync(f, (await win.webContents.capturePage()).toPNG()); return f; };
+  console.log("  목록 →", await shot("list"));
+  const secs = () => RES().renders.find((x) => x.id === rid).locQa?.sections || {};
+  const open = async (id) => { const ok = await js(`(() => { const i = window.Detail.se.list.findIndex((x) => x.qa?.id === ${JSON.stringify(id)}); const li = document.querySelector('#drSecList li[data-i="' + i + '"]'); if (!li) return false; li.hidden = false; li.click(); return true; })()`); await wait(1800); return ok; };
+  const busyWait = async (ms = 420000) => { const t = Date.now(); await wait(600); while (Date.now() - t < ms) { const b = await js(`!!window.Detail.le.busy`); if (!b) break; await wait(800); } await wait(2500); };
+  const act = async (id, how) => {
+    const before = secs()[id]; const tA = Date.now(); const e0 = (RES().renders.find((x) => x.id === rid).locQa?.edits || []).length;
+    if (!(await open(id))) return { id, how, error: "목록에 없음" };
+    const pf = await shot(`${id}-open`);
+    if (how === "text") { // 문제 줄(없으면 첫 줄) 글자 크기 −4 · 굵게 → 저장
+      for (let k = 0; k < 2; k++) { await js(`(() => { document.getElementById("leMore").open = true; const r = document.querySelector("#leLines .le-line.bad") || document.querySelector("#leLines .le-line"); r?.querySelector('[data-op="size"][data-v="-2"]')?.click(); })()`); await wait(200); }
+      await shot(`${id}-text-edit`); await js(`document.getElementById("leSave").click()`);
+    } else if (how.startsWith("request:")) { await js(`(() => { const i = document.getElementById("leAsk"); i.value = ${JSON.stringify(how.slice(8))}; document.getElementById("leAskGo").click(); })()`); }
+    else if (how === "drop") { await js(`document.querySelector('#drLoced [data-le="drop"]').click()`); await wait(300); await js(`document.querySelector('#drLoced [data-le="drop"]').click()`); }
+    else if (how === "undo") { await js(`document.getElementById("leUndo").click()`); }
+    else await js(`document.querySelector('#drLoced [data-le="${how}"]').click()`);
+    await busyWait();
+    const lq = RES().renders.find((x) => x.id === rid).locQa, ed = (lq.edits || []).slice(e0);
+    const after = lq.sections?.[id];
+    const r = { id, how, before: before ? (before.pass ? "✔" : `⚠ ${before.why}`) : "-", after: after ? (after.pass ? "✔" : `⚠ ${after.why}`) : how === "drop" ? "뺌" : "-", ms: Date.now() - tA, costUsd: ed.reduce((a, e) => a + (e.costUsd || 0), 0), note: ed.map((e) => e.note).join(" / "), shots: [pf] };
+    r.shots.push(await shot(`${id}-${how.split(":")[0]}-after`));
+    console.log(`  ${r.before} → ${r.after}  [${id} ${how}] ${(r.ms / 1000).toFixed(0)}초 · $${r.costUsd.toFixed(3)} · ${r.note}`);
+    return r;
+  };
+  // --inject: 편집 통로(detail:loc:edit text)로 결함을 만든다 — 한 줄만 1.8배 · 직역 문구 · 원 안 긴 글 → 다시 그리고 검수하면 ⚠
+  if (process.argv.includes("--inject")) {
+    const plan = JSON.parse(fs.readFileSync(path.join(dst, `qa-plan-${rid}.json`), "utf8"));
+    const live = (sec) => (sec.layers || []).map((l, i) => ({ l, i })).filter(({ l }) => !l.drop && String(l.ko || "").trim() && !["number", "dims", "price", "logo"].includes(l.role));
+    const sz = (l) => Number(l.style?.size ?? l.style?.fontSizePx) || l.h * 0.78;
+    const imgs = plan.sections.filter((x) => x.type === "image" && /^d\d+$/.test(x.id));
+    const used = new Set(), inj = [];
+    const a = imgs.find((x) => { const ls = live(x).filter(({ l }) => !l.shape); return ls.some(({ l }, k) => ls.some(({ l: m }, j) => j !== k && m.role === l.role && Math.abs(m.h - l.h) <= Math.max(m.h, l.h) * 0.08)); });
+    if (a) { const ls = live(a).filter(({ l }) => !l.shape); const pr = ls.find(({ l }, k) => ls.some(({ l: m }, j) => j !== k && m.role === l.role && Math.abs(m.h - l.h) <= Math.max(m.h, l.h) * 0.08)); used.add(a.id); inj.push([a.id, { layers: [{ i: pr.i, size: Math.round(sz(pr.l) * 1.8) }] }, "한 줄만 1.8배"]); }
+    const b = imgs.find((x) => !used.has(x.id) && live(x).some(({ l }) => !l.shape && l.role !== "title")); if (b) { const t = live(b).find(({ l }) => !l.shape && l.role !== "title"); used.add(b.id); inj.push([b.id, { layers: [{ i: t.i, ko: "당신의 주방을 위한 선택을 거부합니다" }] }, "직역 문구"]); }
+    const c = imgs.find((x) => !used.has(x.id) && live(x).some(({ l }) => l.shape?.circle)); if (c) { const t = live(c).find(({ l }) => l.shape?.circle); inj.push([c.id, { layers: [{ i: t.i, size: Math.round(sz(t.l) * 2.2) }] }, "원 안 글 2.2배"]); }
+    for (const [id, payload, what] of inj) { const r = await call("detail:loc:edit", { jobId, renderId: rid, sectionId: id, action: "text", payload }); console.log(`  결함 넣기 ${id} ${what} → ${r.pass === false ? `⚠ ${r.why}` : r.error || "✔(안 잡힘)"}`); }
+    // 넣은 결함은 되돌리기 기록에 남으므로 지워 둔다(수강생이 "되돌리기"로 푸는 게 아니라 단추로 푸는지 보려고)
+    const hf = path.join(dst, ".loc-edit", rid, "history.json"); try { const H = JSON.parse(fs.readFileSync(hf, "utf8")); for (const [id] of inj) delete H.stack[id]; fs.writeFileSync(hf, JSON.stringify(H)); } catch {}
+    await js(`window.Detail.showResult(${JSON.stringify(jobId)}, ${JSON.stringify(rid)})`); await wait(2500);
+    console.log("  결함 넣은 뒤 목록 →", await shot("list-injected"));
+  }
+  const results = []; const flagged = Object.entries(secs()).filter(([, q]) => !q.pass);
+  console.log(`  ⚠ ${flagged.length}장: ${flagged.map(([id, q]) => `${id} ${q.why}`).join(" / ")}`);
+  const pick = (q) => { const k = q.issues?.[0]?.kind, a = q.issues?.[0]?.ai; if (["residue", "chinese"].includes(k) || a === "residue") return "autofix"; if (["literal"].includes(k) || a === "translation") return "request:이 문구를 한국 쇼핑몰에서 쓰는 자연스러운 말로 바꿔줘"; if (["emptyDeco"].includes(k) || a === "empty_deco") return "plain"; if (k === "contrast" || k === "overflow") return "text"; return "tidy"; };
+  for (const [id, q] of flagged) results.push(await act(id, pick(q)));
+  // 남은 ⚠ 는 다음 단추로 한 번 더(요청 → 그림만)
+  for (const [id] of flagged) { const q = secs()[id]; if (q && !q.pass) results.push(await act(id, q.issues?.some((x) => x.kind === "residue" || x.ai === "residue") ? "autofix" : pick(q))); }
+  // 버튼 고루: 문제 없는 장 하나로 글 고치기·되돌리기 · 줄 맞추기 · 빼기 → 다시 넣기
+  const okIds = Object.entries(secs()).filter(([id, q]) => q.pass && /^d\d+$/.test(id) && (q.box?.units || []).length >= 2).map(([id]) => id);
+  if (okIds[0]) { results.push(await act(okIds[0], "text")); results.push(await act(okIds[0], "undo")); }
+  if (okIds[1]) results.push(await act(okIds[1], "tidy"));
+  if (okIds[3]) { results.push(await act(okIds[3], "request:제목을 더 크게 해줘")); results.push(await act(okIds[3], "undo")); }
+  if (okIds[4]) { results.push(await act(okIds[4], "plain")); results.push(await act(okIds[4], "undo")); }
+  if (okIds[2]) { results.push(await act(okIds[2], "drop")); console.log("  뺀 장 칩 →", await shot("removed-chip")); await js(`document.querySelector("#drLocRem [data-undo]")?.click()`); await busyWait(); const back = !!secs()[okIds[2]]; console.log(`  뺀 장 다시 넣기: ${back ? "✔ 돌아옴" : "✕"}`); results.push({ id: okIds[2], how: "다시 넣기", after: back ? "돌아옴" : "없음" }); }
+  await js(`window.Detail.showResult(${JSON.stringify(jobId)}, ${JSON.stringify(rid)})`); await wait(2500); console.log("  마지막 목록 →", await shot("list-final"));
+  const fin = secs(); const res = RES();
+  fs.writeFileSync(path.join(OUT, "locedit.json"), JSON.stringify({ job: LE_JOB, rid, recheck: rq.summary, flaggedBefore: flagged.map(([id, q]) => ({ id, why: q.why })), flaggedAfter: Object.entries(fin).filter(([, q]) => !q.pass).map(([id, q]) => ({ id, why: q.why })), results, costs: res.costs }, null, 1));
+  console.log(`  ⚠ ${flagged.length}장 → ${Object.values(fin).filter((q) => !q.pass).length}장 · 비용 ${JSON.stringify(res.costs || {})}`);
+  console.log("LOCEDIT_OK");
+}
+
 async function main() {
+  if (LE_JOB) { try { await loceditRun(); } catch (e) { console.log("LOCEDIT_FAIL", e?.stack || e); process.exitCode = 1; } app.quit(); return; }
+  if (LQ_JOB) { try { await locqaRun(); } catch (e) { console.log("LOCQA_FAIL", e?.stack || e); process.exitCode = 1; } app.quit(); return; }
   if (UI_JOB) { try { await uiCapture(); } catch (e) { console.log("UI_FAIL", e?.stack || e); } app.quit(); return; }
 try {
   const { initDetail, STEPS } = await import(pathToFileURL(path.join(__dirname, "../../src/main/detail/index.js")).href);

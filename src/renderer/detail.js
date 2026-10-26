@@ -44,9 +44,10 @@
     </aside>
     <section class="dt-main" id="dtMain">
       <div class="dt-setup" id="dtSetup">
-        <div class="dt-sec">1688 상품 주소로 바로 만들기</div>
-        <form class="dt-url" id="dtUrlForm"><input id="dtUrl" class="mono" type="text" spellcheck="false" autocomplete="off" placeholder="https://detail.1688.com/offer/상품번호.html  (주소나 상품번호 붙여넣기)"><button id="dtUrlGo" type="submit">▶ 주소로 만들기</button></form>
-        <p class="dt-urlmsg" id="dtUrlMsg">1688 탭에서 그 상품을 열어 정보를 읽은 뒤, 고른 템플릿으로 바로 만듭니다. 로그인·보안 인증이 뜨면 1688 탭에서 넘겨 주세요.</p>
+        <div class="dt-sec">상품 주소로 바로 만들기</div>
+        <form class="dt-url" id="dtUrlForm"><input id="dtUrl" class="mono" type="text" spellcheck="false" autocomplete="off" placeholder="상품 주소 붙여넣기 (1688 · 타오바오 · 쿠팡 · 네이버 · 오늘의집)"><button id="dtUrlGo" type="submit">▶ 주소로 만들기</button></form>
+        <div class="dt-sites" id="dtSites">${[["1688", "1688"], ["taobao", "타오바오"], ["coupang", "쿠팡"], ["naver", "네이버"], ["ohou", "오늘의집"]].map(([k, n]) => `<span data-site="${k}">${n}</span>`).join("")}</div>
+        <p class="dt-urlmsg" id="dtUrlMsg">그 사이트 화면에서 상품 정보를 읽어 옵니다. 로그인·인증이 뜨면 그 화면에서 넘겨 주세요.</p>
         <div class="dt-pick" id="dtPick"><div class="dt-pick-empty">왼쪽에서 상품을 고르거나, <b>🇨🇳 1688 상품 화면</b> 오른쪽 위의 <b>📄 상세페이지 만들기</b> 버튼을 누르세요.</div></div>
         <div class="dt-sec">템플릿</div>
         <div class="dt-tpls" id="dtTpls"></div>
@@ -55,6 +56,16 @@
         <p class="dt-guide" id="dtGuide"></p>
         <div class="dt-opts"><label><input type="checkbox" id="dtOptReview"> 렌더 직전에 구성 한 번 더 확인(사람 손 30초 — 사진 교체·헤드라인 수정)</label><label><input type="checkbox" id="dtOptPresentAuto" checked> 발표 모드에서는 확인 없이 자동 진행</label>
           <div class="dt-key"><span>🎨 이미지 생성 키(Gemini)</span><input id="dtKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza… (저장만 하고 어디에도 기록하지 않습니다)"><select id="dtKeyModel" title="이미지 생성 모델"><option value="gemini-2.5-flash-image">gemini-2.5-flash-image (기본)</option><option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview-image-generation</option></select><button id="dtKeySave" class="sec" type="button">저장</button><button id="dtKeyClear" class="sec" type="button" title="저장된 키 지우기">지우기</button><small id="dtKeyState"></small></div>
+          <div class="dt-gc" id="dtGc">
+            <div class="dt-gc-head"><b>🔗 내 구글 클라우드</b><span id="dtGcState">연결 안 됨</span><small id="dtGcTrial"></small></div>
+            <div class="dt-gc-form"><label class="sec dt-gc-file" data-tip="서비스 계정 키 파일(.json)을 고르거나 이 칸으로 끌어다 놓기">📄 키 파일로 연결<input id="dtGcFile" type="file" accept=".json,application/json" hidden></label><input id="dtGcKey" type="password" autocomplete="off" spellcheck="false" placeholder="또는 API 키 (AIza…)"><input id="dtGcProj" autocomplete="off" spellcheck="false" placeholder="프로젝트 ID"><button id="dtGcSave" class="sec" type="button">연결</button><button id="dtGcTest" class="sec" type="button" data-tip="글 AI · 이미지 AI · 글자 읽기가 되는지 다시 확인">확인</button><button id="dtGcClear" class="sec" type="button" data-tip="이 PC 에서 구글 연결 지우기">끊기</button></div>
+            <ul class="dt-gc-checks" id="dtGcChecks"></ul>
+            <div class="dt-gc-links"><button class="lnk" type="button" data-gc="trial">무료 체험 시작</button><button class="lnk" type="button" data-gc="vertex">Vertex AI 켜기</button><button class="lnk" type="button" data-gc="vision">Cloud Vision 켜기</button><button class="lnk" type="button" data-gc="keys">API 키 만들기</button><button class="lnk" type="button" data-gc="credits">남은 크레딧 보기</button></div>
+          </div>
+          <div class="dt-usage" id="dtUsage" hidden>
+            <div class="dt-unums"><div><b id="uToday">0장</b><small>오늘</small></div><div><b id="uMonth">0장</b><small>이번 달</small></div><div><b id="uCost">₩0</b><small>이번 달 예상 비용</small></div><button id="uBill" class="sec" type="button" data-tip="실제 청구 금액 보기(브라우저로 열림)">💳 실제 청구</button></div>
+            <details class="dt-umore"><summary>자세히</summary><div class="dt-uweek" id="uWeek"></div><div class="dt-umodels" id="uModels"></div><small class="dt-unote" id="uNote"></small></details>
+          </div>
           <small class="dt-keyhelp">키가 있으면 누끼 제품을 한국 집 안 장면에 다시 놓은 AI 사진(대표 1 + 포인트 3컷 × 2장)을 만들어 검수 뒤 씁니다. 없으면 이 단계는 건너뜁니다.</small></div>
       </div>
       <div class="dt-review" id="dtReview" hidden>
@@ -80,6 +91,7 @@
       </div>
       <div class="dt-infov" id="dtInfoV" hidden>
         <div class="dt-ivhead"><div><b>✅ 상품 정보를 가져왔어요</b><small id="ivSub">확인하고 고친 뒤 상세페이지를 생성하세요</small></div><span class="spacer"></span><a id="ivSrc" href="#" title="앱의 🇨🇳 1688 탭에서 원본 열기"></a><button id="ivRefetch" class="sec" type="button" title="사진 선별·누끼·기획을 다시 분석합니다">↻ 다시 가져오기</button></div>
+        <div class="dt-ivrights" id="ivRights" hidden></div>
         <div class="dt-ivbody">
           <section class="dt-ivmode"><h4>만들기 방식</h4><div class="dt-modes" id="ivModes"></div></section>
           <section><h4>① 대표 이미지(main) <small>AI 이미지 선별 — 불필요한 사진은 AI가 제외했어요(누르면 포함/제외)</small></h4><div class="dt-ivgrid" id="ivGallery"></div>
@@ -116,7 +128,7 @@
         <div class="dt-rsum" id="drSumWrap"><button type="button" class="dt-rsumline" id="drSum" aria-expanded="false" data-tip="누르면 검수 제안·단계별 시간·처리 내역을 펼칩니다"></button>
           <div class="dt-rsumbody" id="drSumBody" hidden><div class="dt-qa" id="drQa" hidden></div><p class="dt-times" id="drTimes" hidden></p><p class="dt-rhow" id="drHow"></p></div></div>
         <div class="dt-rbody">
-          <aside class="dt-secs" id="drSecs" hidden><div class="dt-sec">섹션 <small>누르면 편집</small></div><div class="dt-srcsum"><span id="drSrcSum"></span><button class="sec" id="drSrcToggle" type="button" aria-pressed="true" data-tip="미리보기 위에 섹션마다 원본/AI 생성 표시를 켜고 끕니다">미리보기 표시</button></div><ol id="drSecList"></ol></aside>
+          <aside class="dt-secs" id="drSecs" hidden><div class="dt-sec">섹션 <small>누르면 편집</small></div><div class="dt-locqa" id="drLocQa" hidden></div><button type="button" class="dt-qafilter" id="drQaOnly" hidden aria-pressed="false" data-tip="⚠ 확인이 필요한 장만 보기 — 다시 누르면 전체"></button><div class="dt-locrem" id="drLocRem" hidden></div><div class="dt-srcsum"><span id="drSrcSum"></span><button class="sec" id="drSrcToggle" type="button" aria-pressed="true" data-tip="미리보기 위에 섹션마다 원본/AI 생성 표시를 켜고 끕니다">미리보기 표시</button></div><ol id="drSecList"></ol></aside>
           <div class="dt-slices" id="drSlices"></div>
           <aside class="dt-sedit" id="drSedit" hidden>
             <div class="dt-sec">섹션 편집 <b id="seName"></b><button id="seClose" class="sec" type="button">닫기</button></div>
@@ -127,6 +139,19 @@
             <div class="dt-sec">글자 바로 고치기 <small>AI 호출 없음</small></div><div id="seTexts"></div>
             <button id="seSaveText" class="sec" type="button">✔ 글자 저장·다시 그리기</button>
             <div class="dt-semove"><button id="seUp" class="sec" type="button">▲ 위로</button><button id="seDown" class="sec" type="button">▼ 아래로</button><button id="seDel" class="sec" type="button">🗑 섹션 삭제</button></div>
+          </aside>
+          <aside class="dt-sedit dt-loced" id="drLoced" hidden>
+            <div class="dt-sec"><b id="leName"></b><button id="leClose" class="sec" type="button">닫기</button></div>
+            <div class="le-state" id="leState"></div>
+            <div class="le-acts">
+              <button type="button" class="le-big" data-le="autofix" data-tip="🔧 이 장만 검수를 다시 돌려 글 배치·지운 자리·문구를 고쳐요 (1~2분)"><b>🔧 다시 자동 고치기</b><small>이 장만 다시 손봐요</small></button>
+              <button type="button" class="le-big" data-le="tidy" data-tip="📐 같은 종류 글의 크기와 줄 왼쪽 끝을 똑같이 맞춰요 (몇 초)"><b>📐 줄·크기 맞추기</b><small>크기·줄 끝 통일</small></button>
+              <button type="button" class="le-big" data-le="plain" data-tip="🖼 중국어를 지운 그림만 두고 한글은 얹지 않아요 — 글이 지저분할 때"><b>🖼 한글 빼고 그림만</b><small>글 없이 깨끗하게</small></button>
+              <button type="button" class="le-big" data-le="drop" data-tip="🙈 이 장을 상세페이지에서 빼요 — 목록 위 ‘뺀 장’에서 다시 넣을 수 있어요"><b>🙈 이 장 빼기</b><small>다시 넣을 수 있어요</small></button>
+            </div>
+            <div class="le-ask"><input id="leAsk" type="text" maxlength="200" placeholder="이 장에 요청 — 예: 글자를 원 안에 넣어줘"><button id="leAskGo" class="sec" type="button" data-tip="🤖 AI 가 이 장의 글을 요청대로 고쳐요 (30초~1분)">보내기</button></div>
+            <details class="le-more" id="leMore"><summary>✏️ 글 직접 고치기 · 세부 조정</summary><div id="leLines"></div><button id="leSave" class="pri" type="button">✔ 저장하고 다시 그리기</button></details>
+            <div class="le-foot"><button id="leUndo" class="sec" type="button" data-tip="↶ 이 장을 바로 전 상태로 되돌려요">↶ 되돌리기</button><span id="leBusy"></span></div>
           </aside>
         </div>
         <div class="dt-export" id="drExport"><b>내보내기</b><select id="exW"><option value="780">780px</option><option value="860">860px</option></select><select id="exF"><option value="jpg">JPG</option><option value="png">PNG</option></select><select id="exM"><option value="single">한 장으로</option><option value="sections">섹션별</option></select><button id="exGo" class="sec" type="button">⬇ 폴더에 저장</button><small id="exMsg"></small></div>
@@ -221,16 +246,29 @@
   };
   // 주소(또는 상품번호) → 1688 탭에서 열어 읽기 → 파이프라인. 진행 화면 전환은 메인(detail:fromPage → showDetail)이 한다
   let urlBusy = false;
+  // 붙여 넣은 주소 → 사이트 칩(site-core.js siteOfText 와 같은 규칙 — 칩 표시만, 판정은 메인이 한다)
+  const SITE_KO = { "1688": "1688", taobao: "타오바오", tmall: "티몰", coupang: "쿠팡", naver: "네이버", ohou: "오늘의집" };
+  const siteOfText = (s) => { s = String(s || "").trim(); return /^\d{6,20}$/.test(s) || /1688\.com/i.test(s) ? "1688" : /tmall\.(com|hk)/i.test(s) ? "tmall" : /taobao\.com/i.test(s) ? "taobao" : /coupang\.com/i.test(s) ? "coupang" : /(smartstore|brand)\.naver\.com/i.test(s) ? "naver" : /ohou\.se/i.test(s) ? "ohou" : ""; };
+  const paintSites = () => { const s = siteOfText($("dtUrl").value), k = s === "tmall" ? "taobao" : s; $("dtSites").querySelectorAll("[data-site]").forEach((el) => el.classList.toggle("on", el.dataset.site === k)); $("dtSites").classList.toggle("has", !!k); };
+  $("dtUrl").addEventListener("input", paintSites);
   async function fromUrl(url, rowId = null) {
     if (urlBusy) return;
     const msg = $("dtUrlMsg"), btn = $("dtUrlGo");
-    urlBusy = true; btn.disabled = true; btn.textContent = "⠋ 1688에서 읽는 중…";
-    msg.className = "dt-urlmsg busy"; msg.textContent = "1688 탭에서 상품 화면을 열고 제목·속성표·상세 이미지를 읽는 중입니다 (10~30초)";
-    const spin = setInterval(() => { btn.textContent = `${SPIN[Math.floor(performance.now() / 80) % SPIN.length]} 1688에서 읽는 중…`; }, 80);
+    const site = siteOfText(url), where = site && site !== "1688" ? SITE_KO[site] : "1688"; // 1688 은 예전 문구 그대로
+    urlBusy = true; btn.disabled = true; btn.textContent = `⠋ ${where}에서 읽는 중…`;
+    msg.className = "dt-urlmsg busy"; msg.textContent = where === "1688" ? "1688 탭에서 상품 화면을 열고 제목·속성표·상세 이미지를 읽는 중입니다 (10~30초)" : `${where} 상품 화면을 열고 제목·옵션·상세 이미지를 읽는 중입니다 (20~60초)`;
+    const spin = setInterval(() => { btn.textContent = `${SPIN[Math.floor(performance.now() / 80) % SPIN.length]} ${where}에서 읽는 중…`; }, 80);
     try {
       const r = await api.invoke("detail:fromUrl", { url, rowId, templateId: st.tpl });
-      if (r?.ok) { msg.className = "dt-urlmsg ok"; msg.textContent = `✔ 읽었습니다 — 상세페이지를 만드는 중 (작업 ${r.jobId})`; $("dtUrl").value = ""; }
-      else { msg.className = "dt-urlmsg err"; msg.textContent = "✕ " + (r?.error || "만들지 못했습니다"); }
+      if (r?.ok) { msg.className = "dt-urlmsg ok"; msg.textContent = `✔ 읽었습니다 — 상세페이지를 만드는 중 (작업 ${r.jobId})`; $("dtUrl").value = ""; paintSites(); }
+      else {
+        msg.className = "dt-urlmsg err"; msg.textContent = "✕ " + (r?.error || "만들지 못했습니다");
+        if (r?.needVisible) { // 네이버·오늘의집 로그인·보안 확인 → 같은 세션의 보이는 창에서 사람이 넘긴다
+          const vb = document.createElement("button"); vb.type = "button"; vb.className = "sec dt-urlvis"; vb.textContent = "보이는 창으로 열기";
+          vb.onclick = async () => { const o = await api.invoke("detail:openVisible", { url }); if (o?.error) flash(o.error); else { msg.className = "dt-urlmsg busy"; msg.textContent = "열린 창에서 로그인·확인을 마친 뒤 ▶ 주소로 만들기를 다시 누르세요"; $("dtUrl").value = url; paintSites(); } };
+          msg.append(" ", vb);
+        }
+      }
     } catch (e) { msg.className = "dt-urlmsg err"; msg.textContent = "✕ " + String(e?.message || e).replace(/^Error invoking remote method '[^']+': /, "").slice(0, 160); }
     clearInterval(spin); urlBusy = false; btn.disabled = false; btn.textContent = "▶ 주소로 만들기";
   }
@@ -238,8 +276,40 @@
   function flash(msg) { const g = $("dtGuide"); g.textContent = msg; g.classList.add("hot"); setTimeout(() => g.classList.remove("hot"), 2500); }
   function setMode(m) { st.mode = m; root.classList.toggle("dt-mresult", m === "result"); if (m !== "result") root.classList.remove("dt-listopen"); { const g = $("dtRowsGrp"); if (g) g.hidden = m === "result" || !st.rows.length; } $("dtSetup").hidden = m !== "setup"; $("dtWork").hidden = m !== "work"; $("dtResult").hidden = m !== "result"; $("dtReview").hidden = m !== "review"; $("dtInfoV").hidden = m !== "info"; if (m !== "work") stopWork(); else startWorkLoop(); }
   // ---------- 설정(확인 단계·발표 모드 자동) ----------
-  async function loadOpts() { const o = await api.invoke("detail:settings", null).catch(() => null); if (!o) return; $("dtOptReview").checked = o.detailReview === true; $("dtOptPresentAuto").checked = o.detailPresentAuto !== false; $("dtKeyModel").value = o.geminiImageModel || "gemini-2.5-flash-image"; $("dtKeyState").textContent = o.imageGen?.connected ? `✔ 이미지 생성: ${o.imageGen.provider === "vertex" ? `Vertex(프로젝트 ${o.imageGen.project || "?"})` : o.imageGen.provider} 연결됨${o.hasGeminiKey ? ` · Gemini 키 ${o.geminiKeyHint || ""}` : ""}` : "이미지 생성: 키 없음 — AI 장면 사진 단계 건너뜀"; }
+  async function loadOpts() { const o = await api.invoke("detail:settings", null).catch(() => null); if (!o) return; $("dtOptReview").checked = o.detailReview === true; $("dtOptPresentAuto").checked = o.detailPresentAuto !== false; $("dtKeyModel").value = o.geminiImageModel || "gemini-2.5-flash-image"; $("dtKeyState").textContent = o.imageGen?.connected ? `✔ 이미지 생성: ${o.imageGen.provider === "vertex" ? `Vertex(프로젝트 ${o.imageGen.project || "?"})` : o.imageGen.provider === "server" ? "씨드핵 서버" : o.imageGen.provider} 연결됨${o.hasGeminiKey ? ` · Gemini 키 ${o.geminiKeyHint || ""}` : ""}` : "이미지 생성: 키 없음 — AI 장면 사진 단계 건너뜀"; loadUsage(); }
+  // 🎨 이미지 생성 사용량(받은 장만 · 비용은 토큰 수 × 공개 단가로 낸 예상)
+  async function loadUsage() {
+    const u = await api.invoke("detail:imageUsage").catch(() => null); if (!u) return;
+    const won = (n) => `₩${Math.round(n).toLocaleString("ko-KR")}`;
+    $("dtUsage").hidden = !u.all.n && !$("dtKeyState").textContent.startsWith("✔");
+    $("uToday").textContent = `${u.today.n}장`; $("uMonth").textContent = `${u.month.n}장`; $("uCost").textContent = won(u.month.krw);
+    const max = Math.max(1, ...u.week.map((d) => d.n));
+    $("uWeek").innerHTML = u.week.map((d) => `<div data-tip="${d.day} · ${d.n}장 · ${won(d.usd * u.krwPerUsd)}"><i style="height:${Math.round((d.n / max) * 100)}%"></i><span>${d.day.slice(8)}</span></div>`).join("");
+    $("uModels").textContent = Object.entries(u.models).map(([m, n]) => `${m} ${n}장`).join(" · ") || "이번 달 기록 없음";
+    $("uNote").textContent = `$1 = ₩${u.krwPerUsd.toLocaleString("ko-KR")} 기준 예상치 · 정확한 금액은 💳 실제 청구`;
+  }
+  $("uBill").onclick = () => api.invoke("detail:openBilling").catch(() => {});
+  let usageT = 0; api.on("detail:progress", () => { if (!usageT) usageT = setTimeout(() => { usageT = 0; loadUsage(); }, 1500); }); // 만드는 중에도 숫자가 올라가게(1.5초에 한 번)
   $("dtKeySave").onclick = async () => { const k = $("dtKey").value; const o = await api.invoke("detail:settings", { ...(k ? { geminiKey: k } : {}), geminiImageModel: $("dtKeyModel").value }).catch(() => null); $("dtKey").value = ""; if (o) $("dtKeyState").textContent = o.hasGeminiKey ? `✔ 키 저장됨 ${o.geminiKeyHint || ""}` : "키 없음 — AI 장면 사진 단계 건너뜀"; };
+  // 🔗 내 구글 클라우드(수강생 무료 체험) — main/detail/google-ipc.js
+  function showGc(g) {
+    if (!g) return;
+    $("dtGcState").textContent = g.connected ? `✔ 연결됨 · ${g.project || "프로젝트 ?"}${g.keyHint ? ` · ${g.keyHint}` : ""}` : g.dev ? "개발 PC(gcloud) 사용 중" : "연결 안 됨 — 연결하면 내 무료 체험 크레딧으로 AI 를 씁니다";
+    $("dtGcState").className = g.connected ? "on" : "";
+    const t = g.trial; $("dtGcTrial").textContent = t ? (t.ended ? "무료 체험 기간(90일)이 끝났을 수 있어요 — 남은 크레딧을 확인하세요" : `무료 체험 약 ${t.daysLeft}일 남음(연결한 날 기준)`) : "";
+    const c = g.checks || {};
+    $("dtGcChecks").innerHTML = g.connected ? ["text", "image", "ocr"].map((k) => c[k] ? `<li class="${c[k].ok ? "ok" : "bad"}">${c[k].ok ? "✔" : "✕"} ${esc(c[k].msg)}</li>` : "").join("") : "";
+    if (g.error) flash(g.error);
+  }
+  api.invoke("detail:google:get").then(showGc).catch(() => {});
+  $("dtGcSave").onclick = async () => { $("dtGcState").textContent = "연결 확인 중…"; const g = await api.invoke("detail:google:set", { kind: "apikey", apiKey: $("dtGcKey").value, project: $("dtGcProj").value }).catch((e) => ({ error: String(e) })); $("dtGcKey").value = ""; if (g?.error && !g.connected) { flash(g.error); api.invoke("detail:google:get").then(showGc); return; } showGc(g); loadOpts(); };
+  const gcFile = async (f) => { if (!f) return; $("dtGcState").textContent = "연결 확인 중…"; const g = await api.invoke("detail:google:set", { kind: "sa", json: await f.text() }).catch((e) => ({ error: String(e) })); if (g?.error && !g.connected) { flash(g.error); api.invoke("detail:google:get").then(showGc); return; } showGc(g); loadOpts(); };
+  $("dtGcFile").onchange = (e) => gcFile(e.target.files?.[0]);
+  $("dtGc").addEventListener("dragover", (e) => e.preventDefault());
+  $("dtGc").addEventListener("drop", (e) => { e.preventDefault(); gcFile(e.dataTransfer.files?.[0]); });
+  $("dtGcTest").onclick = async () => { $("dtGcState").textContent = "확인 중…"; showGc(await api.invoke("detail:google:test").catch(() => null)); };
+  $("dtGcClear").onclick = async () => { showGc(await api.invoke("detail:google:clear").catch(() => null)); loadOpts(); };
+  root.querySelectorAll("[data-gc]").forEach((b) => { b.onclick = () => api.invoke("detail:google:open", { what: b.dataset.gc }); });
   $("dtKeyClear").onclick = async () => { const o = await api.invoke("detail:settings", { geminiKey: "" }).catch(() => null); $("dtKey").value = ""; if (o) $("dtKeyState").textContent = "키 없음 — AI 장면 사진 단계 건너뜀"; };
   $("dtKeyModel").onchange = () => api.invoke("detail:settings", { geminiImageModel: $("dtKeyModel").value }).catch(() => {});
   $("dtOptReview").onchange = () => api.invoke("detail:settings", { detailReview: $("dtOptReview").checked }).catch(() => {});
@@ -418,10 +488,11 @@
   $("dwCancel").onclick = async () => { if (!st.work) return; $("dwCancel").disabled = true; $("dwCancel").textContent = "취소하는 중…"; await api.invoke("detail:cancel", { jobId: st.work.jobId }); setTimeout(() => { $("dwCancel").disabled = false; $("dwCancel").textContent = "✕ 취소"; }, 1500); };
 
   // ---------- 결과 화면 ----------
-  async function showResult(jobId, renderId) {
+  async function showResult(jobId, renderId, { keepScroll = false } = {}) {
+    const sc0 = keepScroll ? { r: root.querySelector(".dt-result")?.scrollTop || 0, s: $("drSlices").scrollTop || 0 } : null; // 뒤 검수가 고친 장을 바꿔 끼울 때 보던 자리 그대로
     const r = await api.invoke("detail:get", { jobId, renderId });
     if (!r || r.error || r.status === "running") { if (r?.error) flash(r.error); return; }
-    st.lastResult = r; st.work = null;
+    st.lastResult = r; st.work = null; root.dataset.job = jobId; root.dispatchEvent(new CustomEvent("dt:result", { detail: { jobId } })); // 🖼 썸네일(thumb.js)이 지금 작업을 안다
     const tall = (r.slices || []).reduce((n, s) => n + (s.h || 0), 0);
     $("drTitle").textContent = r.title || jobId;
     loadSections(jobId);
@@ -439,7 +510,7 @@
     // 렌더 탭(템플릿별 보관) — 누르면 그 렌더, 각 탭에 폴더·피그마·HTML·삭제(두 번 눌러 확인)
     const tplName = (id) => (st.tpls.find((t) => t.id === id)?.name || id);
     $("drTabs").innerHTML = (r.renders || []).slice().reverse().map((x) => `<div class="dt-rtab${x.id === r.current ? " on" : ""}" data-rid="${esc(x.id)}">
-      <span class="tt" data-tip="${esc(x.id)} · ${x.sliceCount || x.slices?.length || 0}장${x.qa != null ? ` · 검수 ${x.qa}/5` : ""}"><b>${esc(x.label && /한글화/.test(x.label) ? "원본 한글화" : x.theme ? `카드 · ${x.templateRef ? `🧲 ${themeName(x.templateRef)}` : themeName(x.theme)}` : tplName(x.templateId))}</b><small>${x.createdAt ? new Date(x.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "이전"}</small></span>
+      <span class="tt" data-tip="${esc(x.id)} · ${x.sliceCount || x.slices?.length || 0}장${x.qa != null ? ` · 검수 ${x.qa}/5` : ""}"><b>${esc((x.label && /한글화/.test(x.label)) || x.templateId === "localize" ? "원본 한글화" : x.theme ? `카드 · ${x.templateRef ? `🧲 ${themeName(x.templateRef)}` : themeName(x.theme)}` : tplName(x.templateId))}</b><small>${x.createdAt ? new Date(x.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "이전"}</small></span>
       <span class="acts"><button type="button" data-act="folder" data-tip="📂 이 렌더 폴더 열기">📂</button><button type="button" data-act="figma" data-tip="🎨 이 렌더 피그마 묶음 저장">🎨</button><button type="button" data-act="html" data-tip="🌐 이 렌더 HTML로 보기">🌐</button><button type="button" data-act="del" data-tip="🗑 이 렌더 삭제 — 두 번 눌러 확인">🗑</button></span></div>`).join("");
     $("drMeta").textContent = `템플릿 ${r.templateId} · 이미지 ${r.slices?.length || 0}장(세로 ${tall.toLocaleString("ko-KR")}px) · 원본 ${r.counts?.images ?? "-"}장 · ${((r.durationMs || 0) / 1000).toFixed(0)}초${r.costUsd != null ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`;
     const how = r.how || {};
@@ -447,16 +518,19 @@
     $("drHow").textContent = notes.length ? `△ 대체 동작으로 처리한 단계 — ${notes.join(" · ")}` : `✔ 모든 단계 정상 (OCR ${HOW_KO[how.ocr] || how.ocr || "-"} · 카피 ${HOW_KO[how.copy] || how.copy || "-"})`;
     $("drHow").className = "dt-rhow" + (notes.length ? " warn" : "");
     if (r.scene?.used) $("drHow").textContent += ` · 🎨 AI 생성 이미지 ${r.scene.used}장 사용 — 제품 모양이 실제와 같은지 확인하세요`;
+    if (r.aiNotice) { $("drHow").textContent = `⚠ ${r.aiNotice} · ${$("drHow").textContent}`; $("drHow").classList.add("warn"); } // 서버 AI 한도·로그인 등(relay.js) — 그 단계는 AI 없이 만들었다
     if (r.qa) { const ang = r.brief ? String(r.brief.angle || r.brief.audience || "").trim() : ""; const qp = [r.qa.score != null ? `🤖 AI 검수 ${r.qa.score}/5` : "", r.qa.fixed != null ? `고친 것 ${r.qa.fixed}건` : "", r.qa.rounds != null ? `${r.qa.rounds}회차` : "", r.qa.remaining ? `남은 지적 ${r.qa.remaining}건: ${(r.qa.defects || []).slice(0, 2).map((d) => d.what).join(" / ")}` : "", ang ? `기획 "${ang}"` : ""].filter(Boolean); $("drHow").textContent = `${qp.join(" · ")} — ${$("drHow").textContent}`; $("drHow").className = "dt-rhow" + (r.qa.score >= 4 && !r.scene?.used ? "" : " warn"); }
     $("drSlices").innerHTML = (r.slicePaths || []).map((p, i) => `<figure><img src="${esc(fileUrl(p))}?t=${Date.now()}" alt="" loading="lazy"><figcaption>${esc(r.slices?.[i]?.file || "")} · ${r.slices?.[i]?.w || ""}×${r.slices?.[i]?.h || ""}</figcaption></figure>`).join("") || `<p class="dt-empty">이미지가 없습니다.</p>`;
     $("drTplPick").hidden = true;
     // 한 줄 요약(AI 검수 · 시간 · 확인할 것) — 누르면 검수 제안·단계별 시간·처리 내역 펼침
     const totalS = Math.round(((r.timings?.total) || r.durationMs || 0) / 1000);
-    const sumParts = [r.qa?.score != null ? `🤖 AI 검수 ${r.qa.score}/5${sugg.length ? ` · 제안 ${sugg.length}건` : ""}` : "", totalS ? `⏱ ${totalS}초` : "", r.scene?.used ? `⚠ AI 생성 이미지 ${r.scene.used}장 확인` : "", notes.length ? `△ 대체 동작 ${notes.length}단계` : ""].filter(Boolean);
+    const lq = (r.renders || []).find((x) => x.id === r.current)?.locQa; // 원본 한글화 탭: 뒤 검수 결과를 맨 앞에
+    const lqPart = lq?.status === "running" ? "🔍 검수 중…" : lq?.status === "done" ? [lq.flagged ? `⚠ 확인 필요 ${lq.flagged}장` : `✔ 검수 통과 ${lq.checked}장`, lq.fixed ? `🔧 자동으로 고침 ${lq.fixed}장` : ""].filter(Boolean).join(" · ") : "";
+    const sumParts = [lqPart, r.qa?.score != null && !lq ? `🤖 AI 검수 ${r.qa.score}/5${sugg.length ? ` · 제안 ${sugg.length}건` : ""}` : "", totalS ? `⏱ ${totalS}초` : "", r.scene?.used ? `⚠ AI 생성 이미지 ${r.scene.used}장 확인` : "", notes.length ? `△ 대체 동작 ${notes.length}단계` : ""].filter(Boolean);
     $("drSum").innerHTML = `<span>${esc(sumParts.join(" · ") || "✔ 모든 단계 정상")}</span><em>${$("drSumBody").hidden ? "자세히 ▾" : "접기 ▴"}</em>`;
-    $("drSum").classList.toggle("warn", !!(r.scene?.used || notes.length || (r.qa?.score != null && r.qa.score < 4)));
+    $("drSum").classList.toggle("warn", !!(r.scene?.used || notes.length || (r.qa?.score != null && r.qa.score < 4 && !lq) || lq?.flagged));
     setMode("result");
-    $("drSlices").scrollTop = 0; root.querySelector(".dt-result").scrollTop = 0;
+    $("drSlices").scrollTop = sc0 ? sc0.s : 0; root.querySelector(".dt-result").scrollTop = sc0 ? sc0.r : 0;
   }
   $("drFolder").onclick = () => st.lastResult && api.invoke("detail:open", { jobId: st.lastResult.jobId, what: "folder", renderId: st.lastResult.current });
   $("drFigma").onclick = () => st.lastResult && api.invoke("detail:open", { jobId: st.lastResult.jobId, what: "figma", renderId: st.lastResult.current });
@@ -464,18 +538,33 @@
   // ---- v5 섹션 편집 ----
   const se = { list: [], cur: null };
   async function loadSections(jobId) {
+    // 카드(v5) 결과가 아닌 탭(원본 한글화 등): 목록 = 그 탭에 실제로 그려진 섹션(이동만, 글 편집은 카드 결과에서)
+    const lr = st.lastResult, rd = (lr?.renders || []).find((x) => x.id === lr?.current) || {};
+    se.view = rd.templateId && rd.templateId !== "card" ? "render" : "card";
+    if (se.view === "render") {
+      const RN = { hero: "대표", image: "원본 이미지", notice: "구매 전 확인", spec: "제품 정보", faq: "자주 묻는 질문" }; let im = 0;
+      se.list = (rd.sections || []).map((x, i) => ({ id: `r${i}`, type: x.type, name: x.type === "image" ? `이미지 ${++im}` : RN[x.type] || x.type, texts: {}, fields: [], src: x.type === "image" ? "loc" : x.type === "hero" ? "orig" : "text" }));
+      // 원본 한글화 앱 내 검수: 장별 결과(검수가 잰 장 위치 y)를 렌더 섹션 위치에 붙인다
+      const qs = Object.entries(rd.locQa?.sections || {});
+      se.list.forEach((x, i) => { const s = rd.sections[i], end = rd.sections[i + 1]?.y ?? Infinity; const hit = qs.find(([, q]) => q.y != null && q.y >= s.y - 5 && q.y < end - 5); if (hit) x.qa = { id: hit[0], ...hit[1] }; });
+      $("drSecs").hidden = !se.list.length; $("drSedit").hidden = true; se.cur = null;
+    } else {
     const r = await api.invoke("detail:sections:get", { jobId }).catch(() => null);
     $("drSecs").hidden = !r || r.error || !r.v5; if ($("drSecs").hidden) { $("drSedit").hidden = true; return; }
     se.list = r.sections;
+    }
     const shots = secShots(se.list);
     const cnt = {}; se.list.forEach((x) => { const k = srcOf(x).k; cnt[k] = (cnt[k] || 0) + 1; });
     $("drSrcSum").innerHTML = Object.entries(SRC).filter(([k]) => cnt[k]).map(([k, v]) => `<span class="src-tag ${k}">${v} ${cnt[k]}</span>`).join("");
-    $("drSecList").innerHTML = se.list.map((x, i) => `<li data-i="${i}" class="${se.cur === x.id ? "on" : ""}"><span class="thumbw">${shots[i] || (x.image ? `<img src="${esc(fileUrl(x.image))}" alt="">` : `<span class="ph">${esc(x.type)}</span>`)}<span class="src-tag ${srcOf(x).k}">${srcOf(x).t}</span></span><span><b>${i + 1}. ${esc(x.type)}</b><small>${esc((x.texts.title || x.texts.name || x.texts.sub || "").slice(0, 16))}</small>${x.image ? `<span class="dt-logo${x.logo ? " on" : ""}" role="button" tabindex="0" data-logo="${i}" data-tip="사진에 다른 브랜드 로고가 있으면 켜세요 — 주요 섹션에서 뺍니다">${x.logo ? "로고 있음" : "로고?"}</span>` : ""}</span></li>`).join("");
+    paintLocQa(); paintLocRemoved(rd);
+    $("drSecList").innerHTML = se.list.map((x, i) => `<li data-i="${i}" class="${se.cur === x.id ? "on" : ""}${x.qa && !x.qa.pass ? " qa-warn" : ""}"${se.qaOnly && !(x.qa && !x.qa.pass) ? " hidden" : ""}><span class="thumbw">${shots[i] || (x.image ? `<img src="${esc(fileUrl(x.image))}" alt="">` : `<span class="ph">${esc(x.type)}</span>`)}</span><span><b>${i + 1}. ${esc(x.name || x.type)}</b><i class="src-tag ${srcOf(x).k}">${srcOf(x).t}</i>${x.qa && !x.qa.pass ? `<em class="qa-tag warn" data-tip="${esc(x.qa.issues.map((q) => q.why).join(" · "))}">⚠ 확인 필요</em><small class="qa-why">${esc(x.qa.why)}</small>` : x.qa?.edited && x.qa.pass && x.qa.fixed ? `<em class="qa-tag ok" data-tip="⚠ 였던 장을 고쳐 다시 검수하니 문제가 없어요">✔ 고침 완료</em>` : x.qa?.fixed ? `<em class="qa-tag ok" data-tip="뒤 검수가 자동으로 고친 장">🔧 고침</em>` : ""}<small>${esc((x.texts.title || x.texts.name || x.texts.sub || "").slice(0, 16))}</small>${x.image ? `<span class="dt-logo${x.logo ? " on" : ""}" role="button" tabindex="0" data-logo="${i}" data-tip="사진에 다른 브랜드 로고가 있으면 켜세요 — 주요 섹션에서 뺍니다">${x.logo ? "로고 있음" : "로고?"}</span>` : ""}</span></li>`).join("");
     paintSrc();
+    if (se.view === "render" && le.id) { const i = se.list.findIndex((x) => x.qa?.id === le.id); if (i >= 0) { le.i = i; root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", +l.dataset.i === i)); loadLocEdit(); } else closeLocEdit(); }
+    else if (se.view !== "render") closeLocEdit();
   }
   // 사진 출처: 장면 생성(scene/) = AI 생성, 원본 사진(clean·raw) = 원본, 원본 한글화(localize/) = 원본 한글화, 사진 없음 = 글만
   const SRC = { orig: "원본", loc: "원본 한글화", ai: "AI 생성", text: "글만" };
-  function srcOf(x) { const r = String(x.rel || "").replace(/\\/g, "/"); const k = x.from === "scene" || /^scene\//.test(r) ? "ai" : !r ? "text" : /^localize\//.test(r) ? "loc" : "orig"; return { k, t: SRC[k] }; }
+  function srcOf(x) { const r = String(x.rel || "").replace(/\\/g, "/"); const k = x.src ? x.src : x.from === "scene" || /^scene\//.test(r) ? "ai" : !r ? "text" : /^localize\//.test(r) ? "loc" : "orig"; return { k, t: SRC[k] }; }
   // 미리보기 위 출처 표시: 섹션 위치(secShots 가 찾은 슬라이스·y)에 작은 꼬리표
   let srcOn = true; try { srcOn = localStorage.getItem("dtSrcOn") !== "0"; } catch {}
   function paintSrc() {
@@ -483,30 +572,32 @@
     root.querySelectorAll("#drSlices .src-ov").forEach((e) => e.remove()); if (!srcOn) return;
     const figs = [...root.querySelectorAll("#drSlices figure")];
     (se.pos || []).forEach((p, i) => { const f = figs[p?.n]; const im = f?.querySelector("img"); const x = se.list[i]; if (!f || !im || !x) return; const o = srcOf(x); if (o.k === "text") return;
-      const t = document.createElement("span"); t.className = `src-ov src-tag ${o.k}`; t.textContent = `${i + 1}. ${o.t}`; t.style.top = `${Math.round(p.y / p.sh * im.clientHeight) + 8}px`; f.appendChild(t); });
+      const bad = x.qa && !x.qa.pass; const t = document.createElement("span"); t.className = `src-ov src-tag ${bad ? "qa-warn" : o.k}`; t.textContent = bad ? `⚠ ${i + 1}. ${x.qa.why}` : `${i + 1}. ${o.t}`; if (le.id && le.i === i) t.style.opacity = ".35"; t.style.top = `${Math.round(p.y / p.sh * im.clientHeight) + 8}px`; f.appendChild(t); });
   }
   $("drSrcToggle").onclick = () => { srcOn = !srcOn; try { localStorage.setItem("dtSrcOn", srcOn ? "1" : "0"); } catch {} paintSrc(); };
   window.addEventListener("resize", () => paintSrc());
-  $("drSlices").addEventListener("load", (e) => { if (e.target.tagName === "IMG") paintSrc(); }, true);
+  $("drSlices").addEventListener("load", (e) => { if (e.target.tagName === "IMG") { paintSrc(); if (le.id) paintLocMarks(); } }, true);
   // 섹션 썸네일 = 완성 화면에서 그 섹션 부분(글만 있는 섹션도 이미지로). 렌더의 섹션 위치(y,h)와 슬라이스 이미지로 잘라 보여 준다
-  const SHOT_W = 96, SHOT_MAX_H = 150;
+  // 썸네일: 같은 크기 칸(SHOT_W×SHOT_H) 안에 그 섹션 전체를 축소해 가운데 놓는다(위만 잘리거나 납작해지지 않게)
+  const SHOT_W = 96, SHOT_H = 120;
   function secShots(list) {
     const r = st.lastResult; const rd = (r?.renders || []).find((x) => x.id === r.current) || {};
     const rs = rd.sections || [], sl = r?.slices || [], paths = r?.slicePaths || []; if (!rs.length || !sl.length || sl.length !== paths.length) return [];
-    const W = rd.width || sl[0].w || 780, k = SHOT_W / W; let top = 0; const sy = sl.map((s) => { const y = top; top += s.h || 0; return y; });
+    const W = rd.width || sl[0].w || 780; let top = 0; const sy = sl.map((s) => { const y = top; top += s.h || 0; return y; }); const total = top;
     const out = []; let j = 0; se.pos = [];
     for (let i = 0; i < list.length; i++) {
       let m = -1; for (let t = j; t < rs.length; t++) if (rs[t].type === list[i].type) { m = t; break; } // 비어서 안 그려진 섹션은 건너뜀
       if (m < 0) continue; j = m + 1; const s = rs[m];
       const n = sy.findIndex((y, q) => s.y >= y && s.y < y + (sl[q].h || 0)); if (n < 0) continue;
       se.pos[i] = { n, y: s.y - sy[n], sh: sl[n].h || 1 };
-      const h = Math.max(24, Math.min(SHOT_MAX_H, Math.round((s.h || 0) * k)));
-      out[i] = `<span class="shot" style="height:${h}px;background-image:url('${esc(fileUrl(paths[n]))}');background-size:${SHOT_W}px auto;background-position:0 ${-Math.round((s.y - sy[n]) * k)}px" role="img" aria-label="${esc(list[i].type)} 섹션 화면"></span>`;
+      const end = Math.min(sy[n] + (sl[n].h || 0), s.h ? s.y + s.h : (rs[m + 1]?.y ?? total)); const hh = Math.max(1, end - s.y); // 높이 정보가 없으면 다음 섹션 시작까지, 슬라이스 밖은 자름
+      const k = Math.min(SHOT_W / W, SHOT_H / hh), w = Math.round(W * k), h = Math.max(8, Math.round(hh * k));
+      out[i] = `<span class="shot"><span style="width:${w}px;height:${h}px;background-image:url('${esc(fileUrl(paths[n]))}');background-size:${w}px auto;background-position:0 ${-Math.round((s.y - sy[n]) * k)}px" role="img" aria-label="${esc(list[i].type)} 섹션 화면"></span></span>`;
     }
     return out;
   }
   $("drSecList").addEventListener("click", async (e) => { const lg = e.target.closest("[data-logo]"); if (!lg) return; e.stopPropagation(); const x = se.list[+lg.dataset.logo]; if (!x?.rel && !x?.image) return; const on = !x.logo; lg.classList.toggle("on", on); lg.textContent = on ? "로고 있음" : "로고?"; const r = await api.invoke("detail:logo:set", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, file: x.rel || x.image, on }); if (r?.error) flash(r.error); else toast(on ? "로고 있음 — 이 사진을 빼고 다시 구성합니다" : "로고 표시 해제 — 다시 구성합니다"); }, true);
-  $("drSecList").addEventListener("click", (e) => { if (e.target.closest("[data-logo]")) return; const li = e.target.closest("[data-i]"); if (!li) return; const x = se.list[+li.dataset.i]; se.cur = x.id; openSedit(x); goSec(+li.dataset.i); loadSections(st.lastResult.jobId); });
+  $("drSecList").addEventListener("click", (e) => { if (e.target.closest("[data-logo]")) return; const li = e.target.closest("[data-i]"); if (!li) return; const x = se.list[+li.dataset.i]; se.cur = x.id; if (se.view === "render") { root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", l === li)); goSec(+li.dataset.i); if (x.qa?.id) openLocEdit(+li.dataset.i); return; } openSedit(x); goSec(+li.dataset.i); loadSections(st.lastResult.jobId); });
   // 목록에서 고른 섹션으로 미리보기 이동(맨 위 고정 줄 아래에 오게) + 잠깐 테두리 표시
   function goSec(i) {
     const p = se.pos?.[i]; const f = p && root.querySelectorAll("#drSlices figure")[p.n]; const im = f?.querySelector("img"); if (!im) return;
@@ -520,7 +611,7 @@
     const fl = document.createElement("span"); fl.className = "sec-flash"; fl.style.top = `${Math.round(p.y / p.sh * im.clientHeight)}px`; fl.style.height = `${Math.round(h / p.sh * im.clientHeight)}px`; f.appendChild(fl); setTimeout(() => fl.remove(), 1600);
   }
   function openSedit(x) {
-    $("drSedit").hidden = false; $("seName").textContent = `${x.type} (${x.id.replace(/^v5-/, "")}) · ${srcOf(x).t}`; $("seImg").src = x.image ? fileUrl(x.image) : ""; $("seImg").hidden = !x.image; $("seReq").value = "";
+    $("drLoced").hidden = true; le.id = null; $("drSedit").hidden = false; $("seName").textContent = `${x.type} (${x.id.replace(/^v5-/, "")}) · ${srcOf(x).t}`; $("seImg").src = x.image ? fileUrl(x.image) : ""; $("seImg").hidden = !x.image; $("seReq").value = "";
     const KN = { label: "작은 머리말", category: "분류", name: "상품명", sub: "보조 문구", title: "제목", desc: "설명", headline: "큰 제목" };
     const fields = x.fields || Object.entries(x.texts).map(([k, v]) => ({ path: k, label: KN[k] || k, value: v }));
     let g0 = null; // 배지·목록·표·FAQ 는 "FAQ 2"처럼 묶음 머리를 달아 보여 준다
@@ -572,10 +663,120 @@
   $("drExpGo").onclick = () => $("drExport").scrollIntoView({ behavior: reduce() ? "auto" : "smooth", block: "end" });
   $("drSum").onclick = () => { const b = $("drSumBody"); b.hidden = !b.hidden; $("drSum").setAttribute("aria-expanded", String(!b.hidden)); const em = $("drSum").querySelector("em"); if (em) em.textContent = b.hidden ? "자세히 ▾" : "접기 ▴"; if (!b.hidden && $("drQaList")) $("drQaList").hidden = false; };
 
+  // ---------- 원본 한글화 장별 고치기(오른쪽 칸) ----------
+  // 단추 4개(다시 자동 고치기 · 줄·크기 맞추기 · 한글 빼고 그림만 · 이 장 빼기) + 이 장에 요청 + 접힌 "글 직접 고치기"(줄마다 문구·크기·굵게·정렬·빼기) + ↶ 되돌리기
+  const le = { id: null, i: null, view: null, edits: {}, busy: null, tick: 0 };
+  const nzt = (t) => String(t || "").replace(/[\s\u200b\u00ad]+/g, "");
+  const curRd = () => (st.lastResult?.renders || []).find((x) => x.id === st.lastResult?.current) || {};
+  function closeLocEdit() { le.id = null; le.view = null; $("drLoced").hidden = true; root.querySelectorAll("#drSlices .le-mark").forEach((e) => e.remove()); }
+  function openLocEdit(i) { const x = se.list[i]; if (!x?.qa?.id) return; if (le.id !== x.qa.id) { le.edits = {}; $("leMore").open = false; $("leAsk").value = ""; } le.id = x.qa.id; le.i = i; $("drSedit").hidden = true; $("drLoced").hidden = false; loadLocEdit(); }
+  async function loadLocEdit() {
+    const id = le.id; if (!id) return;
+    const r = await api.invoke("detail:loc:section", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, sectionId: id }).catch((e) => ({ error: String(e) }));
+    if (le.id !== id) return;
+    if (r?.error) { flash(r.error); closeLocEdit(); return; }
+    le.view = r; paintLocEdit(); paintLocMarks();
+  }
+  // 문제마다 "이렇게 풀어요" 한 줄(수강생이 어떤 단추를 누를지 바로 알게)
+  const HINT = { overlap: "→ 📐 줄·크기 맞추기, 또는 글 직접 고치기에서 크기 −", overflow: "→ 글 직접 고치기에서 크기 − 나 문구 줄이기", roleDev: "→ 📐 줄·크기 맞추기", colDev: "→ 📐 줄·크기 맞추기", layout: "→ 📐 줄·크기 맞추기", contrast: "→ 글 직접 고치기에서 굵게, 또는 요청 \"글자를 잘 보이게\"", residue: "→ 🔧 다시 자동 고치기로 다시 지워 보고, 그래도 남으면 🙈 빼기", chinese: "→ 🔧 다시 자동 고치기", literal: "→ 글 직접 고치기나 요청으로 문구 바꾸기", translation: "→ 글 직접 고치기나 요청으로 문구 바꾸기", emptyDeco: "→ 🖼 한글 빼고 그림만, 또는 🙈 빼기" };
+  const AI_HINT = { align: "colDev", spacing: "layout", size: "roleDev", overflow: "overflow", residue: "residue", empty_deco: "emptyDeco", translation: "translation" };
+  const issueTexts = (q) => (q?.issues || []).flatMap((x) => x.texts || []).map(nzt).filter(Boolean);
+  const lineOfText = (t) => { const k = nzt(t); return (le.view?.layers || []).findIndex((l) => { const n = nzt(l.ko); return n && k && (n === k || n.startsWith(k) || k.startsWith(n)); }); };
+  function paintLocEdit() {
+    const v = le.view, x = se.list[le.i] || {}, q = x.qa || v?.qa; if (!v) return;
+    $("leName").textContent = `${x.name || v.id} 고치기`;
+    const busy = !!le.busy;
+    $("leState").innerHTML = !q ? "" : q.pass ? `<p class="ok">✔ ${q.edited ? "고쳤어요 — 다시 검수해 보니 문제 없어요" : "검수에서 문제 없음"}</p>`
+      : `<p class="warn">⚠ 이 장에서 확인할 것</p><ul>${(q.issues || []).map((i) => `<li>${esc(i.why)}<small>${esc(HINT[i.kind === "ai" ? AI_HINT[i.ai] || "layout" : i.kind] || "")}</small></li>`).join("")}</ul>`;
+    root.querySelectorAll("#drLoced [data-le]").forEach((b) => { b.disabled = busy || (v.type !== "image" && b.dataset.le !== "drop"); });
+    $("leAsk").disabled = $("leAskGo").disabled = busy || v.type !== "image"; $("leSave").disabled = busy; $("leUndo").disabled = busy || !v.canUndo;
+    $("leMore").hidden = v.type !== "image" || !v.layers.length;
+    $("leLines").innerHTML = v.layers.map((l) => { const e = { ...l, ...(le.edits[l.i] || {}) }; const bold = e.weight >= 700; const al = e.align || "";
+      return `<div class="le-line${e.drop ? " off" : ""}${issueTexts(q).some((t) => { const n = nzt(l.ko); return n.startsWith(t) || t.startsWith(n); }) ? " bad" : ""}" data-i="${l.i}">
+        <textarea rows="1" data-k="ko"${e.drop ? " disabled" : ""}>${esc(e.ko)}</textarea>
+        <div class="le-ctl"><button type="button" data-op="size" data-v="-2" data-tip="글자 작게">−</button><span class="sz" title="글자 크기">${Math.round(e.size)}</span><button type="button" data-op="size" data-v="2" data-tip="글자 크게">+</button>
+        <button type="button" data-op="bold" class="${bold ? "on" : ""}" data-tip="굵게 켜고 끄기"><b>굵게</b></button>
+        <span class="le-al">${[["left", "왼쪽"], ["center", "가운데"], ["right", "오른쪽"]].map(([k, t]) => `<button type="button" data-op="align" data-v="${k}" class="${al === k ? "on" : ""}" data-tip="${t} 맞춤">${t}</button>`).join("")}</span>
+        <button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 줄 다시 살리기" : "이 줄 빼기"}">${e.drop ? "↺" : "✕"}</button></div>
+        ${l.shape ? `<small class="le-shape">${l.shape} 안 글</small>` : ""}</div>`; }).join("") || `<p class="dt-empty">고칠 한글 줄이 없어요.</p>`;
+    $("leLines").querySelectorAll("textarea").forEach(fitTa);
+    $("leSave").hidden = !Object.keys(le.edits).length;
+    $("leBusy").textContent = busy ? `⏳ ${le.busy.msg || "고치는 중"} · ${Math.round((Date.now() - le.busy.t0) / 1000)}초` : le.last || "";
+  }
+  // 미리보기 위 표시: 이 장의 글 상자(검수 측정) — 문제 글은 빨간 테두리, 누르면 그 줄 고치기로
+  function paintLocMarks() {
+    root.querySelectorAll("#drSlices .le-mark").forEach((e) => e.remove());
+    const x = se.list[le.i], q = x?.qa, p = se.pos?.[le.i], rd = curRd(), s = rd.sections?.[le.i]; if (!le.id || !q?.box || !p || !s) return;
+    const f = root.querySelectorAll("#drSlices figure")[p.n], im = f?.querySelector("img"); if (!im || !im.clientWidth) return;
+    const k = im.clientWidth / (rd.width || 780), top0 = (q.y ?? s.y) - (s.y - p.y), bad = issueTexts(q);
+    for (const u of q.box.units || []) {
+      const y = top0 + u.y; if (y < 0 || y > p.sh) continue;
+      const m = document.createElement("span"); const isBad = bad.some((t) => { const n = nzt(u.t); return n.startsWith(t) || t.startsWith(n); });
+      m.className = `le-mark${isBad ? " bad" : ""}`; Object.assign(m.style, { left: `${Math.round(u.x * k) - 3}px`, top: `${Math.round(y * k) - 3}px`, width: `${Math.round(u.w * k) + 6}px`, height: `${Math.round(u.h * k) + 6}px` });
+      m.dataset.tip = isBad ? "⚠ 문제 있는 글 — 누르면 이 줄 고치기" : "누르면 이 줄 고치기"; m.dataset.t = u.t;
+      f.appendChild(m);
+    }
+  }
+  $("drSlices").addEventListener("click", (e) => { const m = e.target.closest(".le-mark"); if (!m) return; const i = lineOfText(m.dataset.t); $("leMore").open = true; const row = i >= 0 ? $("leLines").querySelector(`[data-i="${le.view.layers[i].i}"]`) : null; if (row) { row.scrollIntoView({ block: "center", behavior: reduce() ? "auto" : "smooth" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1200); row.querySelector("textarea")?.focus(); } });
+  window.addEventListener("resize", () => { if (le.id) paintLocMarks(); });
+  function paintLocRemoved(rd) { const rm = rd?.locQa?.removed || [], el = $("drLocRem"); el.hidden = !rm.length; el.innerHTML = rm.length ? `<span>🙈 뺀 장 ${rm.length}</span>${rm.map((r) => `<button type="button" class="sec" data-undo="${esc(r.id)}" data-tip="↶ 이 장을 다시 넣어요">${esc(r.name || r.id)} 다시 넣기</button>`).join("")}` : ""; }
+  $("drLocRem").addEventListener("click", (e) => { const b = e.target.closest("[data-undo]"); if (b) locAct("undo", {}, b.dataset.undo); });
+  // 줄 고치기(모아 두었다가 저장)
+  $("leLines").addEventListener("input", (e) => { const t = e.target.closest("textarea"); if (!t) return; fitTa(t); const i = +t.closest("[data-i]").dataset.i; (le.edits[i] ||= {}).ko = t.value; $("leSave").hidden = false; });
+  $("leLines").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-op]"); if (!b) return; const i = +b.closest("[data-i]").dataset.i, l = le.view.layers.find((q) => q.i === i), ed = (le.edits[i] ||= {}), cur = { ...l, ...ed };
+    if (b.dataset.op === "size") ed.size = Math.max(8, Math.round(cur.size + Number(b.dataset.v)));
+    if (b.dataset.op === "bold") ed.weight = cur.weight >= 700 ? 400 : 700;
+    if (b.dataset.op === "align") ed.align = b.dataset.v;
+    if (b.dataset.op === "drop") ed.drop = !cur.drop;
+    paintLocEdit();
+  });
+  async function locAct(action, payload = {}, sectionId = le.id) {
+    if (!st.lastResult || !sectionId || le.busy) return;
+    le.busy = { msg: "시작", t0: Date.now() }; le.last = ""; if (le.id) paintLocEdit();
+    clearInterval(le.tick); le.tick = setInterval(() => { if (le.busy && le.id) $("leBusy").textContent = `⏳ ${le.busy.msg || "고치는 중"} · ${Math.round((Date.now() - le.busy.t0) / 1000)}초`; }, 1000);
+    const r = await api.invoke("detail:loc:edit", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, sectionId, action, payload }).catch((e) => ({ error: String(e) }));
+    clearInterval(le.tick); le.busy = null;
+    if (r?.error) { le.last = `✕ ${r.error}`; flash(r.error); if (le.id) paintLocEdit(); return; }
+    if (action === "text") le.edits = {};
+    if (action === "drop") closeLocEdit();
+    if (action === "undo" && sectionId !== le.id) le.id = sectionId; // 뺀 장 다시 넣기 → 그 장 칸 열기
+    le.last = `${r.pass === false ? "⚠" : "✔"} ${r.note}${r.pass === false && r.why ? ` · 남은 것: ${r.why}` : ""} · ${Math.round((r.ms || 0) / 1000)}초${r.costUsd ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`;
+    toast(le.last);
+    await showResult(st.lastResult.jobId, st.lastResult.current, { keepScroll: true }); // 고친 그림으로 바꿔 끼우고 같은 칸 다시 열기(loadSections 끝)
+  }
+  root.querySelectorAll("#drLoced [data-le]").forEach((b) => { b.onclick = () => { if (b.dataset.le === "drop") { if (!b.classList.contains("arm")) { b.classList.add("arm"); b.querySelector("small").textContent = "한 번 더 누르면 빼요"; setTimeout(() => { b.classList.remove("arm"); b.querySelector("small").textContent = "다시 넣을 수 있어요"; }, 2500); return; } } locAct(b.dataset.le, b.dataset.le === "drop" ? { name: se.list[le.i]?.name } : {}); }; });
+  $("leAskGo").onclick = () => { const t = $("leAsk").value.trim(); if (!t) return flash("요청을 적어 주세요 — 예: 제목을 더 크게"); locAct("request", { text: t }); };
+  $("leAsk").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) $("leAskGo").click(); });
+  $("leSave").onclick = () => { const layers = Object.entries(le.edits).map(([i, e]) => ({ i: +i, ...e })); if (layers.length) locAct("text", { layers }); };
+  $("leUndo").onclick = () => locAct("undo");
+  $("leClose").onclick = () => closeLocEdit();
+  api.on("detail:changed", (p) => { const q = p?.locEdit; if (!q || st.lastResult?.jobId !== q.jobId) return; if (q.status === "running" && le.busy) { le.busy.msg = String(q.msg || "").replace(/^\S+\s+/, ""); } });
+
   // ---------- 메인 프로세스 이벤트 ----------
   api.on("detail:progress", onProgress);
   api.on("detail:changed", (p) => { if (p?.qa && st.mode === "result" && st.lastResult?.jobId === p.qa.jobId) { toast(`🤖 AI 검수 ${p.qa.score}/5 · 제안 ${p.qa.n}건`); showResult(p.qa.jobId, st.lastResult.current); } });
   api.on("detail:changed", (p) => { if (p?.templates) loadThemes(); });
+  // 원본 한글화 뒤 검수: 진행 글만 바꾸고, 끝나면 고친 새 렌더로 조용히 바꿔 끼움(보던 자리 유지) + 알림
+  api.on("detail:changed", (p) => {
+    const q = p?.locQa; if (!q || st.mode !== "result" || st.lastResult?.jobId !== q.jobId) return;
+    const rd = (st.lastResult.renders || []).find((x) => x.id === q.renderId); if (rd) rd.locQa = { ...(rd.locQa || {}), status: q.status, msg: q.msg || rd.locQa?.msg };
+    if (q.status === "running") { if (st.lastResult.current === q.renderId) paintLocQa(); return; }
+    if (q.status === "done") { const t = [q.fixed ? `🔧 ${q.fixed}장 자동으로 고침` : "", q.flagged ? `⚠ 확인 필요 ${q.flagged}장` : ""].filter(Boolean).join(" · "); toast(t || "✔ 원본 한글화 검수 통과"); }
+    showResult(q.jobId, st.lastResult.current, { keepScroll: true });
+  });
+  // 검수 진행 줄 · "확인 필요 N장" 거르기 단추 — 지금 보는 탭의 locQa 로 그린다
+  let qaTick = 0;
+  function paintLocQa() {
+    const lr = st.lastResult, rd = (lr?.renders || []).find((x) => x.id === lr?.current) || {}, q = rd.locQa, el = $("drLocQa"), fb = $("drQaOnly");
+    clearInterval(qaTick); qaTick = 0;
+    el.hidden = !(q && q.status === "running");
+    if (!el.hidden) { const t0 = q.startedAt || Date.now(); const draw = () => { el.innerHTML = `<b>🔍 검수 중…</b><small>${esc(String(q.msg || "").replace(/^\S+\s+/, ""))} · ${Math.round((Date.now() - t0) / 1000)}초</small>`; }; draw(); qaTick = setInterval(() => { if (!root.isConnected || el.hidden) return clearInterval(qaTick); draw(); }, 1000); }
+    const n = Object.values(q?.sections || {}).filter((x) => !x.pass).length;
+    fb.hidden = !(q?.status === "done" && n); if (!n) se.qaOnly = false;
+    fb.textContent = se.qaOnly ? `⚠ 확인 필요 ${n}장 · 전체 보기` : `⚠ 확인 필요 ${n}장`; fb.setAttribute("aria-pressed", String(!!se.qaOnly)); fb.classList.toggle("on", !!se.qaOnly);
+  }
+  $("drQaOnly").onclick = () => { se.qaOnly = !se.qaOnly; paintLocQa(); root.querySelectorAll("#drSecList li").forEach((li) => { const x = se.list[+li.dataset.i]; li.hidden = !!se.qaOnly && !(x?.qa && !x.qa.pass); }); };
   api.on("detail:changed", () => { if (st.mode !== "work") load(); else { const c = $("dcount"); api.invoke("detail:list").then((jobs) => { const n = (jobs || []).filter((j) => j.status === "done").length; if (c) { c.textContent = String(n); c.hidden = !n; } }).catch(() => {}); } });
   async function show() {
     await load();
@@ -601,15 +802,36 @@
     renderInfo(); setMode("info"); ivErr(""); ivSyncRun();
   }
   const toggleIds = () => { const exc = [], inc = []; [...iv.info.gallery, ...iv.info.detail].forEach((x) => { if (x.excluded && !x.aiExcluded) exc.push(x.id); if (!x.excluded && x.aiExcluded) inc.push(x.id); if (x.excluded && x.aiExcluded) {} }); return { excluded: [...iv.info.gallery, ...iv.info.detail].filter((x) => x.excluded).map((x) => x.id), included: inc }; };
+  // 한국 판매처(쿠팡·네이버·오늘의집): 다른 판매자 사진일 수 있다 → 재료로 쓰기 전에 한 번 고르기(내 상품 / 🧲 레퍼런스)
+  function renderRights() {
+    const r = iv.info, el = $("ivRights"); el.hidden = !r.koSource; if (!r.koSource) return;
+    const site = SITE_KO[r.koSource] || r.koSource;
+    el.className = "dt-ivrights" + (r.rightsOk ? " ok" : "");
+    el.innerHTML = r.rightsOk ? `<span>✔ 내 상품 사진으로 확인했어요 · ${esc(site)}</span><button type="button" class="sec" data-rights="undo">바꾸기</button>`
+      : `<span><b>내 상품 사진일 때만 재료로 쓰세요</b> · 다른 판매자 상품이면 🧲 레퍼런스(템플릿)로 저장해 벤치마킹하세요</span><button type="button" class="pri" data-rights="mine">✔ 내 상품 사진이에요</button><button type="button" class="sec" data-rights="ref" data-tip="상세 이미지의 구조(섹션 순서·색·설득 흐름)만 뽑아 🧲 내 템플릿에 넣습니다 — 사진·문장은 쓰지 않아요">🧲 레퍼런스로 저장</button><em id="ivRightsMsg"></em>`;
+  }
+  $("ivRights").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-rights]"); if (!b || !iv.info) return;
+    const act = b.dataset.rights;
+    if (act === "mine" || act === "undo") { iv.info.rightsOk = act === "mine"; renderRights(); ivErr(""); ivSave({ rightsOk: iv.info.rightsOk }); return; }
+    b.disabled = true; const msg = $("ivRightsMsg"); if (msg) msg.textContent = "🧲 상세 이미지 분석 중 (1~5분)";
+    const r = await api.invoke("detail:refFromJob", { jobId: iv.jobId }).catch((err) => ({ error: err?.message || String(err) }));
+    b.disabled = false;
+    if (r?.error) { if ($("ivRightsMsg")) $("ivRightsMsg").textContent = `✕ ${r.error}`; return; }
+    if ($("ivRightsMsg")) $("ivRightsMsg").textContent = r.existing ? `이미 보관함에 있어요 · ${r.template?.name || ""}` : `✔ 🧲 보관함에 저장 · ${r.template?.name || ""} — ⑤ 디자인 스타일에서 골라 쓰세요`;
+    await loadThemes?.(); toast(`🧲 레퍼런스 저장 · ${r.template?.name || ""}`);
+  });
+  api.on("detail:captureProgress", (p) => { if (p?.jobId && p.jobId === iv.jobId && $("ivRightsMsg")) $("ivRightsMsg").textContent = `🧲 ${p.msg || ""}`; }); // 🧲 레퍼런스 저장 진행(메인 detail:refFromJob)
   function renderInfo() {
     const r = iv.info;
+    renderRights();
     $("ivSrc").textContent = r.url ? `🔗 원본 ${r.url.replace(/^https?:\/\//, "").slice(0, 46)}` : ""; $("ivSrc").hidden = !r.url;
     const card = (x) => `<button type="button" class="dt-ivimg${x.excluded ? " off" : ""}" data-id="${esc(x.id)}" title="${esc(x.why || "")}"><img src="${esc(fileUrl(x.photo || x.path))}" alt="" loading="lazy">${x.excluded ? `<em>제외</em>` : ""}<small>${esc(x.id)}${x.label ? ` · ${esc(x.label)}` : ""}${x.score != null ? ` · ${x.score}점` : ""}${x.sameAs ? ` · 대표 ${esc(x.sameAs)}과 같음` : ""}</small><span class="dt-logo${x.logo ? " on" : ""}" role="button" tabindex="0" data-logo="${esc(x.id)}" data-tip="사진에 다른 브랜드 로고가 있으면 켜세요 — 주요 섹션에서 뺍니다">${x.logo ? "로고 있음" : "로고?"}</span></button>`;
     $("ivGallery").innerHTML = r.gallery.map(card).join("") || `<p class="dt-empty">대표 이미지가 없습니다.</p>`;
     const sku = r.sku || []; $("ivSkuH").hidden = !sku.length; $("ivSku").innerHTML = sku.map(card).join(""); $("ivSkuN").textContent = sku.length ? `${sku.length}장 — 옵션 사진(색상·규격)` : "";
     // 만들기 방식(원본 한글화 · AI 장면 연출 · 둘 다) — 예상 비용·시간 따로
     const MD = [["localize", "🈚 원본 한글화", "1688 원본 사진을 살리고 중국어만 한글로 · 빠름·저비용 · 실제 사진·크기 정확"], ["scene", "🎨 AI 장면 연출(v5)", "섹션마다 AI 장면 사진 + 짧은 카드 글 · 분위기·연출"], ["both", "✨ 둘 다", "렌더 탭 2개(원본 한글화 + AI 장면) — 비교해서 고르기"]];
-    $("ivModes").innerHTML = MD.map(([id, name, desc]) => { const m = r.modes?.[id] || {}; return `<button type="button" class="dt-mode${(r.mode || "both") === id ? " on" : ""}" data-mode="${id}"><b>${name}</b><small>${desc}</small><em>약 $${(m.usd ?? 0).toFixed(2)} · 약 ${m.minutes ?? "?"}분</em></button>`; }).join("");
+    $("ivModes").innerHTML = MD.filter(([id]) => !r.koSource || r.modes?.[id]).map(([id, name, desc]) => { const m = r.modes?.[id] || {}; return `<button type="button" class="dt-mode${(r.mode || "both") === id ? " on" : ""}" data-mode="${id}"><b>${name}</b><small>${desc}</small><em>약 $${(m.usd ?? 0).toFixed(2)} · 약 ${m.minutes ?? "?"}분</em></button>`; }).join("");
     $("ivDetail").innerHTML = r.detail.map(card).join("");
     $("ivDetailN").textContent = `${r.detail.filter((x) => !x.excluded).length}/${r.detail.length}장 사용`;
     const withText = [...r.gallery, ...r.detail].filter((x) => x.texts?.length);
@@ -704,6 +926,7 @@
     if (b.dataset.mode === "watch") return goRunning(b.dataset.job);
     if (b.disabled) return;
     ivErr("");
+    if (iv.info?.koSource && !iv.info.rightsOk) { ivErr("위 안내에서 「내 상품 사진이에요」를 먼저 눌러 주세요"); $("ivRights").scrollIntoView({ block: "center", behavior: "smooth" }); return; }
     b.disabled = true; b.classList.add("busy"); b.innerHTML = `<span class="spin"></span> 생성 시작 중…`;
     const edits = { product_name_ko: $("ivName").value, brief_text: $("ivBrief").value, templateId: iv.info.templateId };
     let r = null;
@@ -741,7 +964,7 @@
     ["focusout", "scroll", "mousedown", "keydown"].forEach((ev) => document.addEventListener(ev, hide, true));
     window.SeedTip = { show, hide };
   }
-  window.Detail = { show, load, showResult, openInfo, state: st, push: onProgress }; // push: 화면 하네스·시연용(진행 이벤트를 직접 넣기)
+  window.Detail = { show, load, showResult, openInfo, state: st, push: onProgress, le, se }; // le·se: 화면 하네스(장별 고치기 상태) // push: 화면 하네스·시연용(진행 이벤트를 직접 넣기)
   setMode("setup");
   api.invoke("detail:list").then((jobs) => { const n = (jobs || []).filter((j) => j.status === "done").length; const c = $("dcount"); if (c) { c.textContent = String(n); c.hidden = !n; } }).catch(() => {});
 })();

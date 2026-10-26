@@ -1,0 +1,107 @@
+/* ✍ 상품명 짓기 — 밝은 본문(키워드 추천과 같은 톤). 후보 상품명을 크게, 세부는 접는다 */
+.namer {
+  --n-bg: #f4f4f5; --n-surface: #fff; --n-line: #e4e4e7; --n-line2: #d4d4d8; --n-text: #18181b; --n-text2: #71717a; --n-go: #15803d; --n-go-bg: #f0fdf4; --n-mid: #b45309; --n-mid-bg: #fffbeb; --n-stop: #dc2626; --n-stop-bg: #fef3f2;
+  position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--n-bg); color: var(--n-text); color-scheme: light; font: 14px/1.5 var(--sans); overflow-y: auto;
+}
+.namer .sec { background: #f7f7f8; color: var(--n-text); border: 1px solid var(--n-line2); border-radius: 6px; padding: 6px 12px; font-size: 13px; }
+.namer .chip { display: inline-block; font-size: 12.5px; padding: 2px 8px; border-radius: 5px; background: #f4f4f5; color: #3f3f46; white-space: nowrap; }
+.namer .chip.g { background: var(--n-go-bg); color: var(--n-go); font-weight: 600; }
+.namer .chip.o { background: var(--n-mid-bg); color: var(--n-mid); }
+.namer .chip.t { background: #fef9c3; color: #713f12; }
+
+/* 시작 화면 */
+.nm-start { width: 100%; max-width: 680px; margin: 36px auto; padding: 26px 28px; background: var(--n-surface); border: 1px solid var(--n-line); border-radius: 12px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; }
+.nm-start > b { font-size: 20px; }
+.nm-start > span { font-size: 13.5px; color: var(--n-text2); }
+.nm-rule { list-style: none; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--n-line); display: grid; gap: 6px; }
+.nm-rule li { display: grid; grid-template-columns: 200px 1fr; gap: 12px; font-size: 13.5px; }
+.nm-rule li span { color: var(--n-text2); }
+
+/* 입력 줄 */
+.nm-form { display: grid; grid-template-columns: 1.3fr 1fr .7fr; gap: 10px 12px; margin-top: 14px; align-items: end; }
+.nm-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--n-text2); min-width: 0; }
+.nm-form label small { color: #a1a1aa; }
+.nm-form .ft { grid-column: 1 / -1; }
+.nm-form input { font: 14px var(--sans); color: var(--n-text); background: var(--n-surface); border: 1px solid var(--n-line2); border-radius: 7px; padding: 8px 10px; min-width: 0; }
+.nm-form .kw input { font-weight: 700; }
+.nm-go { grid-column: 1 / -1; padding: 12px 16px; border-radius: 9px; border: 0; background: var(--n-go); color: #fff; font: 700 15px var(--sans); }
+.nm-go:hover:not(:disabled) { background: #166534; }
+.nm-form.compact { margin: 0; grid-template-columns: 1.2fr 1fr .6fr 1.4fr auto; }
+.nm-form.compact .ft { grid-column: auto; }
+.nm-form.compact .ft small { display: none; }
+.nm-form.compact .nm-go { grid-column: auto; padding: 8px 14px; font-size: 13.5px; }
+.nm-bar { position: sticky; top: 0; z-index: 2; padding: 12px 20px; background: var(--n-surface); border-bottom: 1px solid var(--n-line); }
+.nm-scroll { padding: 14px 20px 40px; display: flex; flex-direction: column; gap: 12px; max-width: 1100px; width: 100%; box-sizing: border-box; }
+
+/* 상자 */
+.nm-box { background: var(--n-surface); border: 1px solid var(--n-line); border-radius: 10px; padding: 14px 16px; }
+.nm-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; }
+.nm-h b { font-size: 15px; }
+.nm-h span { font-size: 12.5px; color: var(--n-text2); }
+.nm-h .nm-src { margin-left: auto; }
+.nm-h .nm-src b { font: 700 13px var(--mono); color: var(--n-text); }
+
+/* 후보 상품명(결론) — 크게 */
+.nm-cand { padding: 12px 0; border-top: 1px solid var(--n-line); }
+.nm-cand:first-of-type { border-top: 0; padding-top: 2px; }
+.nm-name { display: flex; align-items: center; gap: 10px; }
+.nm-name .no { flex: none; width: 24px; height: 24px; border-radius: 50%; background: #f4f4f5; color: var(--n-text2); font: 800 13px var(--mono); display: grid; place-items: center; }
+.nm-cand.first .no { background: var(--n-go); color: #fff; }
+.nm-name b { flex: 1; min-width: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; word-break: keep-all; }
+.nm-name mark { background: #fde047; color: inherit; padding: 0 2px; border-radius: 3px; }
+.nm-copy { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--n-line2); background: var(--n-surface); font-size: 13px; }
+.nm-copy:hover { border-color: var(--n-go); color: var(--n-go); }
+.nm-meta { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 0 34px; }
+.nm-hint { margin: 8px 0 0; font-size: 13px; color: var(--n-mid); }
+.nm-err { margin: 10px 0 0; padding: 8px 12px; border-radius: 7px; background: var(--n-stop-bg); color: var(--n-stop); font-size: 13px; }
+
+/* 단어 고르기 */
+.nm-ws { display: flex; flex-wrap: wrap; gap: 6px; }
+.nm-w { padding: 6px 11px; border-radius: 99px; border: 1px solid var(--n-line2); background: var(--n-surface); font-size: 13.5px; font-weight: 600; }
+.nm-w small { font: 600 11.5px var(--mono); color: var(--n-text2); }
+.nm-w i { font-style: normal; font-size: 11px; color: #a1a1aa; }
+.nm-w:hover { border-color: var(--n-go); }
+.nm-w.on { background: var(--n-go); border-color: var(--n-go); color: #fff; }
+.nm-w.on small, .nm-w.on i { color: #dcfce7; }
+.nm-off { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; font-size: 12.5px; color: var(--n-text2); }
+.nm-off b { font-weight: 600; color: var(--n-mid); margin-right: 2px; }
+.nm-more { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; color: var(--n-text2); }
+.nm-dim { margin: 0; color: var(--n-text2); }
+
+/* 내 상품명 검사 */
+.nm-mine { width: 100%; box-sizing: border-box; font: 16px var(--sans); color: var(--n-text); border: 1px solid var(--n-line2); border-radius: 8px; padding: 10px 12px; }
+.nm-chks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.nm-chk { font-size: 13px; padding: 3px 9px; border-radius: 6px; font-weight: 600; }
+.nm-chk.p { background: var(--n-go-bg); color: var(--n-go); }
+.nm-chk.f { background: var(--n-stop-bg); color: var(--n-stop); }
+.nm-chk.u { background: #f4f4f5; color: #3f3f46; }
+.nm-why { flex-basis: 100%; margin: 6px 0 0; font-size: 13px; color: var(--n-text2); }
+
+/* 상위 상품명(접기) */
+.nm-fold summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; list-style: none; }
+.nm-fold summary::before { content: "▸"; color: var(--n-text2); }
+.nm-fold[open] summary::before { content: "▾"; }
+.nm-fold summary span { font-size: 12.5px; color: var(--n-text2); }
+.nm-top { margin: 10px 0 0; padding-left: 22px; display: grid; gap: 4px; font-size: 13px; }
+.nm-top li { display: grid; grid-template-columns: minmax(0, 1fr) auto 90px; gap: 10px; align-items: center; }
+.nm-tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nm-top li > span:last-child { text-align: right; color: var(--n-text2); font-family: var(--mono); font-size: 12px; }
+
+/* 쿠팡 자동완성·연관검색어 */
+.nm-w em, .nm-cpb { font-style: normal; font: 700 10.5px var(--sans); padding: 0 5px; margin-right: 4px; border-radius: 4px; background: #eef2ff; color: #346aff; vertical-align: 1px; }
+.nm-w.on em { background: rgb(255 255 255 / .2); color: #fff; }
+.nm-cp { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: -2px 0 12px; font-size: 12.5px; color: var(--n-text2); }
+.nm-cp .bad { color: var(--n-stop); }
+.nm-cp.run { color: var(--n-text); }
+.nm-cp.run i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c7d2fe; border-top-color: #346aff; animation: nm-spin .8s linear infinite; }
+@keyframes nm-spin { to { transform: rotate(360deg); } }
+details.nm-cp { display: block; }
+details.nm-cp summary { cursor: pointer; display: flex; align-items: center; gap: 6px; list-style: none; }
+details.nm-cp summary::before { content: "▸"; }
+details.nm-cp[open] summary::before { content: "▾"; }
+details.nm-cp summary b { color: var(--n-text); font-family: var(--mono); }
+.nm-re { padding: 1px 7px; border-radius: 6px; border: 1px solid var(--n-line2); background: var(--n-surface); font-size: 12px; }
+.nm-cpl { display: grid; gap: 4px; margin-top: 8px; padding: 10px 12px; background: #fafafa; border-radius: 8px; color: var(--n-text); line-height: 1.6; }
+.nm-cpl b { color: #346aff; font-weight: 600; margin-right: 4px; }
+.nm-h span b { font-size: inherit; font-weight: 700; color: var(--n-text); }
+.nm-w small.solo { color: #a1a1aa; font-weight: 500; }

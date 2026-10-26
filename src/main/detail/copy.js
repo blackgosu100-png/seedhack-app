@@ -58,7 +58,7 @@ export function fixTranslation(zh = "", ko = "") {
     const n = /\d/.test(m[1]) ? Number(m[1]) : JIN_NUM[m[1]]; if (!n) continue;
     const kg = String(Math.round(n * 0.5 * 10) / 10);
     const re = new RegExp(`(약\\s*)?${n}\\s*(kg|킬로그램|킬로|근|斤)`, "i");
-    if (new RegExp(`약\\s*${kg}\\s*kg`).test(t)) continue; // 이미 보정됨(두 번 적용해도 같게)
+    if (new RegExp(`(^|[^\\d.])${kg.replace(".", "\\.")}\\s*kg`, "i").test(t)) continue; // 이미 보정됨(두 번 적용해도 같게) · v13 AI 가 이미 kg 로 바꾼 것("50kg까지 거뜬")에 "(약 50kg)"를 또 붙이던 것
     t = re.test(t) ? t.replace(re, `약 ${kg}kg`) : `${t} (약 ${kg}kg)`;
   }
   for (const m of z.matchAll(/(\d+)\s*两(?!件|个)/g)) { const g = Number(m[1]) * 50; const re = new RegExp(`${m[1]}\\s*(냥|량|两)`); if (re.test(t)) t = t.replace(re, `약 ${g}g`); }
@@ -753,7 +753,7 @@ export async function writeCopy(input, { log = () => {}, model = process.env.SIG
   if (wantCli) {
     how = "cli";
     log("dim", `  ✍️ AI 카피 요청 (Claude CLI·${model}${v2 ? "·v2 기획안" : ""}) · 이미지 ${(input.images || []).length}장`);
-    ai = await runStructured({ system: SYS, schema: SCHEMA, text: TEXT, model, timeoutMs });
+    ai = await runStructured({ purpose: "copy-v2", system: SYS, schema: SCHEMA, text: TEXT, model, timeoutMs });
   } else if (wantServer) {
     how = "server";
     log("dim", "  ✍️ AI 카피 요청 (서버 중계)");
@@ -981,7 +981,7 @@ export async function writeCopyV5(input, { brief = {}, sections = [], claims = n
   let ai = null, error;
   if (wantCli) {
     log("dim", `  ✍️ 섹션 카드 카피 요청 (Claude CLI·${model}) · 섹션 ${sections.length}개${guide ? " · 벤치마킹 가이드" : ""}`);
-    ai = await runStructured({ system: COPY_V5_SYSTEM, schema: COPY_V5_SCHEMA, text: renderCopyInputV5(input, brief, sections, guide), model, timeoutMs });
+    ai = await runStructured({ purpose: "copy-v5", system: COPY_V5_SYSTEM, schema: COPY_V5_SCHEMA, text: renderCopyInputV5(input, brief, sections, guide), model, timeoutMs });
     if (ai?.error) { error = ai.error; log("dim", `  ✍️ v5 카피 실패 → 규칙 · ${error}`); }
   }
   let { copy, fixes } = ai?.ok ? sanitizeCopyV5(ai.result, input, brief, sections) : { copy: rulesCopyV5(input, brief, sections), fixes: [] };
@@ -1011,7 +1011,7 @@ export async function guardCopySimilarity(copy, reference, { input = {}, brief =
   out = JSON.parse(JSON.stringify(copy));
   if (useCli) {
     const text = [`[우리 상품 사실] ${ours.slice(0, 900)}`, "", "[고칠 문구 — path 그대로 돌려주세요]", ...first.flagged.map((f) => `- path=${f.path} · 지금: ${JSON.stringify(f.text)} · 비슷한 레퍼런스 문장: ${JSON.stringify(f.ref)}`)].join("\n");
-    const r = await runStructured({ system: SIM_REWRITE_SYSTEM, schema: SIM_REWRITE_SCHEMA, text, model, timeoutMs: 120000 });
+    const r = await runStructured({ purpose: "sim-rewrite", system: SIM_REWRITE_SYSTEM, schema: SIM_REWRITE_SCHEMA, text, model, timeoutMs: 120000 });
     if (r?.ok) { costUsd = r.costUsd ?? null; for (const it of r.result.items || []) if (first.flagged.some((f) => f.path === it.path) && S(it.text)) { setPath(out, it.path, String(it.text)); report.rewritten++; } }
     else log("dim", `  🧷 고쳐 쓰기 실패 → 규칙 문구 · ${r?.error || ""}`);
   }
@@ -1034,6 +1034,7 @@ export async function guardCopySimilarity(copy, reference, { input = {}, brief =
 
 // ─────────────────────────────── v6: 원본 한글화 — 이미지 레이어 번역(Claude 1회) ───────────────────────────────
 import { LOCALIZE_SYSTEM, LOCALIZE_SCHEMA, renderLocalizeInput, EMPH_KINDS } from "./copy-prompt.js";
+import { classifyLocalizeImage, fixLiteral, glossaryPrompt, heroNameFrom } from "./localize-core.js"; // v12: 넣지 말 이미지 판정 · 용어집 · 직역체 고치기 · 히어로 상품명
 // 다시 써도 되는 자리인가: 단색·보간으로 지운 자리(solid·interp), 띠(pill) 위 글자 = true / 사진 위(complex·ai 로 지움)·도면 라벨 = false
 export function rewriteOk(ly = {}) {
   if (typeof ly.rewrite_ok === "boolean") return ly.rewrite_ok;
@@ -1105,7 +1106,17 @@ export function sanitizeLayer(ly, ko, brands = [], cr = null) {
   return { ko: t, drop: false };
 }
 // images: [{ id, kind, w, h, layers:[{ id?, zh, role, w, mt? }] }] → { images:[{ id, promo, promo_reason, layers:[{ ...layer, ko, drop, why? }] }], hero, how, costUsd, elapsedMs, fixes }
-export async function translateLayers({ images = [], brief = null, attrs = [], claims = null, log = () => {}, model = process.env.SIGNAL_AI_MODEL || "sonnet", useCli, timeoutMs = 300000 } = {}) {
+// aiCache(폴더, 재생·회귀 하네스 전용): 같은 요청(system·text·model)이면 지난 AI 응답을 다시 씀 — 규칙만 고쳐 다시 돌릴 때 번역 비용 0. 앱은 쓰지 않는다
+async function runStructuredCached(args, aiCache) {
+  if (!aiCache) return runStructured(args);
+  const [{ default: fs }, { default: path }, { createHash }] = await Promise.all([import("node:fs"), import("node:path"), import("node:crypto")]);
+  const f = path.join(aiCache, createHash("sha1").update(JSON.stringify([args.system, args.text, args.model])).digest("hex") + ".json");
+  try { return { ...JSON.parse(fs.readFileSync(f, "utf8")), costUsd: 0, cached: true }; } catch {}
+  const r = await runStructured(args);
+  if (r?.ok) { fs.mkdirSync(aiCache, { recursive: true }); fs.writeFileSync(f, JSON.stringify(r)); }
+  return r;
+}
+export async function translateLayers({ images = [], brief = null, attrs = [], claims = null, log = () => {}, model = process.env.SIGNAL_AI_MODEL || "sonnet", useCli, timeoutMs = 420000, aiCache = null } = {}) { // v12: 묶음당 7분(47장·3묶음 실측 225~300초)
   const t0 = Date.now();
   const brands = brandValues({ attrs });
   const cr = (brief?.caution || []).length ? cautionRules(brief) : null;
@@ -1113,8 +1124,16 @@ export async function translateLayers({ images = [], brief = null, attrs = [], c
   let ai = null, error;
   const list = images.filter((im) => (im.layers || []).length);
   if (wantCli && list.length) {
-    log("dim", `  🈚 이미지 글 한글화 요청 (Claude CLI·${model}) · ${list.length}장 · 레이어 ${list.reduce((a, im) => a + im.layers.length, 0)}개`);
-    ai = await runStructured({ system: LOCALIZE_SYSTEM, schema: LOCALIZE_SCHEMA, text: renderLocalizeInput(list.map((im) => ({ ...im, layers: im.layers.map((ly) => ({ ...ly, rewrite_ok: rewriteOk(ly) })) })), brief), model, timeoutMs });
+    // 장이 많으면(쿠팡형 40장+) 한 번에 보내면 5분 넘게 걸리고 시간 초과로 통째 기계번역이 될 수 있다 → 최대 3묶음으로 나눠 동시에(대표 사진이 든 첫 묶음이 hero 를 정한다)
+    const chunks = []; { const tot = list.reduce((a, im) => a + im.layers.length, 0), per = Math.max(120, Math.ceil(tot / 3)); let cur = [], n = 0; for (const im of list) { if (cur.length && n + im.layers.length > per) { chunks.push(cur); cur = []; n = 0; } cur.push(im); n += im.layers.length; } if (cur.length) chunks.push(cur); } // 최대 3묶음 정도(묶음마다 고정 비용이 붙어 잘게 나누면 비싸다)
+    log("dim", `  🈚 이미지 글 한글화 요청 (Claude CLI·${model}) · ${list.length}장 · 레이어 ${list.reduce((a, im) => a + im.layers.length, 0)}개${chunks.length > 1 ? ` · ${chunks.length}묶음 동시` : ""}`);
+    const runCh = (ch, tm) => runStructuredCached({ purpose: "localize", system: LOCALIZE_SYSTEM, schema: LOCALIZE_SCHEMA, text: renderLocalizeInput(ch.map((im) => ({ ...im, layers: im.layers.map((ly) => ({ ...ly, rewrite_ok: rewriteOk(ly) })) })), brief) + glossaryPrompt(), model, timeoutMs: tm }, aiCache).catch((e) => ({ error: String(e?.message || e) }));
+    const rs = await Promise.all(chunks.map((ch) => runCh(ch, timeoutMs)));
+    // v12: 시간 초과·실패한 묶음은 반으로 나눠 한 번 더(시간 1.5배) — 기계번역 대체가 생기지 않게(2026-10-13 대파 분쇄기 47장: 4묶음 중 1묶음이 300초 초과)
+    for (let k = 0; k < rs.length; k++) { if (rs[k]?.ok || chunks[k].length < 2) continue; const h = Math.ceil(chunks[k].length / 2); log("dim", `  🈚 한글화 묶음 ${k + 1} 실패(${String(rs[k]?.error || "").slice(0, 40)}) → 둘로 나눠 다시`); const [a, b] = await Promise.all([runCh(chunks[k].slice(0, h), timeoutMs * 1.5), runCh(chunks[k].slice(h), timeoutMs * 1.5)]); if (a?.ok || b?.ok) rs[k] = { ok: true, model: (a?.ok ? a : b).model, costUsd: (Number(a?.costUsd) || 0) + (Number(b?.costUsd) || 0), result: { images: [...(a?.ok ? a.result?.images || [] : []), ...(b?.ok ? b.result?.images || [] : [])], hero: (a?.ok ? a : b).result?.hero || {} } }; }
+    const oks = rs.filter((r) => r?.ok);
+    ai = oks.length ? { ok: true, model: oks[0].model, costUsd: oks.some((r) => r.costUsd != null) ? oks.reduce((a, r) => a + (Number(r.costUsd) || 0), 0) : null, result: { images: oks.flatMap((r) => r.result?.images || []), hero: (rs[0]?.ok ? rs[0] : oks[0]).result?.hero || {} } } : { error: rs.find((r) => r?.error)?.error || "응답 없음" };
+    if (oks.length < rs.length) log("dim", `  🈚 한글화 ${rs.length - oks.length}/${rs.length}묶음 실패 → 그 장은 기계번역 · ${rs.find((r) => r?.error)?.error || ""}`);
     if (ai?.error) { error = ai.error; log("dim", `  🈚 한글화 실패 → 기계번역 · ${error}`); }
   }
   const byId = new Map((ai?.ok ? ai.result.images || [] : []).map((x) => [S(x.id), x]));
@@ -1126,23 +1145,34 @@ export async function translateLayers({ images = [], brief = null, attrs = [], c
     const ls = im.layers || [];
     const hitN = ls.filter((l) => PROMO_ZH.test(S(l.zh))).length;
     const promoRule = ls.some((l) => ["title", "badge"].includes(l.role) && /证书|专利|认证|资质|工厂|厂房|车间|生产线|流水线|合作(伙伴|客户|品牌)/.test(S(l.zh))) || (ls.length > 0 && hitN >= Math.max(1, Math.ceil(ls.length / 2)));
-    const promo = !!(r?.promo || promoRule);
+    const cls = classifyLocalizeImage(ls.map((l) => ({ zh: l.zh, role: l.role, h: l.textBox?.h || l.text_box?.h || l.h })), { imgH: im.h || 1000, kind: im.kind || "detail" }); // 글자 높이(OCR 상자, 지울 영역 아님) // v12: 구매 유도·가격 설명·판매 정책·후기 모음·중국어 사양표
+    const promo = !!(r?.promo || promoRule || cls);
     const layers = (im.layers || []).map((ly, i) => {
       const aiL = (r?.layers || []).find((x) => x.idx === i);
       const aiKo = aiL?.ko;
       const rw = rewriteOk(ly);
       let s = sanitizeLayer({ ...ly, rewrite_ok: rw }, aiKo != null ? aiKo : ly.mt, brands, cr);
       if (aiL && aiL.natural === false && !s.drop) { const mt = /[가-힣]/.test(S(ly.mt)) ? sanitizeLayer(ly, ly.mt, brands, cr) : null; fixes.push(`${im.id}#${i} 어색 자가판정 → ${mt && !mt.drop ? "기계번역 기본 문구" : "그대로(대체 없음)"}`); if (mt && !mt.drop) s = mt; }
+      if (!s.drop) { const fl = fixLiteral(ly.zh, s.ko, { mt: ly.mt }); if (fl.changed) { fixes.push(`${im.id}#${i} 직역 "${s.ko}" → ${fl.drop ? "삭제" : `"${fl.ko}"`}`); s = fl.drop ? { ko: "", drop: true, why: "직역(고칠 말 없음)" } : { ...s, ko: fl.ko }; } if (!s.drop && fl.literal) s = { ...s, literal: true }; } // v12 용어집·직역체
       if (s.drop || s.warn) fixes.push(`${im.id}#${i} ${S(ly.zh).slice(0, 12)}: ${s.why}`);
       const emph = s.drop ? [] : cleanEmph(aiL?.emph, s.ko);
       return { ...ly, rewrite_ok: rw, ko: s.ko, drop: s.drop, emph, ...(aiL && "natural" in aiL ? { natural: !!aiL.natural } : {}), ...(s.why ? { why: s.why } : {}), ...(aiKo != null ? { ko_ai: S(aiKo), emph_ai: aiL?.emph || [] } : {}) }; // ko_ai: AI 원문(재정화 때 이걸로 다시)
     });
-    return { id: im.id, promo, promo_reason: promo ? S(r?.promo_reason) || (promoRule ? "인증·공장·맞춤제작 홍보 문구" : "") : "", layers };
+    return { id: im.id, promo, promo_reason: promo ? (cls?.reason || S(r?.promo_reason) || (promoRule ? "인증·공장·맞춤제작 홍보 문구" : "")) : "", ...(cls ? { promo_kind: cls.kind } : {}), layers };
   });
+  // v12 직역체 다시 쓰기: 고친 뒤에도 직역 흔적이 남은 줄만 모아 짧은 요청 1회(실패하면 그대로 — 아래 렌더 전 검사가 작은 줄은 뺀다)
+  const lit = []; out.forEach((im) => im.layers.forEach((ly, i) => { if (ly.literal && !ly.drop) lit.push({ im, i, ly }); }));
+  if (lit.length && wantCli) {
+    try {
+      const r2 = await runStructuredCached({ purpose: "localize-rewrite", system: "중국 상세 이미지 문구의 한국어 번역 중 직역체(기계번역 말투)만 한국 쇼핑몰에서 실제 쓰는 짧고 자연스러운 말로 고쳐 씁니다. 숫자·단위는 그대로, 원문보다 길게 쓰지 않습니다. JSON 만.", schema: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "ko"], properties: { n: { type: "integer" }, ko: { type: "string" } } } } } },
+        text: lit.map((x, n) => `${n}. 원문 ${S(x.ly.zh)} → 지금 "${x.ly.ko}"`).join("\n") + glossaryPrompt(), model, timeoutMs: 120000 }, aiCache);
+      for (const it of r2?.ok ? r2.result?.items || [] : []) { const x = lit[it.n]; if (!x || !S(it.ko)) continue; const sv = sanitizeLayer(x.ly, it.ko, brands, cr); if (!sv.drop) { fixes.push(`${x.im.id}#${x.i} 직역 다시 쓰기 "${x.ly.ko}" → "${sv.ko}"`); x.im.layers[x.i] = { ...x.ly, ko: sv.ko, literal: false, ko_literal: x.ly.ko }; } }
+    } catch (e) { log("dim", `  🈚 직역 다시 쓰기 실패 (${String(e?.message || e).slice(0, 80)})`); }
+  }
   const h = ai?.ok ? ai.result.hero || {} : {};
   const noun = productNoun({ coupangName: brief?.product_name_ko, title_ko: brief?.product_type || "" });
   const heroFix = (v, n, fb) => { const sf = softenAll(S(v)); const t = sf.text; return t && !sf.awkward && !bannedIn(t).length && !policyKind(t) ? clip(t, n) : fb; }; // 치환이 어색하면 기본 라벨
-  const hero = { label: heroFix(h.label, 10, "NEW ITEM"), sub: heroFix(h.sub, 22, clip(S(brief?.key_appeal).split(/[.。]/)[0], 22)), name: heroFix(h.name, 14, clip(noun, 14)) };
+  const hero = { label: heroFix(h.label, 10, "NEW ITEM"), sub: heroFix(h.sub, 22, clip(S(brief?.key_appeal).split(/[.。]/)[0], 22)), name: heroFix(h.name, 14, heroNameFrom(brief?.product_name_ko) || clip(noun, 14)) };
   hero.name_emph = cleanEmph(h.name_emph, hero.name).slice(0, 1);
   { const cc = normalizeClaims(claims || {}); const top = cc.sold_out || cc.rank || cc.trust_badges[0]; if (top) { hero.label = clip(top, 12); hero.badges = cc.trust_badges; } } // 셀러 신뢰 값은 hero 머리글로
   const elapsedMs = Date.now() - t0;
@@ -1158,7 +1188,8 @@ export function resanitizeLocalized(localized = {}, { brief = null, attrs = [] }
   const images = (localized.images || []).map((im) => ({ ...im, layers: markIconLayers(im.layers || []).map((ly, i) => {
     const base = S(ly.ko_ai) || S(ly.ko);
     if (ly.drop && !base) return ly;
-    const s = sanitizeLayer({ ...ly, rewrite_ok: rewriteOk(ly) }, base || ly.mt, brands, cr);
+    let s = sanitizeLayer({ ...ly, rewrite_ok: rewriteOk(ly) }, base || ly.mt, brands, cr);
+    if (!s.drop) { const fl = fixLiteral(ly.zh, s.ko, { mt: ly.mt }); if (fl.changed) s = fl.drop ? { ko: "", drop: true, why: "직역(고칠 말 없음)" } : { ...s, ko: fl.ko }; } // v12 용어집·직역체
     if (s.ko !== S(ly.ko) || s.drop !== !!ly.drop) fixes.push(`${im.id}#${i} "${S(ly.ko)}" → ${s.drop ? `삭제(${s.why})` : `"${s.ko}"`}`);
     return { ...ly, ko: s.ko, drop: s.drop, emph: s.drop ? [] : cleanEmph(ly.emph_ai || ly.emph, s.ko), ...(s.why ? { why: s.why } : {}) };
   }) }));

@@ -71,7 +71,7 @@ export async function writeBrief(input, { log = () => {}, model = process.env.SI
   let ai = null, error;
   if (wantCli) {
     log("dim", `  🧭 기획안 요청 (Claude CLI·${model}${webSearch ? "·WebSearch" : ""})`);
-    ai = await runStructured({ system: BRIEF_SYSTEM, schema: BRIEF_SCHEMA, text: renderBriefInput(input), model, timeoutMs, allowedTools: webSearch ? ["WebSearch"] : null });
+    ai = await runStructured({ purpose: "brief", system: BRIEF_SYSTEM, schema: BRIEF_SCHEMA, text: renderBriefInput(input), model, timeoutMs, allowedTools: webSearch ? ["WebSearch"] : null });
     if (ai?.error) { error = ai.error; log("dim", `  🧭 기획안 실패 → 규칙 기본 기획안 · ${error}`); }
   }
   const elapsedMs = Date.now() - t0;
@@ -240,7 +240,7 @@ export async function writeBriefV3(input, { log = () => {}, model = process.env.
   const human = S(input.brief_text) ? parseBriefText(input.brief_text) : null;
   if (wantCli) {
     log("dim", `  🧭 기획서·디자인 톤 요청 (Claude CLI·${model}${tools.length ? "·" + tools.join("+") : ""})`);
-    ai = await runStructured({ system: BRIEF_V3_SYSTEM, schema: BRIEF_V3_SCHEMA, text: renderBriefV3Input(input), model, timeoutMs, allowedTools: tools.length ? tools : null });
+    ai = await runStructured({ purpose: "brief-v3", system: BRIEF_V3_SYSTEM, schema: BRIEF_V3_SCHEMA, text: renderBriefV3Input(input), model, timeoutMs, allowedTools: tools.length ? tools : null });
     if (ai?.error) { error = ai.error; log("dim", `  🧭 기획서 실패 → 규칙 기본 · ${error}`); }
   }
   const elapsedMs = Date.now() - t0;

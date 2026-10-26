@@ -334,6 +334,7 @@ async function autoImageSearch() {
     scan?.fail("사진은 올렸지만 검색 버튼을 못 찾았습니다");
     log("사진은 올렸지만 검색 버튼을 못 찾았습니다 — 화면의 '搜索图片(이미지 검색)'을 눌러 주세요"); return;
   }
+  if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
   btn.click(); // 결과는 새 창(//s.1688.com/youyuan/…)으로 열리고, 앱이 같은 화면에 띄운다
   scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
   // 사진은 아직 비우지 않는다 — 결과 화면에서 1688이 사진을 못 받았으면(썸네일 깨짐·0건) 결과 화면의 '上传图片'에 한 번 더 올린다(rankPanel)
@@ -414,16 +415,16 @@ function renderRank(panel, r) {
   if (busy && !panel.__t0) panel.__t0 = Date.now();
   if (!busy) panel.__t0 = 0;
   btn.disabled = busy || !r.top.length;
-  btn.innerHTML = r.probing ? `<span class="mono">&gt; 진짜 옵션가 확인 ${5 - r.probeLeft + 1}/5</span><i class="cur"></i> <small class="bt"></small>`
+  btn.innerHTML = r.probing ? `<span class="mono">&gt; 진짜 옵션가 확인 ${3 - r.probeLeft + 1}/3</span><i class="cur"></i> <small class="bt"></small>`
     : r.aiBusy ? `<span class="mono">&gt; AI 판단 중</span><i class="cur"></i> <small class="bt"></small>`
-    : r.ai && !r.ai.error ? "↻ 다시 추천" : `▶ 딸깍 추천 <small>진짜 옵션가 5개 확인 → AI 판단</small>`;
-  st.textContent = r.captcha ? "✕ 1688 보안 인증 필요 — 1688 탭에서 슬라이더를 밀고 다시 누르세요" : r.ai?.error ? `✕ AI 추천 실패 · ${r.ai.error}` : "";
+    : r.ai && !r.ai.error ? "↻ 다시 추천" : `▶ 딸깍 추천 <small>진짜 옵션가 3개 확인 → AI 판단</small>`;
+  st.textContent = r.mismatch ? "⚠ 쿠팡 상품과 닮은 결과가 없습니다 — 사진 검색이 빗나갔어요. 결과 화면 위 작은 사진 중 상품 전체가 담긴 것을 눌러 다시 찾아 주세요" : r.captcha ? "✕ 1688 보안 인증 필요 — 1688 탭에서 슬라이더를 밀고 다시 누르세요" : r.ai?.error ? `✕ AI 추천 실패 · ${r.ai.error}` : "";
   st.title = r.ai?.skipped || "";
   st.hidden = !st.textContent;
   // 진행 단계: 이미지 검색 · 판매자 점수 · 진짜 옵션가 · AI 판단
-  const known = r.top.slice(0, 5).filter((x) => x.realPrice != null).length;
+  const known = Math.min(3, r.top.slice(0, 3).filter((x) => x.realPrice != null).length);
   const aiDone = r.ai && !r.ai.error && r.ai.picks?.length;
-  const steps = [["이미지 검색", "done"], ["판매자 점수", "done"], [`진짜 옵션가 ${known}/5`, r.probing ? "on" : known ? "done" : ""], ["AI 판단", r.aiBusy ? "on" : aiDone ? "done" : ""]];
+  const steps = [["이미지 검색", "done"], ["판매자 점수", "done"], [`진짜 옵션가 ${known}/3`, r.probing ? "on" : known ? "done" : ""], ["AI 판단", r.aiBusy ? "on" : aiDone ? "done" : ""]];
   panel.querySelector(".pipe").innerHTML = steps.map(([t, c]) => `<span class="${c}">${c === "done" ? "✓" : c === "on" ? "◉" : "○"} ${esc(t)}</span>`).join("<em>›</em>");
   // 숫자: 후보 · 허용가 · 중앙가 · 제외
   const odd = r.allow != null && (r.allow > 1500 || (panel.__price || 0) > 500000); // 판매가 읽기 오류(예: ₩1,980,000)로 허용가가 비정상
@@ -461,10 +462,15 @@ function renderRank(panel, r) {
         <div class="chips"><span>월 판매 <b>${fmt(x.sales)}</b></span><span>재구매 <b>${x.repeat != null ? x.repeat + "%" : "-"}</b></span><span>업력 <b>${x.years != null ? x.years + "년" : "-"}</b></span>${x.moq ? `<span>최소 <b>${x.moq}</b></span>` : ""}${!ai && x.score != null ? `<span>점수 <b>${x.score}</b></span>` : ""}</div>
         ${ai && x.optionLabel ? `<div class="opt">옵션: ${esc(x.optionLabel)}</div>` : ""}
         ${x.reason ? `<div class="rs${ai ? " big" : ""}">${esc(x.reason)}</div>` : ""}${x.risk ? `<div class="rk">⚠ ${esc(x.risk)}</div>` : ""}
-        <button type="button" class="open" data-id="${x.offerId}">상품 열기 ›</button>
+        ${!x.real ? `<button type="button" class="open probe1" data-id="${x.offerId}" title="이 상품만 진짜 옵션가 확인(1초 안팎)" style="margin-right:6px">옵션가 확인</button>` : ""}<button type="button" class="open" data-id="${x.offerId}">상품 열기 ›</button>
       </div></div>`;
   }).join("") || `<div class="empty">후보 없음</div>`;
-  body.querySelectorAll("button.open").forEach((b) => b.addEventListener("click", () => {
+  body.querySelectorAll("button.probe1").forEach((b) => b.addEventListener("click", async (e) => {
+    e.stopImmediatePropagation(); b.disabled = true; b.textContent = "⏳ 확인 중…";
+    const r = await ipcRenderer.invoke("cn:probeOne", b.dataset.id).catch((err) => ({ error: /No handler/.test(String(err)) ? "앱을 다시 켜야 합니다" : String(err) }));
+    if (r?.error) { b.disabled = false; b.textContent = "✕ " + String(r.error).slice(0, 24); }
+  }, true));
+  body.querySelectorAll("button.open:not(.probe1)").forEach((b) => b.addEventListener("click", () => {
     const id = b.dataset.id, href = cardHref.get(id);
     const url = /^\d{9,14}$/.test(id) ? `https://detail.1688.com/offer/${id}.html` : href || "";
     ipcRenderer.send("cn:log", `상품 열기 · 번호 ${id || "없음"} → ${url.slice(0, 120) || "주소 없음"}`);
@@ -479,6 +485,24 @@ async function rankPanel() {
   // 앱이 "전체 사진" 뜻으로 주소에 붙인 region=0,360,0,360 을 1688이 더 이상 받지 않는다(썸네일 깨짐·0건 — 2026-10-08 확인)
   // → 결과를 기다리지 않고 바로 region 없이 다시 연다(1688 기본 = 물체 자동 선택). 올바른 영역 형식을 알아내면 main.js의 region 지정을 그 형식으로 고칠 것
   const u = new URL(location.href), noRegionKey = "sg-noregion:" + (u.searchParams.get("imageId") || u.searchParams.get("imageAddress") || "");
+  // 전체 사진으로 검색: 1688 영역 형식은 region=왼쪽,오른쪽,위,아래 "올린 사진의 픽셀" 기준(2026-10-11 확인: 물체 조각을 고르면 region=30,191,73,209).
+  // 1688은 기본으로 사진 속 물체 하나만 잘라 찾아(목베개 사진 → 목 아래 조각, 빨래건조대 → 기둥) 엉뚱한 상품이 나온다 → 처음 열릴 때 한 번 전체 사진 영역으로 다시 연다.
+  // (사람이 결과 화면에서 다른 조각을 고르면 region이 붙어 있으므로 건드리지 않는다)
+  const fullKey = "sg-fullregion:" + (u.searchParams.get("imageId") || "");
+  if (!u.searchParams.has("region") && u.searchParams.get("imageId") && !sessionStorage.getItem(fullKey)) {
+    const pend0 = await ipcRenderer.invoke("cn:pending");
+    if (pend0?.b64) {
+      const im = new Image(); im.src = `data:${pend0.type || "image/jpeg"};base64,${pend0.b64}`;
+      try { await im.decode(); } catch {}
+      if (im.naturalWidth > 10 && im.naturalHeight > 10) {
+        sessionStorage.setItem(fullKey, "1");
+        u.searchParams.set("region", `0,${im.naturalWidth},0,${im.naturalHeight}`);
+        ipcRenderer.send("cn:log", `전체 사진으로 다시 검색 (region=0,${im.naturalWidth},0,${im.naturalHeight} · 1688이 고른 물체 조각 대신)`);
+        location.replace(u.href);
+        return;
+      }
+    }
+  }
   if (u.searchParams.get("region") === "0,360,0,360" && !sessionStorage.getItem(noRegionKey)) {
     sessionStorage.setItem(noRegionKey, "1");
     u.searchParams.delete("region");
@@ -489,9 +513,10 @@ async function rankPanel() {
   const scan = await sgScanStart(2, "1688 후보 카드 읽는 중"); // 🎤 발표 모드면 해커 화면
   let cards = await waitFor(() => { const c = readCards(); return c.length >= 5 ? c : null; }, 15000);
   const pend = await ipcRenderer.invoke("cn:pending");
-  if (!cards && pend) {
+  const retryKey = "sg-retry:" + (pend?.ts || "");
+  if (!cards && pend && !sessionStorage.getItem(retryKey)) {
     // 첫 화면에서 올린 사진을 1688이 못 받은 경우(썸네일 깨짐·0건) — 사람이 결과 화면의 '上传图片'에 직접 올리면 되므로 같은 칸에 한 번 더 올린다
-    ipcRenderer.invoke("cn:pendingDone"); // 재시도는 한 번만
+    sessionStorage.setItem(retryKey, "1"); // 재시도는 한 번만 — 사진은 남겨 둬야 새 결과 화면에서도 "전체 사진" 영역을 다시 붙인다(비우면 1688이 물체 하나만 골라 엉뚱한 결과)
     const inputs = [...document.querySelectorAll('input[type="file"]')];
     const input = inputs.find((i) => /上传图片|사진\s*업로드|이미지\s*업로드|업로드/.test(i.closest("div")?.parentElement?.textContent || "")) || inputs.find((i) => i.matches(FILE_INPUT)) || inputs[0];
     if (input) {
@@ -502,6 +527,13 @@ async function rankPanel() {
       input.dispatchEvent(new Event("change", { bubbles: true }));
       await sleep(1500);
       findAdaptive("confirm")?.click(); // 확인 패널이 뜨는 화면이면 눌러 준다(없으면 바로 검색됨)
+      // 다시 올린 사진도 "전체 사진"으로: 화면이 새로 열리지 않고 주소만 바뀌면(물체 하나 자동 선택) 여기서 영역을 붙여 다시 연다
+      const before = new URL(location.href).searchParams.get("imageId");
+      const moved = await waitFor(() => { const v = new URL(location.href); return v.searchParams.get("imageId") && v.searchParams.get("imageId") !== before && !v.searchParams.has("region") ? v : null; }, 6000);
+      if (moved) {
+        const im = new Image(); im.src = `data:${pend.type || "image/jpeg"};base64,${pend.b64}`; try { await im.decode(); } catch {}
+        if (im.naturalWidth > 10) { sessionStorage.setItem("sg-fullregion:" + moved.searchParams.get("imageId"), "1"); moved.searchParams.set("region", `0,${im.naturalWidth},0,${im.naturalHeight}`); ipcRenderer.send("cn:log", `다시 올린 사진도 전체 사진으로 검색 (region=0,${im.naturalWidth},0,${im.naturalHeight})`); location.replace(moved.href); return; }
+      }
       cards = await waitFor(() => { const c = readCards(); return c.length >= 5 ? c : null; }, 20000);
       ipcRenderer.send("cn:log", cards ? `다시 올리기로 후보 ${cards.length}개 찾음` : "다시 올려도 결과가 없습니다");
     } else ipcRenderer.send("cn:log", "결과 화면에서 사진 칸을 못 찾았습니다");
@@ -600,7 +632,34 @@ async function rankPanel() {
     <div class="foot"><button type="button" class="go" disabled>▶ 딸깍 추천</button></div>`;
   (document.body || document.documentElement).appendChild(panel);
   setInterval(() => { if (!panel.__t0) return; const s = `${((Date.now() - panel.__t0) / 1000).toFixed(1)}s`; panel.querySelectorAll(".bt").forEach((t) => (t.textContent = s)); }, 100); // 진행 중 경과 시간
-  panel.querySelector(".x").addEventListener("click", () => panel.remove());
+  // ✕ = 숨기기(지우지 않음): 보드가 ✕ 자리의 "🎯 추천 보기" 버튼으로 줄어든다. 버튼은 끌어서 옮길 수 있고 마지막 자리를 기억한다.
+  // 숨겨 둔 동안에도 옵션가·AI 결과는 계속 갱신된다
+  const POS_KEY = "sg-rank-open-pos";
+  const reopen = document.createElement("button");
+  reopen.type = "button"; reopen.id = "sg-rank-open"; reopen.textContent = "🎯 추천 보기"; reopen.title = "추천 보드 다시 열기 · 끌어서 옮길 수 있어요";
+  reopen.style.cssText = "position:fixed;z-index:2147483647;display:none;border:0;border-radius:12px;padding:10px 16px;background:#0b0f14;color:#3ddc84;font:800 14px -apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:grab;touch-action:none;user-select:none;transition:transform .18s ease";
+  (document.body || document.documentElement).appendChild(reopen);
+  const clampPos = (x, y) => [Math.max(4, Math.min(innerWidth - reopen.offsetWidth - 4, x)), Math.max(4, Math.min(innerHeight - reopen.offsetHeight - 4, y))];
+  const placeAt = (x, y) => { const [cx, cy] = clampPos(x, y); reopen.style.left = cx + "px"; reopen.style.top = cy + "px"; reopen.style.right = "auto"; reopen.style.bottom = "auto"; };
+  panel.querySelector(".x").addEventListener("click", () => {
+    const xr = panel.querySelector(".x").getBoundingClientRect();
+    panel.style.display = "none"; reopen.style.display = "block";
+    let saved = null; try { saved = JSON.parse(localStorage.getItem(POS_KEY) || "null"); } catch {}
+    if (saved && Number.isFinite(saved.x)) placeAt(saved.x, saved.y);
+    else placeAt(xr.right - reopen.offsetWidth, xr.top); // 처음엔 ✕ 자리로 줄어든 것처럼
+    reopen.style.transform = "scale(1.12)"; setTimeout(() => (reopen.style.transform = ""), 180);
+  });
+  // 끌어서 옮기기(5px 넘게 움직이면 끌기, 아니면 누르기)
+  let drag = null;
+  reopen.addEventListener("pointerdown", (e) => { const r = reopen.getBoundingClientRect(); drag = { sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false }; reopen.setPointerCapture(e.pointerId); reopen.style.cursor = "grabbing"; });
+  reopen.addEventListener("pointermove", (e) => { if (!drag) return; if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5) return; drag.moved = true; placeAt(e.clientX - drag.ox, e.clientY - drag.oy); });
+  reopen.addEventListener("pointerup", () => {
+    if (!drag) return; const moved = drag.moved; drag = null; reopen.style.cursor = "grab";
+    if (moved) { const r = reopen.getBoundingClientRect(); try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch {} return; }
+    panel.style.display = ""; reopen.style.display = "none";
+  });
+  reopen.addEventListener("click", (e) => { if (e.detail === 0) { panel.style.display = ""; reopen.style.display = "none"; } }); // 키보드(Enter)로 열기
+  addEventListener("resize", () => { if (reopen.style.display === "block") { const r = reopen.getBoundingClientRect(); placeAt(r.left, r.top); } });
   panel.querySelector("button.go").addEventListener("click", async () => {
     // 가격 확인이 필요하면 먼저 하고(끝나면 AI 자동), 아니면 바로 AI
     panel.__want = true;
@@ -641,11 +700,13 @@ async function askPill() {
   el.innerHTML = (isOffer() ? `<button type="button" class="ask" style="${b};background:#3ddc84;color:#06240f" title="판매자에게 재고·박스 입수량 → 포장 사이즈·사진 → 무지/영문 박스 순서로 나눠서 묻습니다. 판매자가 수량·가격을 되물으면 멈추고 알려 드립니다.">💬 AI 문의</button>` : "")
     + `<button type="button" class="box" style="${b};background:#0b0f14;color:#fff" hidden>문의함 <span class="n"></span></button>`
     + `<button type="button" class="tr" style="${b};background:#0b0f14;color:#7cb3ff" title="1688 화면 번역 — 누를 때마다: 한글로 → 중국어 아래 한글 → 끄기 (마우스를 올리면 중국어 원문)">🌐</button>`
+    + (isOffer() ? `<button type="button" class="wave" style="${b};background:#0b0f14;color:#3ddc84" title="파도타기 — 이 상품 중국어 제목에서 핵심 키워드를 뽑아 타오바오·1688을 판매순으로 다시 훑고, 처음 보는 상품을 사진으로 국내 확인">🌊 파도타기</button>` : "")
     + `<button type="button" class="tb" style="${b};background:#ff5000;color:#fff" title="같은 쿠팡 사진으로 타오바오에서 같은 상품 찾기 — 직접 촬영한 판매자 상세·구매자 리뷰 사진을 참고 자료로">🛍 타오바오</button>`;
   (document.body || document.documentElement).appendChild(el);
   const boxBtn = el.querySelector(".box");
   ipcRenderer.on("chat:count", (_e, n) => { boxBtn.hidden = !n; boxBtn.querySelector(".n").textContent = n || ""; });
   boxBtn.addEventListener("click", () => ipcRenderer.invoke("chat:act", { a: "show" }));
+  el.querySelector(".wave")?.addEventListener("click", (e) => waveStart(e.currentTarget));
   el.querySelector(".tb")?.addEventListener("click", async (e) => {
     const r = await ipcRenderer.invoke("tb:search");
     if (r?.error) { e.currentTarget.textContent = "✕ " + r.error.slice(0, 30); setTimeout(() => { e.currentTarget.textContent = "🛍 타오바오"; }, 4000); }
@@ -713,13 +774,13 @@ async function taobaoAuto() {
   if (!pend) return;
   const log = (t) => ipcRenderer.send("tb:log", t);
   await sleep(1500);
-  // 로그아웃 상태면 사진 검색 결과가 안 나온다(“网络信号走丢啦”) → 로그인 안내, 사진은 남겨 두고 로그인 뒤 이어서
-  const loggedOut = [...document.querySelectorAll("a, span, div")].some((e) => /^(亲，请登录|请登录|登录)$/.test((e.textContent || "").trim()) && e.getBoundingClientRect().top < 120 && e.getBoundingClientRect().width > 0);
-  if (loggedOut) { log("타오바오 로그인 안 됨 — 로그인하면 이어서 검색"); sgBand("sg-tb-login", "타오바오 로그인이 필요합니다 — 왼쪽 위 '亲，请登录'로 로그인하면 같은 상품 찾기가 자동으로 이어집니다 (10분 안)"); return; }
+  // 로그인 여부를 화면 글자로 짐작하지 않는다(로그인돼 있어도 "登录" 글자가 남아 있어 잘못 막았음, 2026-10-13).
+  // 일단 검색하고, 결과가 없을 때만 로그인·보안 인증을 안내한다.
   if (/^s\.taobao\.com$/i.test(location.hostname)) {
+    try { log(`진단 결과화면: opener=${!!window.opener} name=${String(window.name || "").slice(0, 80)} ref=${document.referrer.slice(0, 80)} ss=[${Object.keys(sessionStorage).slice(0, 12).join(",")}] ls=[${Object.keys(localStorage).filter((k) => /img|image|pic|search|pai/i.test(k)).slice(0, 12).join(",")}]`); } catch {}
     if (await waitFor(() => tbItems().length >= 3, 8000)) { ipcRenderer.invoke("tb:pendingDone"); log(`타오바오 결과 ${tbItems().length}개 — 상품을 열어 상세·리뷰를 보세요`); sgBand("sg-tb-ok", "🛍 타오바오 같은 상품 결과입니다 — 상품을 열고 '📷 리뷰 사진 모으기'를 누르면 리뷰 사진을 모읍니다", 9000); return; }
     const key = "sg-tb-retry:" + pend.ts;
-    if (sessionStorage.getItem(key)) { ipcRenderer.invoke("tb:pendingDone"); log("다시 올려도 결과가 없습니다"); sgBand("sg-tb-none", "타오바오 사진 검색 결과가 없습니다 — 보안 인증(슬라이더)이 떠 있으면 직접 넘긴 뒤 화면의 '搜同款'에 사진을 올려 주세요"); return; }
+    if (sessionStorage.getItem(key)) { ipcRenderer.invoke("tb:pendingDone"); log("다시 올려도 결과가 없습니다"); sgBand("sg-tb-none", "타오바오 사진 검색 결과가 없습니다 — 타오바오 로그인이 풀렸거나 보안 인증(슬라이더)이 떠 있을 수 있어요. 확인한 뒤 화면의 '搜同款'에 사진을 올려 주세요"); return; }
     sessionStorage.setItem(key, "1");
     log("결과가 없어 이 화면 사진 칸에 다시 올립니다");
     await tbUpload(pend, log);
@@ -794,7 +855,174 @@ async function showReviewBox() {
   });
 }
 
-const safeStart = () => { taobaoAuto().catch((e) => ipcRenderer.send("tb:log", `자동 사진 검색 오류: ${e && e.message}`)); reviewPill().catch(() => {}); notFoundNotice(); captchaNotice(); askPill().catch(() => {}); start().catch(() => {}); rankPanel().catch((e) => ipcRenderer.send("cn:log", `추천 패널 오류: ${e && e.message}`)); autoImageSearch().catch((e) => ipcRenderer.send("cn:log", `자동 이미지 검색 오류: ${e && e.message}`)); };
+// 진단: 이미지 검색 결과 화면 주소(영역 region 등)가 어떻게 바뀌는지 남긴다 — 1688이 받는 "전체 사진" 영역 형식을 찾기 위함
+function logResultsUrl() {
+  if (!/pc-image-search|youyuan/i.test(location.pathname + location.search)) return;
+  let last = "";
+  const tick = () => { if (location.href !== last) { last = location.href; ipcRenderer.send("cn:log", `진단 결과주소: ${location.href.replace(/^https:\/\/[^/]+/, "").slice(0, 600)}`); } };
+  tick(); setInterval(tick, 1000);
+}
+// ---- 🌊 파도타기 ----
+// 1688 상품 화면 🌊 → 핵심 키워드(AI) 고르기 → 타오바오/1688 판매순 1페이지 → 오른쪽 "파도타기 보드":
+// 최근 주문 많은 순 · 처음 봄 · 최근 등록 추정(상품 번호가 큰 쪽) · 사진으로 국내 확인(구글 렌즈, 위 6개 자동)
+const WAVE_CSS = `
+#sg-wave{position:fixed;right:14px;top:14px;bottom:14px;width:420px;z-index:2147483646;background:#fff;color:#18181b;border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.18);font:14px/1.45 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#sg-wave .hd{padding:14px 16px 10px;border-bottom:1px solid #f4f4f5}
+#sg-wave .hd .t{display:flex;justify-content:space-between;align-items:center} #sg-wave .hd b{font-size:17px}
+#sg-wave .x{background:none;border:0;font-size:18px;color:#71717a;cursor:pointer;padding:4px 8px}
+#sg-wave .sub{font-size:12px;color:#71717a;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sg-wave .kws{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+#sg-wave .kw{border:1px solid #d4d4d8;background:#fff;border-radius:16px;padding:5px 11px;cursor:pointer;font-size:13px;color:#3f3f46}
+#sg-wave .kw.on{background:#16a34a;border-color:#16a34a;color:#fff;font-weight:700} #sg-wave .kw small{opacity:.75;margin-left:4px}
+#sg-wave .site{display:flex;gap:6px;margin-top:8px;align-items:center;font-size:12px;color:#52525b}
+#sg-wave .site button{border:1px solid #d4d4d8;background:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px}
+#sg-wave .site button.on{background:#18181b;color:#fff;border-color:#18181b;font-weight:700}
+#sg-wave .nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 16px}
+#sg-wave .num{border:1px solid #e4e4e7;border-radius:12px;padding:8px 10px} #sg-wave .num span{font-size:11.5px;color:#52525b} #sg-wave .num b{display:block;font:900 22px/1.2 ui-monospace,Menlo,monospace}
+#sg-wave .num.g{background:#f0fdf4;border-color:#86efac} #sg-wave .num.g b{color:#15803d}
+#sg-wave .flt{display:flex;gap:6px;padding:0 16px 8px} #sg-wave .flt button{border:1px solid #d4d4d8;background:#fff;border-radius:14px;padding:4px 10px;font-size:12.5px;cursor:pointer} #sg-wave .flt button.on{background:#18181b;color:#fff;border-color:#18181b}
+#sg-wave .list{flex:1;overflow:auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+#sg-wave .card{display:flex;gap:10px;border:1px solid #e4e4e7;border-radius:12px;padding:10px}
+#sg-wave .card img{width:84px;height:84px;object-fit:cover;border-radius:8px;background:#f4f4f5;flex:none}
+#sg-wave .card .b{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+#sg-wave .card .tt{font-weight:700;font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#sg-wave .card .zh{font-size:11.5px;color:#a1a1aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sg-wave .card .pr{display:flex;gap:8px;align-items:baseline} #sg-wave .card .pr b{font:900 18px ui-monospace,Menlo,monospace} #sg-wave .card .pr span{font-size:12.5px;color:#3f3f46}
+#sg-wave .bd{display:flex;gap:4px;flex-wrap:wrap} #sg-wave .bd i{font-style:normal;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:#18181b;color:#fff} #sg-wave .bd i.o{background:#fff;color:#18181b;border:1px solid #d4d4d8}
+#sg-wave .kr{font-size:12px;color:#52525b;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+#sg-wave .kr em{font-style:normal;padding:1px 7px;border-radius:6px;background:#f4f4f5;color:#52525b} #sg-wave .kr em.few{background:#dcfce7;color:#166534;font-weight:700} #sg-wave .kr .ok{color:#15803d;font-weight:700}
+#sg-wave .act{display:flex;gap:6px;margin-top:2px} #sg-wave .act button{flex:1;border:1px solid #d4d4d8;background:#fff;border-radius:8px;padding:6px 4px;font-size:12.5px;cursor:pointer;color:#3f3f46}
+#sg-wave .foot{font-size:11.5px;color:#71717a;padding:8px 16px;border-top:1px solid #f4f4f5}
+#sg-wave .empty{color:#71717a;font-size:13px;padding:20px 0;text-align:center}`;
+const shopChip = (sh, cls) => `<em class="${cls}" ${sh.url ? `data-url="${esc(sh.url)}" role="button" tabindex="0" title="${esc(sh.name)} 대표 상품 열기" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px"` : ""}>${esc(sh.name)} ${sh.n}건</em>`;
+const waveIsSearch = () => (/^s\.1688\.com$/i.test(location.hostname) && /offer_search/i.test(location.pathname)) || (/^s\.taobao\.com$/i.test(location.hostname) && /[?&]q=/.test(location.search) && !/imgSearchOrigin/.test(location.search));
+const num = (s) => { const m = String(s || "").replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(万|w)?/i); return m ? Math.round(Number(m[1]) * (m[2] ? 10000 : 1)) : null; };
+// 상품 화면 → 키워드 뽑기 → 고르기 상자
+async function waveStart(btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = "⏳ 키워드 뽑는 중…";
+  const img = document.querySelector('meta[property="og:image"]')?.content || [...document.images].filter((i) => i.naturalWidth >= 300).sort((a, b) => b.naturalWidth - a.naturalWidth)[0]?.src || "";
+  // 앱을 다시 켜기 전(메인에 파도타기가 없을 때)이나 AI 오류면 멈춰 있지 말고 이유를 보여 준다
+  const r = await ipcRenderer.invoke("wave:start", { titleZh: document.title, img, url: location.href, cost: readPrice() })
+    .catch((e) => ({ error: /No handler/.test(String(e)) ? "앱을 한 번 다시 켜야 파도타기가 동작합니다 (Cmd+Q 후 다시 실행)" : String(e?.message || e).slice(0, 80) }));
+  btn.disabled = false; btn.textContent = old;
+  if (r?.error) { sgBand("sg-wave-err", "🌊 " + r.error, 6000); return; }
+  waveChooser(r.ctx);
+}
+function waveChooser(ctx) {
+  document.getElementById("sg-wave")?.remove();
+  if (!document.getElementById("sg-wave-css")) { const st = document.createElement("style"); st.id = "sg-wave-css"; st.textContent = WAVE_CSS; document.documentElement.appendChild(st); }
+  const box = document.createElement("div"); box.id = "sg-wave"; box.style.bottom = "auto";
+  let site = ctx.lastSite || "taobao";
+  const draw = () => {
+    box.innerHTML = `<div class="hd"><div class="t"><b>🌊 파도타기</b><button type="button" class="x" aria-label="닫기">✕</button></div>
+      <div class="sub">${esc(ctx.titleZh)}</div>
+      <div class="kws">${ctx.keywords.map((k) => `<button type="button" class="kw" data-kw="${esc(k.zh)}">${esc(k.zh)}<small>${esc(k.ko)}</small></button>`).join("")}<button type="button" class="kw add">+ 직접 입력</button></div>
+      <div class="site">어디서 · <button type="button" data-s="taobao" class="${site === "taobao" ? "on" : ""}">타오바오</button><button type="button" data-s="1688" class="${site === "1688" ? "on" : ""}">1688</button> · 키워드를 누르면 판매순으로 엽니다</div></div>`;
+    box.querySelector(".x").onclick = () => box.remove();
+    box.querySelectorAll(".site button").forEach((b) => (b.onclick = () => { site = b.dataset.s; draw(); }));
+    box.querySelectorAll(".kw[data-kw]").forEach((b) => (b.onclick = () => ipcRenderer.invoke("wave:open", { kw: b.dataset.kw, site })));
+    box.querySelector(".kw.add").onclick = async () => { const k = prompt("중국어 키워드를 넣어 주세요 (예: 记忆棉颈枕)"); if (!k) return; const c = await ipcRenderer.invoke("wave:addKeyword", k); if (c) { ctx = c; draw(); } };
+  };
+  draw();
+  (document.body || document.documentElement).appendChild(box);
+}
+// 검색 결과 카드 읽기 (1688: data-renderkey 끝 번호 · 타오바오: 상품 링크의 id=)
+function waveCards() {
+  const out = new Map();
+  if (/1688\.com$/i.test(location.hostname)) {
+    for (const c of document.querySelectorAll("[data-renderkey]")) {
+      const id = (c.getAttribute("data-renderkey") || "").split("_").reverse().find((x) => /^\d{9,14}$/.test(x)); if (!id || out.has(id)) continue;
+      const lines = (c.innerText || "").split("\n").map((x) => x.trim()).filter(Boolean), j = lines.join(" ");
+      const jn = j.replace(/(\d),(\d{3})/g, "$1$2"); // 1,400 → 1400 (앱 🌐 번역이 켜져 있으면 "600개 이상의 항목"처럼 한국어로 바뀐다)
+      const pm = j.match(/[¥￥]\s*(\d+)(?:\s*(\.\d+))?/), sm = jn.match(/(\d+(?:\.\d+)?)\s*(万)?\+?\s*件(?!\s*起)/) || jn.match(/(\d+(?:\.\d+)?)\s*(만)?\s*개\s*이상(?!\s*(?:구매|주문))/);
+      out.set(id, { id, site: "1688", title: lines[0] || "", price: pm ? Number(pm[1] + (pm[2] || "")) : null, orders: sm ? Math.round(Number(sm[1]) * (sm[2] ? 10000 : 1)) : null,
+        img: (c.querySelector("img")?.currentSrc || c.querySelector("img")?.src || "").replace(/_\d+x\d+.*$/, ""), url: `https://detail.1688.com/offer/${id}.html` });
+    }
+  } else {
+    for (const a of document.querySelectorAll('a[href*="item.taobao.com/item.htm"], a[href*="detail.tmall.com/item.htm"], a[href*="item.htm?id="]')) {
+      const id = (a.href.match(/[?&]id=(\d{6,15})/) || [])[1]; if (!id || out.has(id)) continue;
+      let c = a; for (let k = 0; k < 6 && c.parentElement && !(c.querySelector("img") && /[¥￥]/.test(c.innerText || "")); k++) c = c.parentElement;
+      const lines = (c.innerText || "").split("\n").map((x) => x.trim()).filter(Boolean), j = lines.join(" ");
+      if (!/[¥￥]/.test(j)) continue;
+      const pm = j.match(/[¥￥]\s*(\d+)(?:\s*(\.\d+))?/);
+      const jn = j.replace(/(\d),(\d{3})/g, "$1$2");
+      const sm = jn.match(/(\d+(?:\.\d+)?)\s*(万)?\+?\s*人(?:付款|收货|购买)/) || jn.match(/已售\s*(\d+(?:\.\d+)?)\s*(万)?\+?/) || jn.match(/(\d+(?:\.\d+)?)\s*(万|만)?\+?\s*(?:명|인)\s*(?:이\s*)?(?:결제|구매|수령|구입)/) || jn.match(/(?:판매|구매)\s*(\d+(?:\.\d+)?)\s*(만)?\+?/) || jn.match(/(\d+(?:\.\d+)?)\s*(万)?\+?\s*(?:件|笔)/);
+      const title = lines.filter((l) => /[一-鿿]/.test(l) && l.length >= 8).sort((x, y) => y.length - x.length)[0] || lines[0] || "";
+      out.set(id, { id, site: "taobao", title, price: pm ? Number(pm[1] + (pm[2] || "")) : null, orders: sm ? Math.round(Number(sm[1]) * (sm[2] ? 10000 : 1)) : null,
+        img: (c.querySelector("img")?.currentSrc || c.querySelector("img")?.src || "").replace(/^\/\//, "https://"), url: a.href.split("#")[0] });
+    }
+  }
+  return [...out.values()];
+}
+async function waveBoard() {
+  if (!waveIsSearch() || document.getElementById("sg-wave")) return;
+  const ctx = await ipcRenderer.invoke("wave:ctx"); if (!ctx) return;
+  if (!document.getElementById("sg-wave-css")) { const st = document.createElement("style"); st.id = "sg-wave-css"; st.textContent = WAVE_CSS; document.documentElement.appendChild(st); }
+  const site = /1688/.test(location.hostname) ? "1688" : "taobao";
+  const kw = decodeURIComponent((location.search.match(/[?&](?:q|keywords)=([^&]+)/) || [])[1] || "").replace(/\+/g, " ");
+  const box = document.createElement("div"); box.id = "sg-wave";
+  (document.body || document.documentElement).appendChild(box);
+  const S = { cards: [], fresh: new Set(), kr: new Map(), tr: new Map(), onlyNew: false, onlyKr: false, first: false, since: null };
+  const log = (t) => ipcRenderer.send("cn:log", "🌊 " + t);
+  const read = async () => {
+    const got = waveCards();
+    if (!got.length) {
+      const anchors = document.querySelectorAll('a[href*="item"]').length;
+      log(`결과 카드를 못 읽음 · ${location.host} · 상품링크 ${anchors}개 · 글자 ${(document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 160)}`);
+    }
+    const ids = got.map((c) => c.id).filter((id) => !S.cards.some((x) => x.id === id));
+    const sr = await ipcRenderer.invoke("wave:seen", { site, kw, ids }); (sr?.fresh || []).forEach((id) => S.fresh.add(id)); if (S.cards.length === 0) { S.first = !!sr?.first; S.since = sr?.since || null; }
+    const all = [...S.cards, ...got.filter((c) => ids.includes(c.id))];
+    const sortedIds = all.map((c) => BigInt(c.id)).sort((a, b) => (a < b ? -1 : 1)), cut = sortedIds[Math.floor(sortedIds.length * 0.8)] ?? null;
+    S.cards = all.map((c) => ({ ...c, recent: cut != null && BigInt(c.id) >= cut })).sort((a, b) => (b.orders ?? -1) - (a.orders ?? -1));
+    const need = S.cards.filter((c) => !S.tr.has(c.id) && /[一-鿿]/.test(c.title)).slice(0, 40);
+    if (need.length) ipcRenderer.invoke("tb:translate", need.map((c) => c.title)).then((ko) => { need.forEach((c, i) => ko[i] && S.tr.set(c.id, ko[i])); draw(); }).catch(() => {});
+    draw();
+  };
+  const lens = async (c) => {
+    if (S.kr.has(c.id)) return; S.kr.set(c.id, { busy: true }); draw();
+    const r = await ipcRenderer.invoke("wave:lens", { img: c.img, id: c.id });
+    S.kr.set(c.id, r?.ok ? r : { error: r?.error || "실패" }); draw();
+  };
+  const draw = () => {
+    const krDone = [...S.kr.values()].filter((x) => x.ok), few = krDone.filter((x) => x.total <= 3).length;
+    // 처음 봄: 처음 검색한 키워드면 없음. 다시 조회했는데 대부분(60% 넘게)이 처음이면 의미 없으니 숨김
+    const newCount = S.cards.filter((c) => S.fresh.has(c.id)).length, showNew = !S.first && newCount > 0 && newCount <= S.cards.length * 0.6;
+    const list = S.cards.filter((c) => (!S.onlyNew || !showNew || S.fresh.has(c.id)) && (!S.onlyKr || (S.kr.get(c.id)?.ok && S.kr.get(c.id).total <= 3)));
+    box.innerHTML = `<div class="hd"><div class="t"><b>🌊 파도타기 · ${site === "1688" ? "1688" : "타오바오"} 판매순</b><button type="button" class="x" aria-label="닫기">✕</button></div>
+      <div class="sub">키워드 ${esc(kw)} · 출발 ${esc(ctx.name || ctx.titleZh)}</div>
+      <div class="kws">${ctx.keywords.map((k) => `<button type="button" class="kw ${k.zh === kw ? "on" : ""}" data-kw="${esc(k.zh)}" title="${esc(k.ko)}">${esc(k.zh)}<small>${esc(k.ko)}</small></button>`).join("")}</div>
+      <div class="site">다른 곳에서 · <button type="button" data-s="${site === "1688" ? "taobao" : "1688"}">${site === "1688" ? "타오바오" : "1688"}로 같은 키워드</button><button type="button" class="re" title="아래로 내려 더 나온 상품까지 다시 읽기">↻ 다시 읽기</button></div></div>
+      <div class="nums"><div class="num"><span>찾은 후보</span><b>${S.cards.length}</b></div><div class="num"><span>처음 봄</span><b>${showNew ? newCount : "-"}</b></div><div class="num g"><span>국내 거의 없음</span><b>${few}<small style="font-size:12px;color:#52525b">/${krDone.length}</small></b></div></div>
+      <div class="flt">${showNew ? `<button type="button" class="fn ${S.onlyNew ? "on" : ""}">처음 본 것만</button>` : ""}<button type="button" class="fk ${S.onlyKr ? "on" : ""}">국내 적은 것만</button></div>
+      <div class="list">${list.map((c) => { const k = S.kr.get(c.id); return `<div class="card" data-id="${c.id}"><img src="${esc(c.img)}" alt="" referrerpolicy="no-referrer"><div class="b">
+        <div class="bd">${showNew && S.fresh.has(c.id) ? "<i>처음 봄</i>" : ""}${c.recent ? '<i class="o">최근 등록 추정</i>' : ""}</div>
+        <div class="tt">${esc(S.tr.get(c.id) || c.title)}</div>${S.tr.get(c.id) ? `<div class="zh">${esc(c.title)}</div>` : ""}
+        <div class="pr"><b>${c.price != null ? "¥" + c.price : "-"}</b><span>${c.orders != null ? `최근 ${c.orders.toLocaleString()}건 주문` : "주문 수 없음"}</span></div>
+        <div class="kr">${!k ? `<button type="button" class="lens" style="border:1px solid #d4d4d8;background:#fff;border-radius:8px;padding:3px 8px;font-size:12px;cursor:pointer">📷 국내 확인</button>` : k.busy ? "⏳ 사진으로 국내 확인 중…" : k.error ? `<span style="color:#ea580c">✕ ${esc(k.error)}</span>` : k.total <= 3 ? `<span class="ok">국내 거의 없음</span>${k.shops.map((s) => shopChip(s, "few")).join("")}` : `<span>국내 판매 ${k.total}건</span> ${k.shops.slice(0, 4).map((s) => shopChip(s, "")).join("")}`}</div>
+        <div class="act"><button type="button" class="open">상품 열기</button></div></div></div>`; }).join("") || `<div class="empty">${S.cards.length ? "조건에 맞는 상품이 없습니다" : "결과 카드를 읽는 중…"}</div>`}</div>
+      <div class="foot">참고 지표 · 국내 판매는 사진을 구글 렌즈로 찾은 한국 쇼핑몰 결과 수 · 쇼핑몰 이름을 누르면 대표 상품이 열립니다</div>`;
+    box.querySelector(".x").onclick = () => box.remove();
+    box.querySelectorAll(".kw[data-kw]").forEach((b) => (b.onclick = () => ipcRenderer.invoke("wave:open", { kw: b.dataset.kw, site })));
+    box.querySelector(".site button[data-s]").onclick = (e) => ipcRenderer.invoke("wave:open", { kw, site: e.currentTarget.dataset.s });
+    box.querySelector(".re").onclick = () => read();
+    box.querySelectorAll("em[data-url]").forEach((el) => (el.onclick = () => ipcRenderer.invoke("wave:ext", el.dataset.url)));
+    box.querySelector(".fn").onclick = () => { S.onlyNew = !S.onlyNew; draw(); };
+    box.querySelector(".fk").onclick = () => { S.onlyKr = !S.onlyKr; draw(); };
+    box.querySelectorAll(".card").forEach((el) => {
+      const c = S.cards.find((x) => x.id === el.dataset.id);
+      el.querySelector(".lens")?.addEventListener("click", () => lens(c));
+      el.querySelector(".open").onclick = () => { location.href = c.url; };
+    });
+  };
+  draw();
+  await sleep(2500); await read();
+  setTimeout(read, 5000); // 늦게 그려지는 카드까지
+  // 주문 많은 위 6개는 자동으로 국내 확인(한 번에 하나씩)
+  for (const c of S.cards.slice(0, 6)) { if (!box.isConnected) break; await lens(c); }
+}
+
+const safeStart = () => { waveBoard().catch((e) => ipcRenderer.send("cn:log", `🌊 보드 오류: ${e && e.message}`)); logResultsUrl(); taobaoAuto().catch((e) => ipcRenderer.send("tb:log", `자동 사진 검색 오류: ${e && e.message}`)); reviewPill().catch(() => {}); notFoundNotice(); captchaNotice(); askPill().catch(() => {}); start().catch(() => {}); rankPanel().catch((e) => ipcRenderer.send("cn:log", `추천 패널 오류: ${e && e.message}`)); autoImageSearch().catch((e) => ipcRenderer.send("cn:log", `자동 이미지 검색 오류: ${e && e.message}`)); };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", safeStart);
 else safeStart();
 
@@ -981,9 +1209,12 @@ function readOptions(desc) {
 function readAttrs() {
   const out = [], seen = new Set();
   const push = (k, v) => { k = txt1(k).replace(/[:：]\s*$/, ""); v = txt1(v); if (!k || !v || k.length > 40 || seen.has(k)) return; seen.add(k); out.push({ k_zh: k, v_zh: v.slice(0, 200) }); };
-  const roots = [...document.querySelectorAll('[class*="attribute" i], [class*="offer-attr" i], #J_AttrUL, .attributes-list, [class*="attrs" i], [class*="props" i]')].filter((e) => !inOurUi(e));
+  const roots = [...document.querySelectorAll('[class*="attribute" i], [class*="offer-attr" i], #J_AttrUL, .attributes-list, [class*="attrs" i], [class*="props" i], [class*="ParamsInfo" i]')].filter((e) => !inOurUi(e));
   for (const root of roots.filter((r) => !roots.some((o) => o !== r && o.contains(r)))) {
     const n0 = out.length;
+    // 타오바오·티몰 새 화면(参数信息): 항목 = Title + SubTitle. 강조 칸(emphasis)은 큰 글씨가 값·작은 글씨가 이름, 일반 칸은 Title=이름·SubTitle=값
+    for (const it of root.querySelectorAll('[class*="ParamsInfoItem" i]')) { const ch = [...it.children], t = ch.find((c) => /ItemTitle/i.test(String(c.className))), s = ch.find((c) => /SubTitle/i.test(String(c.className))); if (t && s) { if (/emphasis/i.test(String(it.className))) push(s.textContent, t.textContent); else push(t.textContent, s.textContent); } }
+    if (out.length > n0) continue;
     for (const tr of root.querySelectorAll("tr")) { const c = [...tr.children].map((x) => txt1(x.textContent)); for (let i = 0; i + 1 < c.length; i += 2) push(c[i], c[i + 1]); }
     if (out.length > n0) continue;
     for (const dt of root.querySelectorAll("dt")) { const dd = dt.nextElementSibling; if (dd?.tagName === "DD") push(dt.textContent, dd.textContent); }
@@ -1026,11 +1257,13 @@ const inShopArea = (el) => { for (let p = el; p && p !== document.body; p = p.pa
 const stripSiteTail = (t) => txt1(t).replace(/\s*[-—_|｜]\s*(阿里巴巴|1688|淘宝网?|天猫|tmall|taobao|alibaba)[^-—_|｜]*$/i, "").trim();
 function readTitleCandidates() {
   const out = [], seen = new Set();
-  const add = (t, from) => { t = txt1(t).slice(0, 200); if (t.length < 4 || seen.has(t)) return; seen.add(t); out.push({ t, from, company: isCompanyName(t) }); };
+  const tb = /^(taobao|tmall)$/.test(detailSite()); // 타오바오·티몰: 검색칸 문구(按图片搜索 등)가 상품명으로 잡히던 문제(2026-10-12 실제 1건) → 새 화면 mainTitle 먼저, 화면 도구 문구는 뺀다
+  const add = (t, from) => { t = txt1(t).slice(0, 200); if (t.length < 4 || seen.has(t) || (tb && /^(按图片搜索|图片搜索|以图搜[款图]|搜索|搜同款|找同款|找相似|淘宝网|天猫|登录|首页|宝贝详情|商品详情)$/.test(t))) return; seen.add(t); out.push({ t, from, company: isCompanyName(t) }); };
   const scripts = [...document.scripts].map((s) => s.textContent || "").join("\n").slice(0, 2000000);
   const fromJson = (key) => { for (const m of scripts.matchAll(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.){4,200})"`, "g"))) { try { add(JSON.parse(`"${m[1]}"`), key); } catch {} } };
   fromJson("subject"); fromJson("offerTitle");
   const fromEls = (sel, from) => { for (const el of document.querySelectorAll(sel)) { if (inOurUi(el) || inShopArea(el) || el.closest("head") || el.children.length > 3) continue; add(el.getAttribute("data-title") || el.textContent, from); } };
+  if (tb) { fromEls('[class*="mainTitle" i], [class*="ItemTitle" i] h1, .tb-main-title', "mainTitle"); add(stripSiteTail(document.title), "document.title"); }
   fromEls('h1, [class*="title-text" i], [class*="offer-title" i], [class*="detail-title" i], [class*="main-title" i], [class*="item-title" i]', "h1");
   add(document.querySelector('meta[property="og:title"]')?.content, "og:title");
   add(stripSiteTail(document.title), "document.title");
@@ -1044,8 +1277,18 @@ function readDetailTitle() {
 }
 
 // CONTRACTS 1절 DetailSource 의 raw (브라우저에서 바로 읽은 것)
+// 타오바오·티몰 새 화면: 상세 설명은 화면 아래에 닿아야 불러오고, 불러온 뒤 페이지가 더 길어진다 → 높이가 4번 연속 그대로일 때까지 천천히(최대 약 30초)
+async function wakeLazyLong() {
+  const step = Math.max(600, innerHeight);
+  for (let i = 0, y = 0, lastH = 0, still = 0; i < 80 && still < 4; i++) {
+    y += step; scrollTo(0, y); await sleep(350);
+    const H = document.documentElement.scrollHeight;
+    if (y + innerHeight >= H) { still = H === lastH ? still + 1 : 0; lastH = H; y = Math.max(0, H - innerHeight - step); }
+  }
+  scrollTo(0, 0); await sleep(200);
+}
 async function readDetailRaw() {
-  await wakeLazy();
+  if (/^(taobao|tmall)$/.test(detailSite()) && location.protocol !== "file:") await wakeLazyLong(); else await wakeLazy();
   const desc = findDescContainer();
   let detailImages = desc ? imgsIn(desc) : [];
   let detailText_zh = desc ? String(desc.innerText || "").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim().slice(0, 20000) : "";
@@ -1176,6 +1419,7 @@ const SG_CSS = `
 .log p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.log .g{color:var(--neon)}.log .y{color:var(--amber)}.log .c{color:var(--cyan)}
 .foot{position:relative;z-index:2;height:42px;display:flex;align-items:center;gap:16px;padding:0 26px;border-top:1px solid #10221a;font-size:12px;color:#3f6650}.foot b{color:#bfe8cf;font-weight:600}.foot .sp{flex:1}
 .foot button{background:none;border:0;color:#3f6650;font:12px var(--mono);cursor:pointer}.foot button:hover{color:#fff}
+.top .cancel{margin-left:14px;background:#1f1407;border:1px solid #b45309;color:#ffb454;border-radius:8px;padding:6px 12px;font:700 13px -apple-system,"Apple SD Gothic Neo",sans-serif;cursor:pointer}.top .cancel:hover{background:#b45309;color:#fff}
 .fin{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(4,7,10,.93);text-align:center;cursor:pointer}
 .fin.on{display:flex;animation:f .25s}
 .fin .k{font-size:12px;letter-spacing:.2em;color:var(--dk)}
@@ -1197,7 +1441,7 @@ function sgScan({ name, photo, stage = 0, wait = "" }) {
   const STG = [["업로드", "사진 지문"], ["검색", "1688 이미지 검색"], ["수집", "후보 상품"], ["평가", "판매자 점수"]];
   const plain = `seedhack ~ trace "${name}" --site 1688`;
   sh.innerHTML = `<style>${SG_CSS}</style><div class="sc">
-    <div class="top"><span class="logo">SEED<b>HACK</b><span class="cur"></span></span><span class="cmd"></span><span class="live"><b>● LIVE</b> <span class="clk"></span></span></div>
+    <div class="top"><span class="logo">SEED<b>HACK</b><span class="cur"></span></span><span class="cmd"></span><span class="live"><b>● LIVE</b> <span class="clk"></span></span><button type="button" class="cancel" title="이 검색을 멈추고 1688 첫 화면으로">✕ 검색 취소</button></div>
     <div class="body">
       <div class="src"><div class="lbl">SOURCE · 쿠팡 상품 사진</div><div class="photo">${photo ? `<img src="${photo}" alt="">` : ""}<div class="laser"></div><i></i><i></i><i></i><i></i></div><div class="lbl">IMAGE FINGERPRINT</div><div class="hex"></div></div>
       <div class="mid">
@@ -1249,6 +1493,7 @@ function sgScan({ name, photo, stage = 0, wait = "" }) {
   const onKey = (e) => { if (e.key === "Escape") S.skip = true; };
   addEventListener("keydown", onKey, true);
   q(".skip").onclick = () => { if (S.phase === "B") S.skip = true; else api.close(); };
+  q(".cancel").onclick = () => { S.closed = false; api.close(); ipcRenderer.invoke("cn:cancel").catch(() => {}); };
   const w = (ms) => (S.skip ? Promise.resolve() : sleep(ms));
   const reel = ({ img, cls, no, nm, meta, stamp }) => {
     const im = q(".fim"); im.innerHTML = img ? `<img src="${esc(img)}" alt="">` : ""; im.className = "fim " + cls; void im.offsetWidth; im.classList.add("sw");

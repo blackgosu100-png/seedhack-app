@@ -178,7 +178,8 @@ export async function scan(opts = {}) {
   const pick = (f, sort, n = opts.limit || 60) => { const r = list.filter(f).sort((a, b) => tier(a) - tier(b) || sort(a, b)); return { count: r.length, items: r.slice(0, n).map((k) => (J[k.kw] ? { ...k, ai: aiOf(k) } : k)) }; };
   return {
     month, dbTotal, final: list.length, steps, judged: Object.keys(J).length,
-    ...(opts.full ? { all: list } : {}), // 전체 검수용(tools/kw-judge.mjs --all): 필터를 통과한 후보 전부 safeDef: SAFE_DEF, axesDef: AXES,
+    ...(opts.full ? { all: list } : {}), // 전체 검수용(tools/kw-judge.mjs --all): 필터를 통과한 후보 전부
+    safeDef: SAFE_DEF, axesDef: AXES, // 화면의 안전 필터 칩·경쟁 조건 버튼 정의(주석 안에 들어가 있어 화면에 안 나오던 것, 2026-10-12 수정)
     top3: (() => { // AI가 고른 3개: 묶음마다 AI 통과 1위부터, 겹치지 않게
       const out = [], seen = new Set();
       const g = { start: list.filter((k) => k.mx <= 1000 && k.price <= 40000), weak: list.filter((k) => k.srocket <= 0.2 && k.mx <= 500 && k.price <= 60000), rising: list.filter((k) => (k.fc ?? 0) >= 0.3 && k.mx <= 3000 && k.price <= 60000) };
@@ -203,6 +204,7 @@ export async function scan(opts = {}) {
 export async function draw({ seen = [], n = 10, opts = {} } = {}) {
   const r = await scan({ ...opts, full: true });
   const J = loadJudge(), seenSet = new Set(seen);
+  if (opts.mode === "pro") return drawPro(r, J, seenSet, n);
   const pool = r.all.filter((k) => J[k.kw]?.v === "ok" && J[k.kw]?.easy === true && !k.careful);
   const tierOf = (k) => (k.m1 >= 1000 && k.mx <= 1000 ? "A" : k.m1 >= 1000 && k.mx <= 3000 ? "B" : "C");
   const fresh = pool.filter((k) => !seenSet.has(k.kw));
@@ -221,6 +223,29 @@ export async function draw({ seen = [], n = 10, opts = {} } = {}) {
   const order = { A: 0, B: 1, C: 2 };
   out.sort((a, b) => order[a.tier] - order[b.tier] || b.m1 / (b.mx + 10) - a.m1 / (a.mx + 10));
   return { month: r.month, items: out, pool: pool.length, fresh: fresh.length - out.length, tiers: { A: byTier.A.length, B: byTier.B.length, C: byTier.C.length } };
+}
+
+// 🧭 팔아봤어요(2026-10-12 대표님 결정): 1등 리뷰 1,000개 이상 = 이미 팔리는 게 확인된 시장만. 이름만 듣고 아는 상품(easy)일 필요는 없음
+//  등급: L = 1등 리뷰 5,000~50,000(큰 시장) / M = 1,000~5,000(검증된 시장) · 반반 · 등급 안에서는 시장 크기(평균가 × 1등 리뷰)가 클수록 잘 뽑힌다
+//  카드가 채워지면 Wing 실판매로 1등 하루 판매 · 리뷰 500개+ 상품 수 · 틈을 보여 주고, 틈 판매량 순으로 다시 줄 세운다(reco.js)
+function drawPro(r, J, seenSet, n) {
+  const pool = r.all.filter((k) => J[k.kw]?.v === "ok" && k.mx >= 1000 && k.mx <= 50000); // 1등 리뷰 5만 넘는 곳(뚫어뻥 16만)은 사실상 못 들어감
+  const tierOf = (k) => (k.mx >= 5000 ? "L" : "M");
+  const fresh = pool.filter((k) => !seenSet.has(k.kw));
+  const byTier = { L: [], M: [] };
+  for (const k of fresh) byTier[tierOf(k)].push(k);
+  const pickW = (arr, m) => { // 가중 무작위(시장 크기의 제곱근) m개
+    const a = arr.map((k) => ({ k, w: Math.sqrt((k.price || 0) * k.mx) + 1 })), out = [];
+    while (out.length < m && a.length) { let t = a.reduce((s, x) => s + x.w, 0) * Math.random(), i = 0; while (i < a.length - 1 && (t -= a[i].w) > 0) i++; out.push(a.splice(i, 1)[0].k); }
+    return out;
+  };
+  const want = { L: Math.round(n / 2) }; want.M = n - want.L;
+  const out = [];
+  let carry = 0;
+  for (const t of ["L", "M"]) { const got = pickW(byTier[t], want[t] + carry); carry = want[t] + carry - got.length; out.push(...got.map((k) => ({ ...k, ai: J[k.kw], tier: t, mode: "pro" }))); }
+  if (out.length < n) { const left = byTier.L.filter((k) => !out.some((o) => o.kw === k.kw)); out.push(...pickW(left, n - out.length).map((k) => ({ ...k, ai: J[k.kw], tier: "L", mode: "pro" }))); }
+  out.sort((a, b) => (b.price || 0) * b.mx - (a.price || 0) * a.mx);
+  return { month: r.month, items: out, pool: pool.length, fresh: fresh.length - out.length, tiers: { L: byTier.L.length, M: byTier.M.length } };
 }
 
 // 🧪 실판매 약식 수집용 키워드 30개: "경쟁 약함"(월검색 1천↑·1등 리뷰 1,000↓, 기회점수 순) 15 + "큰 시장"(월검색 1만↑·1등 리뷰 5,000↓, 검색×가격 순) 15

@@ -114,7 +114,10 @@ export function rankCards(cards, opts = {}) {
   for (const s of scored.filter((x) => !x.excluded).sort((a, b) => b.score - a.score || (a.rank ?? 99) - (b.rank ?? 99))) {
     const key = s.company || s.offerId; if (seen.has(key)) continue; seen.add(key); out.push(s);
   }
-  return { ranked: out, excluded: scored.filter((x) => x.excluded), medianPrice };
+  // 사진 검색이 빗나갔는지: 제목을 읽을 수 있는 후보가 충분한데 쿠팡 상품명과 닮은 게 하나도 없으면(가장 닮은 것도 20% 미만) 결과 전체가 엉뚱한 것
+  const known = rels.filter((r) => r != null), bestRel = known.length ? Math.max(...known) : null;
+  const mismatch = !!opts.target && known.length >= 8 && bestRel != null && bestRel < 0.2;
+  return { ranked: out, excluded: scored.filter((x) => x.excluded), medianPrice, bestRel, mismatch };
 }
 
 export const VERDICT_KO = { green: "🟢 샘플 후보", yellow: "🟡 비교 대상", red: "🔴 보류", candidate: "⚪ 후보 (가격 확인 전)", low: "· 낮음", exclude: "✕ 제외" };

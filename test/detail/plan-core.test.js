@@ -739,3 +739,11 @@ test("상품 보임(비전 product_visible·bbox·other_brand): hero·feature �
   assert.equal(f.image, "clean/m2.png"); assert.deepEqual(f.focus, { x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
   assert.ok(!JSON.stringify(plan.sections).includes("clean/m1.png"), "상품이 안 보이는 사진은 안 씀");
 });
+
+test("tidySpecUnits: 斤→kg 환산·중복 kg·남은 한자 정리", async () => {
+  const { tidySpecUnits } = await import("../../src/main/detail/plan-core.js");
+  const r = tidySpecUnits([{ k: "처리량", v: "약 1시간당 360斤(약 180kg, 제조사 표시 기준)" }, { k: "모터", v: "200W DC" }, { k: "x", v: "纯铜电机" }]);
+  assert.equal(r[0].v, "약 1시간당 180kg(제조사 표시 기준)");
+  assert.equal(r[1].v, "200W DC");
+  assert.equal(r.length, 2);
+});

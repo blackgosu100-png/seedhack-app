@@ -35,6 +35,21 @@ export async function lookup(keyword) {
   return { month, main, subs: longer };
 }
 
+// ✍ 상품명 짓기: 서브키워드를 더 넓게(40개 · 월검색 30+) + 상위 상품 단어로 만든 조합(고탄력팬티스타킹 / 팬티스타킹고탄력)의 검색량
+export async function nameLookup(keyword, words = []) {
+  const d = await open();
+  if (!d) return { month: null, main: null, subs: [], vol: {} };
+  const kw = String(keyword).replace(/\s+/g, "");
+  const one = d.prepare("select * from k where keyword = ?");
+  const main = row(one.get(kw));
+  const subs = d.prepare("select * from k where keyword like ? and keyword <> ? and m1 >= 30 order by m1 desc limit 40").all(`%${kw}%`, kw).map(row);
+  const vol = {};
+  // 조합(고탄력팬티스타킹) · 겹치는 말 합치기(청소솔 + 변기솔 → 변기청소솔) · 단어 하나(청소솔)
+  const keys = (w) => [w + kw, kw + w, w, ...[...Array(Math.max(0, kw.length - 1)).keys()].map((i) => kw.slice(0, i + 1) + w)];
+  for (const w of words.slice(0, 60)) for (const k of keys(w)) { if (vol[k]) continue; const r = row(one.get(k)); if (r) vol[k] = { m1: r.m1, mx: r.mx }; }
+  return { month, main, subs, vol };
+}
+
 // 💡 키워드 추천: keyword-pipeline이 같은 폴더에 복사해 둔 keyword_candidates_YYYY-MM.json(정제·그룹 분류 끝난 후보) 중 최신 달
 export function recommend() {
   try {
