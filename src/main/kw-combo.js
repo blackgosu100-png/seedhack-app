@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { entryLevel, entryFlags, dominantSet } from "../shared/kw-entry.js";
 
 const DIR = path.join(os.homedir(), "sellar-data");
 
@@ -63,7 +64,7 @@ async function load() {
   const db = new DatabaseSync(path.join(DIR, files.at(-1)), { readOnly: true });
   month = files.at(-1).slice(7, 14);
   dbTotal = db.prepare("select count(*) n from k").get().n;
-  const rows = db.prepare(`select keyword, category, m1, m1_fc_rate, cp_avg_price, cp_max_reviews, cp_rocket, cp_seller_rocket, cp_overseas, cp_ov_max_reviews, seasonality, season_month
+  const rows = db.prepare(`select keyword, category, is_brand, m1, m3, m1_fc, m1_fc_rate, last_year, ly_peak_month, ly_peak_vol, nv_avg_price, cp_avg_price, cp_avg_reviews, cp_max_reviews, cp_rocket, cp_seller_rocket, cp_overseas, cp_ov_max_reviews, seasonality, season_month
     from k where is_shopping = 'O' and is_brand <> 'O' and cp_total_reviews >= 300 and m1 >= 1000 and cp_avg_price between 3000 and 150000`).all(); // 평균가 3천~15만: 차량·가전 대형 등 초도 50~100개로 못 들어가는 것 제외
   db.close();
   baseCount = rows.length;
@@ -83,6 +84,7 @@ async function load() {
   };
   const cut = {};
   pool = [];
+  const dom = dominantSet(rows), monthNo = new Date().getMonth() + 1; // 🚪 진입 규칙(전달문 2026-11-16): 한 상품 장악 판별은 카테고리 전체에서
   for (const r of rows) {
     const w = why(r);
     if (w) { cut[w] = (cut[w] || 0) + 1; continue; }
@@ -94,6 +96,7 @@ async function load() {
       season: r.seasonality === "있음" ? "있음" : "", seasonMonth: r.season_month && r.season_month !== "없음" ? r.season_month : "",
       safe: { cert: flag("cert"), big: flag("big"), craft: flag("craft"), tools: flag("tools"), apparel: flag("apparel") },
       // 안전·몸에 닿는 분류는 AI가 통과시켜도 "확인 필요"로(가상 초보 테스트 허점: 카스토퍼·코피어싱 통과)
+      entry: entryLevel(r), flags: entryFlags(r, { dominant: dom, month: monthNo }),
       careful: /안전용품|보호용품|피어싱|헬멧|구명|의료|렌즈/.test(cat) || /피어싱|헬멧|보호대|구명/.test(low),
     });
   }
@@ -206,11 +209,13 @@ export async function draw({ seen = [], n = 10, opts = {} } = {}) {
   const J = loadJudge(), seenSet = new Set(seen);
   if (opts.mode === "pro") return drawPro(r, J, seenSet, n);
   const pool = r.all.filter((k) => J[k.kw]?.v === "ok" && J[k.kw]?.easy === true && !k.careful);
-  const tierOf = (k) => (k.m1 >= 1000 && k.mx <= 1000 ? "A" : k.m1 >= 1000 && k.mx <= 3000 ? "B" : "C");
+  // S = 진입 쉬움(전달문 메인 규칙 · 모자라면 완화 규칙): 로켓배송 25%↓ · 평균 리뷰 300↓ · 1등 리뷰 3천↓ · 월검색 2천↑ · 작년 검색 2만↑ · 평균가 1.2만↑
+  const tierOf = (k) => (k.entry === "main" || k.entry === "relaxed" ? "S" : k.m1 >= 1000 && k.mx <= 1000 ? "A" : k.m1 >= 1000 && k.mx <= 3000 ? "B" : "C");
   const fresh = pool.filter((k) => !seenSet.has(k.kw));
-  const byTier = { A: [], B: [], C: [] };
+  const byTier = { S: [], A: [], B: [], C: [] };
   for (const k of fresh) byTier[tierOf(k)].push(k);
-  const want = { A: Math.round(n * 0.2), B: Math.round(n * 0.4) }; want.C = n - want.A - want.B;
+  byTier.S.sort((a, b) => (a.entry === "main" ? 0 : 1) - (b.entry === "main" ? 0 : 1)); // 메인 규칙 통과를 먼저
+  const want = { S: Math.round(n * 0.3), A: Math.round(n * 0.2), B: Math.round(n * 0.3) }; want.C = n - want.S - want.A - want.B;
   const pickW = (arr, m) => { // 가중 무작위(점수의 제곱근) m개
     const a = arr.map((k) => ({ k, w: Math.sqrt(k.m1 / (k.mx + 10)) + 0.05 })), out = [];
     while (out.length < m && a.length) { let t = a.reduce((s, x) => s + x.w, 0) * Math.random(), i = 0; while (i < a.length - 1 && (t -= a[i].w) > 0) i++; out.push(a.splice(i, 1)[0].k); }
@@ -218,11 +223,12 @@ export async function draw({ seen = [], n = 10, opts = {} } = {}) {
   };
   const out = [];
   let carry = 0;
-  for (const t of ["A", "B", "C"]) { const got = pickW(byTier[t], want[t] + carry); carry = want[t] + carry - got.length; out.push(...got.map((k) => ({ ...k, ai: J[k.kw], tier: t }))); }
+  for (const t of ["S", "A", "B", "C"]) { const got = t === "S" ? pickW(byTier.S.filter((k) => k.entry === "main"), want.S) : pickW(byTier[t], want[t] + carry);
+    if (t === "S" && got.length < want.S) got.push(...pickW(byTier.S.filter((k) => k.entry !== "main"), want.S - got.length)); carry = want[t] + carry - got.length; out.push(...got.map((k) => ({ ...k, ai: J[k.kw], tier: t }))); }
   if (out.length < n) { const left = fresh.filter((k) => !out.some((o) => o.kw === k.kw)); out.push(...pickW(left, n - out.length).map((k) => ({ ...k, ai: J[k.kw], tier: tierOf(k) }))); }
-  const order = { A: 0, B: 1, C: 2 };
+  const order = { S: 0, A: 1, B: 2, C: 3 };
   out.sort((a, b) => order[a.tier] - order[b.tier] || b.m1 / (b.mx + 10) - a.m1 / (a.mx + 10));
-  return { month: r.month, items: out, pool: pool.length, fresh: fresh.length - out.length, tiers: { A: byTier.A.length, B: byTier.B.length, C: byTier.C.length } };
+  return { month: r.month, items: out, pool: pool.length, fresh: fresh.length - out.length, tiers: { S: byTier.S.length, A: byTier.A.length, B: byTier.B.length, C: byTier.C.length } };
 }
 
 // 🧭 팔아봤어요(2026-10-12 대표님 결정): 1등 리뷰 1,000개 이상 = 이미 팔리는 게 확인된 시장만. 이름만 듣고 아는 상품(easy)일 필요는 없음

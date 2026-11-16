@@ -103,13 +103,16 @@
   const cpUrl = (x) => `https://www.coupang.com/vp/products/${encodeURIComponent(x.pid)}${x.vid ? `?vendorItemId=${encodeURIComponent(x.vid)}` : ""}`; // 앱 안 쿠팡 탭(새 탭)으로 열림 — main setWindowOpenHandler
   const tile = (x, i, gi) => `<a class="rp-p ${i === gi ? "gapon" : ""}" href="${esc(cpUrl(x))}" target="_blank" title="쿠팡 상품 페이지 열기 — ${esc(x.name)}"><img src="${esc(imgUrl(x.img))}" alt="" loading="lazy"><span class="no">${i + 1}위</span>${x.famous ? `<span class="gapb br" title="키워드 DB에서 브랜드 이름으로 많이 검색되는 브랜드 — 리뷰가 적어도 이름값으로 팔려서 틈으로 보지 않아요">브랜드</span>` : i === gi ? `<span class="gapb" title="리뷰 300개 미만인데 팔리는 상품">틈</span>` : ""}
     <div class="i"><div class="pn" title="${esc(x.name)}">${esc(x.name)}</div><div class="pp">${won(x.price)}원${x.priceSrc === "vid" ? `<small class="nc" title="쿠팡 검색 화면에는 이 상품의 다른 옵션(${won(x.pagePrice)}원)이 떠 있어요. 옵션마다 가격이 달라 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">옵션 다름</small>` : x.priceSrc === "odd" ? `<small class="nc" title="쿠팡 화면에서 읽은 ${won(x.pagePrice)}원이 Wing 판매가와 너무 달라(단위가격 오독 의심) Wing 판매가(쿠폰·즉시할인 전)를 썼어요">확인 필요</small>` : x.priceSrc && x.priceSrc !== "page" && x.priceSrc !== "detail" ? `<small class="nc" title="이 검색어의 쿠팡 화면을 읽지 못해 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">쿠폰 전</small>` : x.listPrice > x.price ? `<s title="Wing 판매가(할인 전)${x.priceSrc === "detail" ? " · 이 옵션의 쿠팡 상품 페이지에서 읽은 가격" : ""}">${won(x.listPrice)}</s>` : ""}</div><div class="kv"><span>판매</span><b>${won(x.sales)}개</b></div><div class="kv"><span>리뷰</span><span>${won(x.reviews)}</span></div></div><span class="go">↗</span></a>`;
+  // 🚪 진입 규칙 꼬리표(전달문 2026-11-16): S 등급 = 로켓배송 적고 리뷰 적은 진입 쉬운 키워드 · 나머지는 표시만(빼지 않음)
+  const flagsHtml = (k) => { const f = [...(k.tier === "S" ? [{ ko: "🚪 진입 쉬움", tone: "good", tip: "로켓배송 25% 이하 · 쿠팡 평균 리뷰 300개 이하 · 1등 리뷰 3천 이하 · 월검색 2천 이상 · 작년 검색 2만 이상 · 평균가 1.2만 원 이상" }] : []), ...(k.flags || [])];
+    return f.length ? `<div class="rp-fl">${f.map((x) => `<span class="${esc(x.tone || "")}" title="${esc(x.tip || "")}">${esc(x.ko)}</span>`).join("")}</div>` : ""; };
   function bigCard(k, i) {
     const h = hy.get(k.kw), m = money(h), w = warnOf(h), g = h.gap;
     const top3 = h.items.slice(0, 3), gi = g ? top3.findIndex((x) => String(x.pid) === String(g.pid) && String(x.vid) === String(g.vid)) : -1;
     const dropT = (h.drop || []).map((d) => `${d.name} (${won(d.sales)}개)`).join("\n");
     return `<article class="rp-card ${i === 0 ? "win" : ""}" style="--i:${i}">
       <span class="rp-src">쿠팡 실판매</span>
-      <div><span class="rp-rk">${i + 1}</span><div class="rp-name">${esc(k.kw)}</div>${k.ai?.desc ? `<div class="rp-desc">${esc(k.ai.desc)}</div>` : ""}</div>
+      <div><span class="rp-rk">${i + 1}</span><div class="rp-name">${esc(k.kw)}</div>${k.ai?.desc ? `<div class="rp-desc">${esc(k.ai.desc)}</div>` : ""}${flagsHtml(k)}</div>
       <div class="rp-rev"><span class="lbl">상위 ${h.n}개 상품 월매출</span><b>${eok(h.total.rev)}</b><small>최근 28일 ${won(h.total.sales)}개 판매 · 리뷰 합 ${won(metric(k, "reviews"))}개${h.drop?.length ? ` · <u title="${esc(dropT)}">검색어와 다른 상품 ${h.drop.length}개 뺌</u>` : ""}</small></div>
       <div class="rp-prods">${top3.map((x, j) => tile(x, j, gi)).join("")}</div>
       <div class="rp-rows">
@@ -126,7 +129,7 @@
     const h = hy.get(k.kw), t = h?.items?.[0], m = money(h);
     if (!t) return `<div class="rp-li"><span class="n">${n}</span><span class="ph"></span><span class="t">${esc(k.kw)}${descOf(k)}</span><span class="dim all">${esc(h?.error ? (/로그인|WING/.test(h.error) ? "Wing 로그인이 필요해요 (① Wing 탭)" : "쿠팡 실판매를 못 불러왔어요") : "판매 지표가 있는 상품이 없어요")}</span><button type="button" class="sec" data-kw="${esc(k.kw)}">🔎 자세히</button></div>`;
     const w = h.medical ? "의료기기 상품 있음" : h.brandShare >= 0.5 ? `브랜드 비중 ${pct(h.brandShare)}` : h.top1Share >= 0.5 ? `1등 쏠림 ${pct(h.top1Share)}` : "";
-    return `<div class="rp-li can" data-row="${esc(k.kw)}" data-n="${n}"><span class="n">${n}</span><img src="${esc(imgUrl(t.img))}" alt="" loading="lazy"><span class="t">${esc(k.kw)}${descOf(k)}${w ? `<small class="w" title="${esc(warnOf(h))}">⚠ ${esc(w)}</small>` : ""}</span>
+    return `<div class="rp-li can" data-row="${esc(k.kw)}" data-n="${n}"><span class="n">${n}</span><img src="${esc(imgUrl(t.img))}" alt="" loading="lazy"><span class="t">${esc(k.kw)}${descOf(k)}${flagsHtml(k)}${w ? `<small class="w" title="${esc(warnOf(h))}">⚠ ${esc(w)}</small>` : ""}</span>
       <span class="c4"><b>${eok(h.total.rev)}</b><small>월매출</small></span>
       ${k.mode === "pro" && h.top1Sales != null
         ? `<span class="c5">1등 하루 <b>${won(Math.round(h.top1Sales / 28))}개</b> · 리뷰 500개+ ${won(h.big500)}개<small>${h.gap ? `틈 28일 ${won(h.gap.sales)}개 판매` : "틈 없음"}</small></span>`
@@ -151,7 +154,7 @@
     <div class="rp-rows"><i class="sk" style="width:90%"></i><i class="sk" style="width:70%"></i></div></article>`;
   // 🔮 조회 전 예상 순서: 평균가 × 1등 상품 리뷰 수(키워드 DB). 대표님 실데이터 82개 기준 실제 월매출 순위와 상관 0.74, 위 3개 적중 75%
   //  (네이버 검색량 × 평균가는 0.18) → 이 순서로 조회해서 1번 카드부터 차례로 채우면, 다 채운 뒤 바뀌는 자리가 적다
-  const predict = (items) => [...items].sort((a, b) => (b.price || 0) * (b.mx || 1) - (a.price || 0) * (a.mx || 1));
+  const predict = (items) => [...items].sort((a, b) => (b.tier === "S") - (a.tier === "S") || (b.price || 0) * (b.mx || 1) - (a.price || 0) * (a.mx || 1)); // 🚪 진입 쉬움(S)을 맨 앞에
   const withSlot = (html, i) => html.replace(/^(\s*<(?:article|div))/, `$1 data-slot="${i}"`);
   const errCard = (k, i) => `<article class="rp-card" style="--i:${i}"><div><span class="rp-rk">${i + 1}</span><div class="rp-name">${esc(k.kw)}</div>${k.ai?.desc ? `<div class="rp-desc">${esc(k.ai.desc)}</div>` : ""}</div><p class="dim">${esc(hy.get(k.kw)?.error ? "쿠팡 실판매를 못 불러왔어요" : "판매 지표가 있는 상품이 없어요")}</p></article>`;
   const slotHtml = (k, i) => withSlot(i < 3 ? (!hy.has(k.kw) ? skelCard(i) : hy.get(k.kw)?.items?.length ? bigCard(k, i) : errCard(k, i)) : hy.has(k.kw) ? row(k, i + 1) : waitRow(k, i + 1), i);
@@ -284,13 +287,14 @@
       ${big ? `<div class="rc-why">💡 ${esc(whyLine(k))}</div>` : ""}
       <div class="rc-num"><b>${won(k.m1)}</b><small>월검색</small></div>
       <div class="rc-chips">${aiChip}</div>
+      ${flagsHtml(k)}
       <div class="rc-chips sub"><span class="chip" title="검색 1등 상품의 리뷰 수 — 적을수록 들어가기 쉬워요">1등 리뷰 ${won(k.mx)}</span><span class="chip">평균 ${man(k.price)}원</span><span class="chip" title="로켓그로스 비중">빠른배송 판매자 ${pct(k.srocket)}</span>${k.fc != null && Math.abs(k.fc) >= 0.3 ? `<span class="chip">다음 달 ${k.fc >= 0 ? "+" : "−"}${pct(Math.abs(k.fc))}</span>` : ""}</div>
       ${big ? `<div class="rc-hy" data-hy="${esc(k.kw)}">${hyHtml(k.kw)}</div>` : ""}
       <button class="pri" type="button" data-kw="${esc(k.kw)}">🔎 키워드 분석으로 자세히</button>
     </div>`;
   }
   // 결과: 이번에 받은 10개(크게, 설명·이유 한 줄) + "10개 더 받기(오늘 n번 남음)" + 지금까지 받은 키워드(접기)
-  const TIER = { A: "경쟁 약함", B: "해볼 만함", C: "익숙한 상품", L: "큰 시장", M: "검증된 시장" };
+  const TIER = { S: "진입 쉬움", A: "경쟁 약함", B: "해볼 만함", C: "익숙한 상품", L: "큰 시장", M: "검증된 시장" };
   function resultHtml() {
     const items = got?.items || [], bs = dstate?.batches || [];
     const left = dstate?.left ?? 0, latest = !bs.length || got?.at === bs[0].at || !got?.at;
@@ -299,7 +303,8 @@
         <div class="rp-btns"><div class="rp-seg" role="group" aria-label="다음에 받을 기준" title="다음에 받을 키워드의 기준 · 지금 보는 결과는 그대로예요">${Object.entries(MODES).map(([id, m]) => `<button type="button" data-mode="${id}" aria-pressed="${opt.mode === id}">${m.ko}</button>`).join("")}</div><button type="button" class="rp-again" id="rcAgain" ${left ? "" : "disabled"} title="${left ? `오늘 ${left}번 남음` : resetTxt()}">${left ? "🎁 10개 더 받기" : "오늘 횟수를 다 썼어요"}</button>${left ? "" : bonusHtml()}</div></div>${left ? "" : limitHtml()}
       ${items.length ? `<div class="rp-prog" id="rpProg"></div>${pickHtml(items)}
       <div class="rp-foot">· 월매출·판매량·리뷰 수 = 이 키워드 검색 상품 중 판매액 상위 10개의 최근 28일 판매량 × 판매가 · 판매량 · 리뷰 수 합계 (검색어와 다른 상품은 빼고 계산)<br>
-        · 추천순 = 조회 전에 예상한 순서(평균가 × 1등 상품 리뷰 수 — 실제 월매출 순위와 대체로 비슷)<br>
+        · 추천순 = 🚪 진입 쉬움(로켓배송 25% 이하 · 쿠팡 평균 리뷰 300개 이하) 먼저, 그다음 조회 전에 예상한 순서(평균가 × 1등 상품 리뷰 수)<br>
+        · 꼬리표: 지금 진입 권장 = 작년 검색이 가장 많던 달이 1~3달 뒤 · 검증된 시장 = 로켓그로스 판매자 50% 이상(이미 팔리는 시장, 더 좋은 상품으로 차별화) · 한 상품이 장악 · 상품 섞임(네이버·쿠팡 평균가 2.5배 차이) — 꼬리표에 마우스를 올리면 이유가 나와요<br>
         · 사진의 <b>틈</b> 표시 = 리뷰 300개 미만인데 많이 팔린 상품 (새로 들어가도 팔린다는 증거)<br>
         ${proGot() ? `· 틈 판매 = 그 틈 상품의 최근 28일 판매량 · 1등 하루 = 가장 많이 판 상품의 28일 판매 ÷ 28 · 리뷰 500개+ 상품 = Wing 검색 결과 기준 개수<br>` : ""}
         · 원가 = 추천가로 팔 때 1688에서 이 가격 이하로 찾으면 광고비 10%를 쓰고도 마진 20%가 남는다는 뜻</div>` : `<p class="rc-empty">${esc(drawMsg || "받을 키워드가 없어요. 조건을 넓혀 보세요.")}</p>`}

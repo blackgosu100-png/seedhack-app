@@ -352,3 +352,11 @@ a.rp-gap:hover small { color: var(--r-go); text-decoration: underline; }
 .rc-src { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; color: var(--r-text2); }
 .rc-src button { font: 12px var(--sans); padding: 3px 10px; border: 1px solid var(--r-line2); background: var(--r-surface); color: var(--r-text2); border-radius: 99px; cursor: pointer; }
 .rc-src button[aria-pressed="true"] { border-color: #16a34a; color: #16a34a; font-weight: 700; background: #f0fdf4; }
+
+/* 🚪 진입 규칙 꼬리표 (2026-11-16) */
+.rp-fl { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.rp-fl span { font: 600 11px/1.6 var(--sans, sans-serif); padding: 0 7px; border-radius: 99px; border: 1px solid #d4d4d8; color: #52525b; background: #fafafa; cursor: help; white-space: nowrap; }
+.rp-fl span.good { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+.rp-fl span.warn { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+.rp-fl span.info { color: #1d4ed8; border-color: #93c5fd; background: #eff6ff; }
+.rc-rank.tS { background: #0d9488; }
