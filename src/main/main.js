@@ -15,6 +15,7 @@ import { buildListupXlsx, buildCollectXlsx } from "./listup-excel.js";
 import { upsertPage, upsertMetric, listCollect, removeCollect, countCollect, pickCollect } from "./collect.js";
 import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId, accessToken } from "./auth.js";
 import { DASHBOARD_URL } from "./auth-config.js";
+import * as hot from "./hot.js"; // ⬆ 화면만 바로 업데이트
 import { recommendViaCli, cliAvailable } from "./ai-cli.js";
 import { parseSpecs } from "./spec-core.js";
 import updaterPkg from "electron-updater";
@@ -25,6 +26,7 @@ import { summarize as hyojaSummarize, pagePrice } from "../shared/hyoja-core.js"
 import { dhashFromGray, grayFromBGRA, rankBySimilarity, specRerank, decidePrice, koHint, toNum } from "./sku-core.js";
 import { parseCard, rankCards, decideCost, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
 import { combo, scan as kwScan, draw as kwDraw, famousBrands } from "./kw-combo.js";
+import { useServer, kwSource, hasLocalDb, rScan, rDraw, rState, rBonus, rLookup, rName, rBrands } from "./kw-remote.js"; // 🔑 키워드 DB 파일이 없는 PC(수강생)는 맥미니 키워드 서버에 묻는다
 import { STRATEGY_SYSTEM, STRATEGY_SCHEMA, renderStrategyInput } from "./strategy-prompt.js";
 import { runStructured } from "./detail/cli.js";
 import { initChat } from "./chat.js";
@@ -106,14 +108,19 @@ function buildPayload(snap) {
   };
 }
 
+// 🔰 첫 실행 안내(renderer/onboard.js): "login" = 앱 로그인만 창 전체(사이트 화면 숨김) · "wing" = Wing 화면 둘레에 빛나는 테두리 자리(ONB_PAD)를 비움
+let onbPhase = null;
+const ONB_PAD = 10;
 function layout() {
   if (!win) return;
+  if (onbPhase === "login") { [wingView, dashView, chat.view(), cnView, ...cnTabs.map((t) => t.view), ...cleanTabs.map((t) => t.view)].forEach((v) => v?.setVisible(false)); return; }
   const [w, h] = win.getContentSize();
   const sw = Math.round(sideW * ZOOM), bh = Math.round(BAR_H * ZOOM), st = Math.round(stripW * ZOOM);
   const b = { x: sw, y: bh, width: Math.max(200, w - sw), height: Math.max(200, h - bh) };
   const th = Math.round(TAB_H * ZOOM);
   const bc = { ...b, y: b.y + th, height: Math.max(200, b.height - th) }; // 쿠팡 탭은 위에 탭 줄 자리
-  wingView?.setBounds({ ...b, width: Math.max(200, b.width - st) }); // Wing 오른쪽에 판정·수강생 확인 칸
+  const pad = onbPhase === "wing" ? Math.round(ONB_PAD * ZOOM) : 0;
+  wingView?.setBounds({ x: b.x + pad, y: b.y + pad, width: Math.max(200, b.width - st - pad * 2), height: Math.max(200, b.height - pad * 2) }); // Wing 오른쪽에 판정·수강생 확인 칸
   dashView?.setBounds(b);
   dashView?.setVisible(active === "dash");
   wingView?.setVisible(active === "wing");
@@ -264,6 +271,7 @@ function hookView(view, tab) {
   // 📊 대시보드가 로그인 화면으로 튕기면 앱 계정(Supabase 토큰)으로 자동 로그인 — 대시보드 /api/signal/embed-login → /auth/embed#th=…
   if (tab === "dash") wc.on("did-navigate", (_e, url) => { if (url.startsWith(`${DASHBOARD_URL}/login`)) dashAutoLogin(wc); });
   if (tab === "wing") wc.on("did-navigate", (_e, url) => {
+    if (onbPhase === "wing") sendWingStep(url);
     if (!/^https:\/\/wing\.coupang\.com\//.test(url)) return;
     flushWing(); // 로그인 성공 직후 저장
     if (GATE_ON && !licensed()) checkVendor(true).then(sendAuth); // 판매자ID 승인 확인
@@ -338,8 +346,8 @@ function createWindow() {
     send("nav", { tab: "wing", url: wingView.webContents.getURL() || WING_HOME });
     log("sys", "▶ 시작 · ① Wing 로그인 → ② 쿠팡 검색 탭에서 검색 → 화면 오른쪽 📊 버튼 → ③ 수집함에서 고르기 → ④ 리스트업에 위안 입력");
     if (SELFTEST) selftest();
-    else { startAuth(); startUpdater(); }
-    send("version", app.getVersion());
+    else { startAuth(); startUpdater(); hot.markGood(); hot.startHot({ log, onReady: (r) => send("hot", r) }); if (hot.hotReady()) send("hot", hot.hotReady()); }
+    send("version", process.env.SEEDHACK_HOT_LABEL ? `${app.getVersion()}+${process.env.SEEDHACK_HOT_LABEL}` : app.getVersion());
   });
   layout();
 }
@@ -375,6 +383,13 @@ function startUpdater() {
   setTimeout(check, 8000);
   setInterval(check, 4 * 60 * 60 * 1000);
 }
+// ⬆ 화면만 바로 업데이트(hot.js) — 받아 둔 새 코드로 다시 켠다. Wing 로그인은 저장한 뒤
+ipcMain.handle("hot:apply", async () => {
+  if (!hot.hotReady()) return;
+  flushWing();
+  await session.fromPartition("persist:wing").cookies.flushStore().catch(() => {});
+  hot.applyHot();
+});
 // 설치 전에 화면·쿠팡 탭을 모두 닫고 완전히 끝낸 뒤 설치 — 옛 파일이 잠겨 있으면 "Failed to uninstall old application files" 오류가 난다
 ipcMain.handle("update:install", async () => {
   if (!updateReady) return;
@@ -426,6 +441,18 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   send("nav", { tab, dash: dashTab, url: v ? v.webContents.getURL() : tab === "collect" ? "수집함 — 쿠팡에서 본 상품 다시 보기·고르기" : tab === "kw" ? "키워드 분석" : tab === "reco" ? "💡 키워드 추천" : tab === "name" ? "✍ 상품명 짓기" : tab === "cat" ? "🚦 카테고리 판정 — 1차~4차 고르면 Wing 인기상품으로 판정" : tab === "detail" ? "📄 상세페이지 — 1688 상세 이미지 → 한글 상세페이지" : "리스트업 — 중국 원가·마진 계산" });
 });
 // 화면(panel.js)이 알려 주는 틀 크기: 왼쪽 사이드바 폭, Wing 오른쪽 칸 폭
+ipcMain.handle("ui:onboard", (_e, { phase } = {}) => {
+  onbPhase = ["login", "wing"].includes(phase) ? phase : null;
+  if (onbPhase === "wing" && active !== "wing") { active = "wing"; send("nav", { tab: "wing", url: wingView.webContents.getURL() }); }
+  layout();
+  if (onbPhase === "wing") sendWingStep(wingView.webContents.getURL());
+});
+// Wing 화면이 지금 어느 단계인지(로그인 칸 · 휴대폰 인증 · 로그인 끝) — 안내 말풍선용. 주소만 보고 판단한다(쿠팡 화면 안은 건드리지 않음)
+function sendWingStep(url = "") {
+  const u = String(url);
+  const step = /^https:\/\/wing\.coupang\.com\//.test(u) ? "ok" : /xauth\.coupang\.com/.test(u) && /(otp|verif|mfa|2fa|authenticat|certif)/i.test(u) ? "verify" : /xauth\.coupang\.com|login/i.test(u) ? "login" : "loading";
+  send("onb:wing", { step });
+}
 ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
   sideW = Math.min(320, Math.max(0, Math.round(+side) || 0));
   stripW = Math.min(600, Math.max(0, Math.round(+strip) || 0));
@@ -1426,7 +1453,7 @@ ipcMain.handle("kw:history", () => {
 ipcMain.handle("kw:search", async (_e, { keyword, pages = 1, force = false, saved = false, src = "" }) => {
   if (!licensed()) return LOCKED;
   if (src !== "reco") markMine(String(keyword || "")); // 키워드 분석에서 직접 검색 → 최근 검색에 보임 · 추천 카드의 🔎 키워드 분석으로 넘어온 건 남기지 않음(2026-10-13)
-  const db = await lookup(keyword).catch(() => ({ month: null, main: null, subs: [] }));
+  const db = await (useServer() ? rLookup(keyword) : lookup(keyword)).catch(() => ({ month: null, main: null, subs: [] }));
   if (db.main) log("sys", `▶ '${keyword}' 네이버 월검색 ${db.main.m1?.toLocaleString() ?? "-"} · 서브키워드 후보 ${db.subs.length}개 (제휴 DB ${db.month})`);
   const res = await searchKeyword(keyword, Math.min(3, Math.max(1, pages)), wingView.webContents, log, force, saved);
   if (res.items?.length) {
@@ -1449,7 +1476,7 @@ ipcMain.handle("collect:export", async (_e, { rows, cpc, margin }) => {
 });
 ipcMain.handle("collect:pagelog", () => store.get("pageLog") || []);
 ipcMain.handle("collect:remove", (_e, pids) => { const n = removeCollect(pids); collectChanged(); return n; });
-ipcMain.handle("kw:db", (_e, keyword) => lookup(keyword).catch(() => ({ month: null, main: null, subs: [] })));
+ipcMain.handle("kw:db", (_e, keyword) => (useServer() ? rLookup(keyword) : lookup(keyword)).catch(() => ({ month: null, main: null, subs: [] })));
 // ✍ 상품명 짓기(강의 2주차 공식) — 제휴 DB 서브키워드 + 키워드 분석에서 받아 둔 쿠팡 상위 상품명(Wing 요청 없음)으로 단어 후보·후보 상품명 3개·검사
 //  picks 를 안 주면 처음 고를 단어를 정해서 돌려준다. 계산은 shared/name-core.js
 const namePools = new Map();
@@ -1464,7 +1491,7 @@ async function namePool(keyword) {
   const { items, ts } = nameItems(kw);
   const cp = cpWordsGet(kw);
   const words = buildPool({ keyword: kw, items, cp }).filter((p) => p.top >= 2 || p.cp).map((p) => p.word.replace(/\s+/g, ""));
-  const db = await nameLookup(kw, words).catch(() => ({ month: null, main: null, subs: [], vol: {} }));
+  const db = await (useServer() ? rName(kw, words) : nameLookup(kw, words)).catch(() => ({ month: null, main: null, subs: [], vol: {} }));
   const pool = buildPool({ keyword: kw, subs: db.subs, items, vol: db.vol, cp });
   const r = { keyword: kw, month: db.month, main: db.main, pool, items, ts, cp };
   namePools.set(kw, r);
@@ -1568,8 +1595,10 @@ ipcMain.handle("name:coupang", async (_e, { keyword, force = false } = {}) => {
 });
 ipcMain.handle("name:check", (_e, { name, keyword, brand = "" } = {}) => checkName(name, { keyword, brand, pool: namePools.get(String(keyword || "").trim())?.pool || [] }));
 ipcMain.handle("kw:reco", () => recommend());
+// 🔑 키워드 DB를 어디서 읽을지: auto(DB 파일 있으면 로컬) · server · local — 대표님 맥에서 수강생과 같은 서버 모드를 시험할 때 server
+ipcMain.handle("kw:source", (_e, v) => { if (["auto", "server", "local"].includes(v)) { store.set("kwSource", v); log("sys", `▶ 키워드 DB 읽는 곳: ${v} → 지금 ${kwSource() === "server" ? "키워드 서버" : "이 PC의 DB 파일"}`); } return { set: store.get("kwSource") || "auto", now: kwSource(), local: hasLocalDb() }; });
 ipcMain.handle("kw:combo", (_e, c) => combo(c || {}));
-ipcMain.handle("kw:scan", (_e, o) => kwScan(o || {}));
+ipcMain.handle("kw:scan", (_e, o) => (useServer() ? rScan(o || {}) : kwScan(o || {})));
 // 🏆 효자상품: 키워드 1개 = Wing 키워드 검색 1번(상품 여러 개의 28일 판매량을 한 번에) → 판매액 상위 N개 + 합계
 //  상품마다 "쿠팡 지표 보기"(1개 4초)를 쓰지 않아서 10개 키워드도 요청 10번이면 끝. 7일 저장 결과는 바로 돌려줌
 // 받은 키워드 결과 다시 보기용: 카드 요약을 키워드별로 저장(기간 제한 없음, 최근 300개) — 껐다 켜도 Wing 조회 없이 그대로 보여 줌
@@ -1587,7 +1616,7 @@ async function hyojaBuild(kw, res, rows, { top, t0, cp, detail = new Map() }) {
     return { name: x.name, brand: x.brand || "", pid: x.pid, vid: x.vid, img: x.img, price: p.price || 0, listPrice: wingP, priceSrc: p.src, pagePrice: p.pagePrice, reviews: x.reviews, sales: x.ex.sales };
   });
   // 카드 숫자(월매출·틈·1688 기준가)는 검색어와 다른 상품을 뺀 뒤 계산 — hyoja-core.js · 유명 브랜드(키워드 DB)는 "틈"에서 뺌
-  const famous = await famousBrands(raw.map((x) => x.brand)).catch(() => new Set());
+  const famous = await (useServer() ? rBrands(raw.map((x) => x.brand)) : famousBrands(raw.map((x) => x.brand))).catch(() => new Set());
   const s = hyojaSummarize(kw, raw, { top, famous });
   // total = 판매액 상위 10개 합 · v3: v2 저장본은 price·gap·주의 정보가 빠진 채 저장됐음(주석 실수) → 다시 계산 · v4: 팔아봤어요 지표(top1Sales·big500) 추가 · v5: 쿠팡 화면 쿠폰가 반영(v4는 Wing 할인 전 가격)
   const nPage = raw.filter((x) => x.priceSrc === "page" || x.priceSrc === "detail").length, nDetail = raw.filter((x) => x.priceSrc === "detail").length;
@@ -1642,8 +1671,9 @@ const drawResetAt = () => { const d = new Date(); d.setHours(24, 0, 0, 0); retur
 const drawInfo = (st) => ({ left: Math.max(0, drawLimit(st) - st.used), daily: DRAW_DAILY, per: DRAW_PER, bonus: DRAW_BONUS, bonusUsed: !!st.bonus, resetAt: drawResetAt(), seenTotal: st.seen.length });
 // batches = 받은 시각(at)별 묶음, 최근 순 30개 — 화면을 다시 열면 마지막 묶음을 그대로 보여 주고, 지난 묶음도 고를 수 있게
 const drawBatches = (hist) => { const m = new Map(); for (const k of hist || []) { if (!k.at) continue; if (!m.has(k.at)) m.set(k.at, []); m.get(k.at).push(k); } return [...m.entries()].sort((a, b) => b[0] - a[0]).slice(0, 30).map(([at, items]) => ({ at, items })); };
-ipcMain.handle("kw:drawState", () => { const st = drawState(); return { ...drawInfo(st), history: st.history.slice(0, 200), batches: drawBatches(st.history) }; });
+ipcMain.handle("kw:drawState", () => { if (useServer()) return rState(); const st = drawState(); return { ...drawInfo(st), history: st.history.slice(0, 200), batches: drawBatches(st.history) }; });
 ipcMain.handle("kw:drawBonus", () => { // 🎁 보너스 5번: 오늘 횟수를 다 썼을 때 하루 1번
+  if (useServer()) return rBonus(); // 서버가 횟수를 센다(앱 저장소를 지워도 초기화 안 됨)
   const st = drawState();
   if (st.bonus) return { error: "bonusUsed", ...drawInfo(st) };
   if (st.used < DRAW_DAILY) return { error: "notYet", ...drawInfo(st) };
@@ -1652,6 +1682,7 @@ ipcMain.handle("kw:drawBonus", () => { // 🎁 보너스 5번: 오늘 횟수를 
   return { ok: true, ...drawInfo(st) };
 });
 ipcMain.handle("kw:draw", async (_e, o) => {
+  if (useServer()) return rDraw(o || {});
   const st = drawState();
   if (st.used >= drawLimit(st)) return { error: "limit", ...drawInfo(st) };
   const d = await kwDraw({ seen: st.seen, n: DRAW_PER, opts: o || {} });

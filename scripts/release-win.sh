@@ -7,6 +7,7 @@ V=$(node -p "require('./package.json').version")
 REPO=blackgosu100-png/coupang-signal-releases
 if gh release view "v$V" -R "$REPO" >/dev/null 2>&1; then echo "✕ v$V 릴리스가 이미 있습니다. package.json의 version을 올려 주세요."; exit 1; fi
 rm -f dist/builder/latest.yml
+node scripts/hot-base.mjs
 npx electron-builder --win nsis --x64 --publish never
 grep -q "version: $V" dist/builder/latest.yml || { echo "✕ latest.yml 버전이 $V가 아닙니다"; exit 1; }
 gh release create "v$V" -R "$REPO" --title "$V" --notes "씨드핵 SEEDHACK $V" \

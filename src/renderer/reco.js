@@ -230,8 +230,13 @@
         <div><b>${won(lock?.count)}</b><span>누구나 팔 수 있는 것</span></div>
         <div><b>${res?.judged ? won(res.judged) : "-"}</b><span>AI가 검수한 키워드</span></div>
       </div>
+      ${srcHtml()}
     </div>`;
   }
+  // 🔑 키워드 DB 읽는 곳(이 PC의 파일 / 키워드 서버) — DB 파일이 있는 PC(대표님 맥)에서만 보임. 수강생과 같은 서버 모드를 시험할 때
+  let kwSrc = null;
+  const srcHtml = () => (kwSrc?.local ? `<div class="rc-src" role="group" aria-label="키워드 DB 읽는 곳">키워드 DB 읽는 곳
+    <button type="button" data-src="local" aria-pressed="${kwSrc.now === "local"}" title="이 맥의 키워드 DB 파일(~/sellar-data)">이 PC</button><button type="button" data-src="server" aria-pressed="${kwSrc.now === "server"}" title="수강생 앱과 같은 맥미니 키워드 서버(kw.noah-lap.cloud)">키워드 서버</button></div>` : "");
 
   // ── 결과: 조절 줄 + 깔때기 요약 + 세 묶음 ──
   function controlsHtml() {
@@ -369,6 +374,11 @@
     const t = e.target;
     if (t.closest("#rcGo") || t.closest("#rcAgain")) { go(); return; }
     if (t.closest("#rcPast")) { restore(dstate?.batches?.[0]); return; }
+    const sb = t.closest("[data-src]");
+    if (sb && sb.dataset.src !== kwSrc?.now) { // 읽는 곳을 바꾸면 깔때기·남은 횟수·지난 결과를 그쪽 기준으로 다시
+      (async () => { kwSrc = await api.invoke("kw:source", sb.dataset.src).catch(() => kwSrc); res = null; render(); await load(); dstate = await api.invoke("kw:drawState").catch(() => dstate); render(); })();
+      return;
+    }
     if (t.closest("#rcBonus")) { bonus(); return; }
     const so = t.closest("button[data-sort]");
     if (so && !so.disabled) { const key = so.dataset.sort; sortBy = sortBy.key === key && key !== "reco" ? { key, dir: -sortBy.dir } : { key, dir: SORT_DIR[key] ?? -1 }; open4.clear(); render(true); return; }
@@ -397,6 +407,7 @@
     // 앱을 켜면 시작 화면(기준 고르기)부터. 이번 실행에서 조회한 결과는 다른 탭에 다녀와도 그대로(started) — 2026-10-12 대표님 결정
     //  지난 결과는 시작 화면의 🕘 버튼으로 횟수 없이 다시 연다
     async show() {
+      if (!kwSrc) kwSrc = await api.invoke("kw:source").catch(() => null);
       if (!res) { render(); await load(); }
       dstate = await api.invoke("kw:drawState").catch(() => dstate);
       render();

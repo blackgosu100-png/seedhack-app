@@ -1,15 +1,18 @@
 {
   "name": "coupang-signal-app",
   "productName": "씨드핵",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Wing·쿠팡 실데이터로 소싱 시장을 신호등으로 판정하는 데스크톱 프로그램",
   "type": "module",
-  "main": "src/main/main.js",
+  "main": "src/boot.js",
+  "seedhackShell": 1,
   "scripts": {
     "start": "electron .",
     "selftest": "electron . --selftest",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "release:win": "sh scripts/release-win.sh"
+    "release:win": "sh scripts/release-win.sh",
+    "predist:win": "node scripts/hot-base.mjs",
+    "hot": "node scripts/hot-publish.mjs"
   },
   "author": "블랙고수",
   "license": "UNLICENSED",

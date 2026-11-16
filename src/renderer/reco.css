@@ -347,3 +347,8 @@ a.rp-gap:hover small { color: var(--r-go); text-decoration: underline; }
 .rc-bonus:disabled { opacity: .6; cursor: default; animation: none; }
 .rp-btns .rc-bonus { font-size: 13px; padding: 10px 14px; margin: 0 0 0 6px; }
 @media (prefers-reduced-motion: reduce) { .rc-bonus, .rc-limit.shake { animation: none; } }
+
+/* 🔑 키워드 DB 읽는 곳(대표님 맥에서만) */
+.rc-src { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; color: var(--r-text2); }
+.rc-src button { font: 12px var(--sans); padding: 3px 10px; border: 1px solid var(--r-line2); background: var(--r-surface); color: var(--r-text2); border-radius: 99px; cursor: pointer; }
+.rc-src button[aria-pressed="true"] { border-color: #16a34a; color: #16a34a; font-weight: 700; background: #f0fdf4; }

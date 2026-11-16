@@ -875,7 +875,11 @@
   });
   // 자동 업데이트: 새 버전을 다 받으면 버튼 표시
   api.on("update", ({ version }) => { $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ ${version} 업데이트 · 다시 시작`; });
-  $("bUpdate").onclick = () => { $("bUpdate").disabled = true; $("bUpdate").textContent = "설치 중…"; api.invoke("update:install"); };
+  // ⬆ 화면만 바로 업데이트(main/hot.js) — 설치 파일 업데이트가 같이 있으면 설치 파일 쪽이 우선
+  let hotOnly = false;
+  api.on("hot", (h) => { if (!h || (!$("bUpdate").hidden && !hotOnly)) return; hotOnly = true; $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ 새 버전 ${h.label} · 바로 적용`; $("bUpdate").title = h.notes || "고친 화면을 바로 적용해요(몇 초 뒤 다시 켜짐)"; });
+  api.on("update", () => { hotOnly = false; });
+  $("bUpdate").onclick = () => { $("bUpdate").disabled = true; $("bUpdate").textContent = hotOnly ? "적용 중…" : "설치 중…"; api.invoke(hotOnly ? "hot:apply" : "update:install"); };
   const showVer = (v) => { if (!v) return; $("appVer").textContent = `v${v}`; $("gateVer").textContent = `v${v}`; document.querySelector(".side .brand").title = `씨드핵 SEEDHACK v${v} — 매일 한 톨, 시스템처럼.`; };
   api.on("version", showVer);
   api.invoke("app:version").then(showVer);
