@@ -320,6 +320,8 @@ async function autoImageSearch() {
   }
   if (!input) { scan?.fail("1688 이미지 검색 칸을 못 찾았습니다"); ipcRenderer.invoke("cn:pendingDone"); log("이미지 검색 칸을 못 찾았습니다 — 검색창 카메라 아이콘(以图搜款)에서 Ctrl+V로 붙여 넣어 주세요"); return; }
   log("검색 칸 찾음 · 사진 올리는 중"); scan?.step(0, "쿠팡 사진 올리는 중");
+  // 사진을 넣기 전에 보이던 것들을 적어 둔다 → 넣은 뒤 "새로 나타난" 버튼만 사진 검색 버튼 후보로 본다(1688 화면 디자인·클래스 이름이 달라도 통함)
+  const preShown = new WeakSet([...document.querySelectorAll('button, [role="button"], a, div, span')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; }));
   const bytes = Uint8Array.from(atob(pend.b64), (c) => c.charCodeAt(0));
   const dt = new DataTransfer();
   dt.items.add(new File([bytes], "coupang.jpg", { type: pend.type || "image/jpeg" }));
@@ -339,7 +341,11 @@ async function autoImageSearch() {
       const orig = e.getAttribute("data-sg-zh") || ""; // 🌐 번역이 덮어쓴 경우 원문
       if (e.children.length <= 2 && (BTN_TXT.test((e.textContent || "").trim()) || BTN_TXT.test(orig.trim()) || /confirm-btn|search-btn/i.test(String(e.className)))) set.add(e);
     }
-    return [...set].filter((e) => e.closest(PANEL) && !/remove|upload-btn|close/i.test(String(e.className)) && e.type !== "file")
+    // 디자인을 몰라도: 사진을 넣은 뒤 새로 나타난, 글자가 "搜索图片/搜索/找同款…"인 것
+    const fresh = [...document.querySelectorAll('button, [role="button"], a, div, span')].filter((e) => !preShown.has(e) && shown(e) && e.children.length <= 2 && !e.closest("#sg-scan, #sg-rank, #sg-ask, #sg-wave")
+      && (BTN_TXT.test((e.textContent || "").trim()) || BTN_TXT.test((e.getAttribute("data-sg-zh") || e.getAttribute("data-sg-src") || "").trim())));
+    const inner = fresh.filter((e) => !fresh.some((o) => o !== e && e.contains(o))); // 가장 안쪽 것만
+    return [...new Set([...[...set].filter((e) => e.closest(PANEL)), ...inner])].filter((e) => !/remove|upload-btn|close/i.test(String(e.className)) && e.type !== "file")
       .sort((a, b) => Number(shown(b)) - Number(shown(a)) || Number(b.tagName === "BUTTON") - Number(a.tagName === "BUTTON") || Number(/confirm|search-btn/i.test(String(b.className))) - Number(/confirm|search-btn/i.test(String(a.className))));
   };
   // 꺼진 버튼을 감싼 칸·그 안 글자도 "꺼짐"으로 본다(업로드 중에 겉 칸을 눌러 봐야 소용없음)
@@ -361,12 +367,13 @@ async function autoImageSearch() {
   };
   let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
   scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
-  const tried = []; let lastDiag = "";
+  const tried = []; let lastDiag = "", lastNew = "";
   for (let n = 0, t0 = Date.now(); Date.now() - t0 < 25000 && !left; n++) {
     if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
     if (blocker()) break;
     let cs = candidates();
-    if (!cs.length && Date.now() - t0 > 6000) { const fb = findAdaptive("confirm"); if (fb && shown(fb)) cs = [fb]; } // 상자를 못 알아본 화면: 예전 방식으로라도
+    if (!cs.length && Date.now() - t0 > 6000) { const fb = findAdaptive("confirm"); if (fb && shown(fb) && !preShown.has(fb)) cs = [fb]; } // 예전 방식 — 단, 원래 있던 버튼(검색창의 일반 검색 버튼)은 누르지 않는다
+    if (!cs.length) lastNew = [...document.querySelectorAll('button, [role="button"], a, div, span')].filter((e) => !preShown.has(e) && shown(e) && !e.children.length && !e.closest("#sg-scan") && (e.textContent || "").trim().length > 0 && (e.textContent || "").trim().length < 14).slice(0, 8).map((e) => `"${(e.textContent || "").trim()}"·${String(e.className).split(/\s+/)[0].slice(0, 24)}`).join(" ");
     const ready = cs.filter((e) => !off(e));
     lastDiag = `후보 ${cs.length}개(켜진 것 ${ready.length}) ${cs.slice(0, 3).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).split(/\s+/).slice(-1)[0].slice(0, 30)}${shown(e) ? "" : "[숨음]"}${off(e) ? "[꺼짐]" : ""}`).join(", ")}`;
     if (!ready.length) { await sleep(800); continue; } // 업로드가 끝나 버튼이 켜질 때까지
@@ -389,7 +396,7 @@ async function autoImageSearch() {
     el.id = "sg-stuck";
     el.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483647;background:#ffb454;color:#1f1300;font:700 14px -apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10px 16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.3)";
     el.textContent = msg;
-    const dg = document.createElement("div"); dg.style.cssText = "font:400 11px ui-monospace,Menlo,Consolas,monospace;opacity:.75;margin-top:4px"; dg.textContent = `${lastDiag || "버튼 후보 없음"} · 시도 ${tried.join(">") || "없음"}`; el.appendChild(dg);
+    const dg = document.createElement("div"); dg.style.cssText = "font:400 11px ui-monospace,Menlo,Consolas,monospace;opacity:.75;margin-top:4px"; dg.textContent = `${lastDiag || "버튼 후보 없음"} · 시도 ${tried.join(">") || "없음"} · 새로 뜬 글자 ${lastNew || "없음"} · 사진칸 ${String(input.className).slice(0, 30) || "?"} < ${String(input.parentElement?.className || "").slice(0, 30)}`; el.appendChild(dg);
     (document.body || document.documentElement).appendChild(el);
   }
 }
