@@ -53,7 +53,29 @@ if (SELFTEST) { const d = path.join(app.getPath("temp"), "signal-selftest-data")
 app.userAgentFallback = app.userAgentFallback
   .replace(/\(KHTML, like Gecko\).*?Chrome\//, "(KHTML, like Gecko) Chrome/")
   .replace(/\sElectron\/\S+/g, "")
-  .replace(/[^\x20-\x7E]/g, "");
+  .replace(/[^\x20-\x7E]/g, "")
+  .replace(/Chrome\/(\d+)[\d.]*/, "Chrome/$1.0.0.0"); // 진짜 크롬처럼 버전 뒷자리는 0 (전체 버전이 보이면 크롬이 아닌 걸로 보임)
+// 🔐 모든 화면을 진짜 크롬처럼(2026-11-17): 처음 Wing 로그인의 휴대폰 인증 뒤 쿠팡 보안이 "Access Denied"로 막았다.
+//  씨드핵 화면은 ① 브라우저 종류 힌트(sec-ch-ua)를 안 보내고 ② 언어가 "ko" 하나뿐이라 크롬과 달랐다 — 네이버도 같은 이유로 막았던 적 있음(site-read.js)
+//  힌트 값은 화면 안 navigator.userAgentData 와 똑같아야 해서, 첫 화면에서 실제 값을 읽어 쓴다(그 전에는 크롬 방식으로 만든 값)
+const CH_MAJ = String(process.versions.chrome || "").split(".")[0];
+const CH_PLATFORM = process.platform === "win32" ? '"Windows"' : process.platform === "darwin" ? '"macOS"' : '"Linux"';
+let chUa = `"Not?A_Brand";v="24", "Chromium";v="${CH_MAJ}"`;
+const ACCEPT_LANG = "ko-KR,ko,en-US,en";
+function chromeLike(ses) {
+  if (!ses || ses.__seedhackCh) return;
+  ses.__seedhackCh = true;
+  try { ses.setUserAgent(app.userAgentFallback, ACCEPT_LANG); } catch {}
+  ses.webRequest.onBeforeSendHeaders((d, cb) => {
+    const h = d.requestHeaders;
+    if (/^https:/.test(d.url) && !Object.keys(h).some((k) => k.toLowerCase() === "sec-ch-ua")) { h["sec-ch-ua"] = chUa; h["sec-ch-ua-mobile"] = "?0"; h["sec-ch-ua-platform"] = CH_PLATFORM; }
+    cb({ requestHeaders: h });
+  });
+}
+app.on("session-created", chromeLike);
+const readBrands = (wc) => wc.executeJavaScript(`JSON.stringify(navigator.userAgentData?.brands || [])`).then((j) => {
+  const b = JSON.parse(j); if (b.length) chUa = b.map((x) => `"${x.brand}";v="${x.version}"`).join(", ");
+}).catch(() => {});
 
 let win, wingView, cleanView = null, active = "wing", current = null;
 // ② 쿠팡 검색: 같은 클린 세션(파티션) 안에서 브라우저처럼 탭 여러 개 — 쿠키를 함께 써서 새 창 차단 문제가 없다
@@ -1946,7 +1968,7 @@ async function selftest() {
   }, 16000);
 }
 
-app.whenReady().then(() => { if (GOT_LOCK) { createWindow(); if (!SELFTEST) chat.schedule(); } }); // 답 기다리는 문의가 있으면 이어서 확인
+app.whenReady().then(() => { chromeLike(session.defaultSession); if (GOT_LOCK) { createWindow(); win?.webContents.once("did-finish-load", () => readBrands(win.webContents)); if (!SELFTEST) chat.schedule(); } }); // 답 기다리는 문의가 있으면 이어서 확인
 app.on("window-all-closed", () => app.quit());
 
 // Wing 로그인 쿠키를 바로 디스크에 저장 — 강제 종료돼도 다음 실행 때 다시 로그인하지 않게(반복 로그인은 쿠팡 보안 차단 원인)
