@@ -94,8 +94,12 @@ export function watchWing(wc, onSnapshot, onLog) {
   const reqs = new Map();
   let warned = false;
 
+  // 🔐 로그인 화면(xauth.coupang.com 등)에서는 감시를 뗀다(2026-11-17) — 처음 로그인 때 휴대폰 인증번호를 넣으면 쿠팡 보안이
+  //  "Access Denied"로 막았다. 감시(디버거)가 붙은 브라우저를 자동 프로그램으로 보는 것으로 보고, Wing 화면에서만 붙인다
+  const isWing = (u) => /^https:\/\/wing\.coupang\.com\//.test(u || "");
+  let onWing = true;
   const attach = (why) => {
-    if (wc.isDestroyed() || dbg.isAttached()) return;
+    if (wc.isDestroyed() || dbg.isAttached() || !onWing) return;
     try {
       dbg.attach("1.3");
       dbg.sendCommand("Network.enable", { maxTotalBufferSize: 64 * 1024 * 1024, maxResourceBufferSize: 48 * 1024 * 1024 }).catch(() => {}); // 카테고리 트리(약 18MB)도 읽히게
@@ -132,11 +136,17 @@ export function watchWing(wc, onSnapshot, onLog) {
   });
   dbg.on("detach", (_e, reason) => {
     reqs.clear();
-    setTimeout(() => attach(`끊김: ${reason || "화면 전환"}`), 300);
+    if (onWing) setTimeout(() => attach(`끊김: ${reason || "화면 전환"}`), 300);
   });
-  // 페이지 이동·로딩 시작 때마다 연결 확인 (응답을 놓치지 않도록 요청 전에 붙인다)
-  wc.on("did-start-navigation", () => attach());
-  wc.on("did-navigate", () => attach());
-  wc.on("dom-ready", () => attach());
-  attach();
+  // 페이지 이동 때마다: Wing 이면 붙이고(응답을 놓치지 않도록 요청 전에), 로그인 화면 등 다른 주소면 뗀다
+  const sync = (url) => {
+    onWing = isWing(url);
+    if (onWing) return attach();
+    if (dbg.isAttached()) { try { dbg.detach(); } catch {} }
+  };
+  wc.on("did-start-navigation", (e, url, _inPlace, isMain) => { const main = e?.isMainFrame ?? isMain; if (main === false) return; sync(e?.url || url); });
+  wc.on("did-redirect-navigation", (e, url, _inPlace, isMain) => { const main = e?.isMainFrame ?? isMain; if (main === false) return; sync(e?.url || url); }); // wing → 로그인 화면 넘김(302)
+  wc.on("did-navigate", (_e, url) => sync(url));
+  wc.on("dom-ready", () => sync(wc.getURL()));
+  sync(wc.getURL() || "https://wing.coupang.com/");
 }
