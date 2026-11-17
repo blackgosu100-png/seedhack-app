@@ -78,7 +78,9 @@
   async function couponPass(items, run) {
     const todo = items.filter((k) => { const h = hy.get(k.kw); return h?.items?.length && !h.cp; });
     cpDone = 0; cpTotal = todo.length; hyProg();
-    for (const k of todo) {
+    for (const [i, k] of todo.entries()) {
+      if (run !== hyRun) return;
+      if (i) await new Promise((ok) => setTimeout(ok, 1500 + Math.random() * 2500)); // 🛡 쿠팡이 기계로 보지 않게 키워드 사이를 사람처럼 띄움(2026-11-17)
       if (run !== hyRun) return;
       const r = await api.invoke("kw:hyojaCp", { keyword: k.kw, top: 5 }).catch(() => null);
       if (run !== hyRun) return;

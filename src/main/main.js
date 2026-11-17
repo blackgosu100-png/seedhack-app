@@ -58,6 +58,10 @@ app.userAgentFallback = app.userAgentFallback
 let win, wingView, cleanView = null, active = "wing", current = null;
 // ② 쿠팡 검색: 같은 클린 세션(파티션) 안에서 브라우저처럼 탭 여러 개 — 쿠키를 함께 써서 새 창 차단 문제가 없다
 let cleanTabs = [], cleanPart = null, tabSeq = 0;
+// 🛡 숨은 자동 화면(쿠폰가·상품 페이지 가격·연관검색어)은 사람이 보는 쿠팡 탭과 다른 세션을 쓴다(2026-11-17)
+//  같은 쿠키를 쓰면 자동 조회가 쿠팡에 "기계"로 찍힐 때 대표님이 누른 상품 링크까지 쿠팡 오류 화면이 떴다
+let bgPart = null;
+const bgPartition = () => (bgPart ||= `cpbg-${Date.now()}`);
 // 📦 1688 탭: 로그인 유지(persist:1688). 리스트업 행에서 🔍1688 → 이미지 검색 → 상품 페이지에서 "리스트업에 넣기"
 let cnView = null, cnTarget = null, cnPending = null; // cnPending: 1688 첫 화면에서 올릴 사진(한 번 쓰고 비움)
 // 🗂 1688 탭(2026-10-13): 첫 탭 = cnView(🔍 검색 · 고정 — 이미지 검색·판매자 점수·자동 조사가 쓰는 화면), 검색 결과에서 상품을 열면 새 탭(cnTabs)
@@ -140,10 +144,9 @@ const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || Obje
 const cpBgs = {};
 function coupangBgView(slot = "search") {
   const o = cpBgs[slot];
-  if (o?.view && !o.view.webContents.isDestroyed() && o.part === cleanPart) return o.view;
+  if (o?.view && !o.view.webContents.isDestroyed() && o.part === bgPartition()) return o.view;
   if (o?.view) { try { win.contentView.removeChildView(o.view); o.view.webContents.close(); } catch {} }
-  if (!cleanPart) cleanPart = `clean-${Date.now()}`;
-  const cpBg = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  const cpBg = new WebContentsView({ webPreferences: { partition: bgPartition(), contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
   win.contentView.addChildView(cpBg);
   const [w, h] = win.getContentSize();
   cpBg.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) }); // 크기를 준 뒤 숨김(크기 0이면 카드가 안 그려질 수 있음)
@@ -151,7 +154,8 @@ function coupangBgView(slot = "search") {
   cpBg.webContents.setAudioMuted(true);
   cpBg.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   cpBg.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다(쿠폰가 읽기): ${err?.message || err}`));
-  cpBgs[slot] = { view: cpBg, part: cleanPart };
+  cpBgs[slot] = { view: cpBg, part: bgPartition() };
+  cpBg.webContents.on("did-finish-load", () => cpBlocked(cpBg.webContents).then((b) => { if (b && bgPart === cpBgs[slot]?.part) { log("dim", "  쿠팡이 자동 조회를 잠시 막았어요 — 숨은 화면 세션을 새로 만들어 다음 키워드부터 이어 가요"); bgPart = null; } }));
   return cpBg;
 }
 // 옵션이 다른 상품: 그 옵션(vendorItemId)의 상품 페이지를 숨은 화면에서 열어 판매가를 읽는다(2026-10-13, 한누네 팬트리 8개 Wing 116,000 → 실제 35,200)
@@ -186,7 +190,11 @@ function sendTabs() {
     tabs: cleanTabs.map((t) => { const wc = t.view.webContents; return { id: t.id, title: wc.getTitle() || "불러오는 중…", url: wc.getURL(), loading: wc.isLoading() }; }),
   });
 }
-function openCleanTab(url = COUPANG_HOME, activate = true) {
+// 쿠팡 오류·차단 화면인지(제목·첫 글자들로만 판단)
+const CP_BLOCK = /서버에서 오류가 발생|Access Denied|요청하신 페이지를 처리하는 중|잠시 후 다시 시도/;
+const cpBlocked = (wc) => wc.executeJavaScript(`(document.title + " " + (document.body?.innerText || "").slice(0, 400))`).then((t) => CP_BLOCK.test(t) && !cpNormal(t)).catch(() => false);
+const cpNormal = (t) => /장바구니|바로구매|로켓배송/.test(t); // 정상 쿠팡 화면이면 이런 말이 보인다
+function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   if (!cleanPart) cleanPart = `clean-${Date.now()}`;
   // 너무 많으면 가장 오래된(지금 보는 탭이 아닌) 탭부터 닫는다
   while (cleanTabs.length >= MAX_TABS) { const old = cleanTabs.find((t) => t.view !== cleanView); if (!old) break; closeCleanTab(old.id, true); }
@@ -197,6 +205,15 @@ function openCleanTab(url = COUPANG_HOME, activate = true) {
   hookView(view, "clean");
   view.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다: ${err?.message || err}`));
   ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => view.webContents.on(ev, sendTabs));
+  // 🛡 쿠팡 오류 화면이 뜨면: 이 탭만 닫고 새 세션(쿠키 없음)으로 같은 주소를 한 번 다시 연다
+  if (!retried) view.webContents.once("did-finish-load", () => cpBlocked(view.webContents).then((b) => {
+    if (!b || !cleanTabs.includes(t)) return;
+    const u = view.webContents.getURL() || url, was = cleanView === view;
+    log("sys", "▶ 쿠팡이 오류 화면을 보냈어요 — 새 클린 세션으로 다시 열어요");
+    cleanPart = `clean-${Date.now()}`;
+    closeCleanTab(t.id, true);
+    openCleanTab(u, was || activate, true);
+  }));
   view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
   if (activate || !cleanView) cleanView = view;
   if (activate) active = "clean"; // 뒤에서 열기(키워드 분석의 쿠폰가 읽기 등)는 지금 화면을 그대로 둔다
@@ -1512,11 +1529,10 @@ const cpWordsGet = (kw) => { const c = (store.get("cpWords") || {})[kw]; return 
 let cpwBusy = null, cpwView = null, cpwPart = null;
 // 상품명 짓기 전용 숨은 쿠팡 화면 — 쿠팡 탭과 같은 클린 세션이지만 지표 스크립트(coupang.cjs)를 안 붙여서 수집함에 상품이 쌓이지 않는다
 function cpWordsView() {
-  if (cpwView && !cpwView.webContents.isDestroyed() && cpwPart === cleanPart) return cpwView;
+  if (cpwView && !cpwView.webContents.isDestroyed() && cpwPart === bgPartition()) return cpwView;
   if (cpwView) { try { win.contentView.removeChildView(cpwView); cpwView.webContents.close(); } catch {} }
-  if (!cleanPart) cleanPart = `clean-${Date.now()}`;
-  cpwPart = cleanPart;
-  cpwView = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  cpwPart = bgPartition();
+  cpwView = new WebContentsView({ webPreferences: { partition: cpwPart, contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   win.contentView.addChildView(cpwView);
   const [w, h] = win.getContentSize();
   cpwView.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) });
