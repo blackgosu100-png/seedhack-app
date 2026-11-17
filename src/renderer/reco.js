@@ -105,7 +105,7 @@
     <div class="i"><div class="pn" title="${esc(x.name)}">${esc(x.name)}</div><div class="pp">${won(x.price)}원${x.priceSrc === "vid" ? `<small class="nc" title="쿠팡 검색 화면에는 이 상품의 다른 옵션(${won(x.pagePrice)}원)이 떠 있어요. 옵션마다 가격이 달라 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">옵션 다름</small>` : x.priceSrc === "odd" ? `<small class="nc" title="쿠팡 화면에서 읽은 ${won(x.pagePrice)}원이 Wing 판매가와 너무 달라(단위가격 오독 의심) Wing 판매가(쿠폰·즉시할인 전)를 썼어요">확인 필요</small>` : x.priceSrc && x.priceSrc !== "page" && x.priceSrc !== "detail" ? `<small class="nc" title="이 검색어의 쿠팡 화면을 읽지 못해 Wing 판매가(쿠폰·즉시할인 전)를 썼어요">쿠폰 전</small>` : x.listPrice > x.price ? `<s title="Wing 판매가(할인 전)${x.priceSrc === "detail" ? " · 이 옵션의 쿠팡 상품 페이지에서 읽은 가격" : ""}">${won(x.listPrice)}</s>` : ""}</div><div class="kv"><span>판매</span><b>${won(x.sales)}개</b></div><div class="kv"><span>리뷰</span><span>${won(x.reviews)}</span></div></div><span class="go">↗</span></a>`;
   // 🚪 진입 규칙 꼬리표(전달문 2026-11-16): S 등급 = 로켓배송 적고 리뷰 적은 진입 쉬운 키워드 · 나머지는 표시만(빼지 않음)
   const flagsHtml = (k) => { const f = [...(k.tier === "S" ? [{ ko: "🚪 진입 쉬움", tone: "good", tip: "로켓배송 25% 이하 · 쿠팡 평균 리뷰 300개 이하 · 1등 리뷰 3천 이하 · 월검색 2천 이상 · 작년 검색 2만 이상 · 평균가 1.2만 원 이상" }] : []), ...(k.flags || [])];
-    return f.length ? `<div class="rp-fl">${f.map((x) => `<span class="${esc(x.tone || "")}" title="${esc(x.tip || "")}">${esc(x.ko)}</span>`).join("")}</div>` : ""; };
+    return f.length ? `<div class="rp-fl">${f.map((x) => `<span class="${esc(x.tone || "")}" data-f="${esc(x.id || "entry")}" title="${esc(x.tip || "")}">${esc(x.ko)}</span>`).join("")}</div>` : ""; };
   function bigCard(k, i) {
     const h = hy.get(k.kw), m = money(h), w = warnOf(h), g = h.gap;
     const top3 = h.items.slice(0, 3), gi = g ? top3.findIndex((x) => String(x.pid) === String(g.pid) && String(x.vid) === String(g.vid)) : -1;
@@ -118,8 +118,8 @@
       <div class="rp-rows">
         <div class="rp-row top"><span class="k">틈</span>${g ? `<a class="v rp-gap" href="${esc(cpUrl(g))}" target="_blank" title="쿠팡 상품 페이지 열기"><img src="${esc(imgUrl(g.img))}" alt="">
           <span>리뷰 <b>${won(g.reviews)}개</b>짜리 상품도 28일 <b class="hl">${won(g.sales)}개</b> 판매<small>${gi >= 0 ? `<span class="rkt" data-flash="${gi}" title="위 사진 칸 보기">${gi + 1}위 상품</span>` : ""}${esc(g.name)} · ${won(g.price)}원 ↗</small></span></a>` : `<span class="v dim">${h.gapBrandOnly ? "리뷰 적은데 팔리는 상품은 유명 브랜드뿐이에요" : "리뷰 300개 미만으로 팔리는 상품은 아직 없어요"}</span>`}</div>
-        ${k.mode === "pro" && h.top1Sales != null ? `<div class="rp-row"><span class="k">시장</span><span class="v">1등 하루 <b>${won(Math.round(h.top1Sales / 28))}개</b> · 리뷰 500개+ 상품 <b>${won(h.big500)}개</b><small>참고: 1등 하루 50개 · 리뷰 500개+ 상품 3개 이상이면 수요가 검증된 시장</small></span></div>` : ""}
-        ${m ? `<div class="rp-row"><span class="k">원가</span><span class="v">${won(m.price)}원에 팔면 → <span class="ok">1688 ¥${m.yuan} 이하면 OK</span><small>광고 10% 쓰고도 개당 약 ${won(m.margin)}원 남음</small></span></div>` : ""}
+        ${k.mode === "pro" && h.top1Sales != null ? `<div class="rp-row" data-r="market"><span class="k">시장</span><span class="v">1등 하루 <b>${won(Math.round(h.top1Sales / 28))}개</b> · 리뷰 500개+ 상품 <b>${won(h.big500)}개</b><small>참고: 1등 하루 50개 · 리뷰 500개+ 상품 3개 이상이면 수요가 검증된 시장</small></span></div>` : ""}
+        ${m ? `<div class="rp-row" data-r="cost"><span class="k">원가</span><span class="v">${won(m.price)}원에 팔면 → <span class="ok">1688 ¥${m.yuan} 이하면 OK</span><small>광고 10% 쓰고도 개당 약 ${won(m.margin)}원 남음</small></span></div>` : ""}
       </div>
       ${w ? `<div class="rp-warn">⚠ ${esc(w)}</div>` : ""}
       <div class="rp-acts"><button type="button" class="pri" data-src="${esc(k.kw)}" title="1위 상품을 리스트업에 담고 1688에서 같은 상품을 자동으로 찾아요">🇨🇳 1688 원가 찾기</button><button type="button" class="sec" data-kw="${esc(k.kw)}" title="키워드 분석 화면에서 쿠팡 상품 전체·쿠폰가를 다시 조회해요">🔎 키워드 분석</button></div>
@@ -225,6 +225,7 @@
         <button type="button" class="rc-bigbtn${exhausted() ? " off" : ""}" id="rcGo">${exhausted() ? "오늘 횟수를 다 썼어요" : `🔍 AI 소싱 시작${dstate ? ` · 오늘 ${dstate.left}번 남음` : ""}`}</button>
         ${limitHtml()}
         <small>한 번에 처음 보는 키워드 10개 · 하루 ${dstate?.daily ?? 10}번 · ${pro ? "원가는 300개 들여오는 기준" : "예산·필터는 결과를 본 뒤에 바꿀 수 있어요"} · 고른 쪽을 기억해요</small>
+        <button type="button" class="rc-past rc-tourb" id="rcTour" title="처음 쓰는 분을 위한 따라 하기 — 손가락이 누를 곳을 짚어 줘요">🎓 사용법 따라 하기 · 1분</button>
         ${dstate?.batches?.length ? `<button type="button" class="rc-past" id="rcPast" title="받기 횟수를 쓰지 않고 마지막으로 받은 키워드를 다시 봐요">🕘 지난 결과 보기 · ${esc(whenTxt(dstate.batches[0].at))}</button>` : ""}
       </div>
       <div class="rc-scale">
@@ -239,7 +240,7 @@
   // 🔑 키워드 DB 읽는 곳(이 PC의 파일 / 키워드 서버) — DB 파일이 있는 PC(대표님 맥)에서만 보임. 수강생과 같은 서버 모드를 시험할 때
   let kwSrc = null;
   const srcHtml = () => (kwSrc?.local ? `<div class="rc-src" role="group" aria-label="키워드 DB 읽는 곳">키워드 DB 읽는 곳
-    <button type="button" data-src="local" aria-pressed="${kwSrc.now === "local"}" title="이 맥의 키워드 DB 파일(~/sellar-data)">이 PC</button><button type="button" data-src="server" aria-pressed="${kwSrc.now === "server"}" title="수강생 앱과 같은 맥미니 키워드 서버(kw.noah-lap.cloud)">키워드 서버</button></div>` : "");
+    <button type="button" data-kwsrc="local" aria-pressed="${kwSrc.now === "local"}" title="이 맥의 키워드 DB 파일(~/sellar-data)">이 PC</button><button type="button" data-kwsrc="server" aria-pressed="${kwSrc.now === "server"}" title="수강생 앱과 같은 맥미니 키워드 서버(kw.noah-lap.cloud)">키워드 서버</button></div>` : "");
 
   // ── 결과: 조절 줄 + 깔때기 요약 + 세 묶음 ──
   function controlsHtml() {
@@ -379,9 +380,9 @@
     const t = e.target;
     if (t.closest("#rcGo") || t.closest("#rcAgain")) { go(); return; }
     if (t.closest("#rcPast")) { restore(dstate?.batches?.[0]); return; }
-    const sb = t.closest("[data-src]");
-    if (sb && sb.dataset.src !== kwSrc?.now) { // 읽는 곳을 바꾸면 깔때기·남은 횟수·지난 결과를 그쪽 기준으로 다시
-      (async () => { kwSrc = await api.invoke("kw:source", sb.dataset.src).catch(() => kwSrc); res = null; render(); await load(); dstate = await api.invoke("kw:drawState").catch(() => dstate); render(); })();
+    const sb = t.closest("[data-kwsrc]");
+    if (sb && sb.dataset.kwsrc !== kwSrc?.now) { // 읽는 곳을 바꾸면 깔때기·남은 횟수·지난 결과를 그쪽 기준으로 다시
+      (async () => { kwSrc = await api.invoke("kw:source", sb.dataset.kwsrc).catch(() => kwSrc); res = null; render(); await load(); dstate = await api.invoke("kw:drawState").catch(() => dstate); render(); })();
       return;
     }
     if (t.closest("#rcBonus")) { bonus(); return; }
@@ -416,6 +417,7 @@
       if (!res) { render(); await load(); }
       dstate = await api.invoke("kw:drawState").catch(() => dstate);
       render();
+      window.dispatchEvent(new CustomEvent("reco:shown"));
     },
   };
 })();
