@@ -92,6 +92,8 @@ function chatDom(kind, arg) {
   }
   // 🌐 1688 사이트(검색 결과·상품 페이지) 번역: 화면에 보이는, 글이 직접 든 가장 안쪽 요소만
   if (kind === "trsite") {
+    if (document.documentElement.hasAttribute("data-sg-tr-hold")) return []; // 자동 조작 중(사진 올리고 검색 누르는 동안)에는 번역을 쉰다
+    const NO_TR = '[class*="search-input" i], [class*="searchbar" i], [class*="search-bar" i], [class*="searchbox" i], [class*="image-search" i], [class*="imagesearch" i], [class*="copy-image" i], [class*="picsearch" i], [class*="upload" i], [class*="captcha" i], [class*="nc_" i], [class*="login" i], form, #sg-scan, #sg-rank, #sg-wave';
     const zh = /[\u4e00-\u9fff]/;
     window.__sgTrN = window.__sgTrN || 0;
     const out = [];
@@ -99,6 +101,10 @@ function chatDom(kind, arg) {
       if (out.length >= 150) break;
       if (/^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|INPUT|SELECT|OPTION|SVG|PATH|CANVAS|IFRAME|IMG)$/i.test(e.tagName) || e.isContentEditable || mine(e)) continue;
       if (e.children.length && [...e.children].some((c) => (c.innerText || "").trim())) continue; // 글 든 자식이 있으면 자식 쪽에서
+      // 화면 깨짐 방지(2026-11-17): 한글로 바꾸면 그 칸 안의 글자 크기를 0으로 만든다 → 안에 입력칸·그림·아이콘·버튼이 든 칸은 같이 찌그러진다(사진 검색 버튼 안의 파일 칸 등).
+      //  ① 그런 칸은 번역하지 않는다 ② 검색창·사진 검색·업로드·로그인·보안 인증 칸은 통째로 건드리지 않는다(자동 조작이 쓰는 곳)
+      if (e.querySelector("input, textarea, select, button, img, svg, canvas, video, iframe, i[class], [class*='icon' i]")) continue;
+      if (e.closest(NO_TR)) continue;
       const r = e.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.bottom < -200 || r.top > innerHeight + 400) continue; // 화면 근처만
       const t = (e.innerText || "").trim();
@@ -110,9 +116,9 @@ function chatDom(kind, arg) {
     return out;
   }
   if (kind === "trapply") {
-    if (document.getElementById("sg-tr-style")?.dataset.v !== "2") { // v2: 대화 상대 목록 규칙 추가 — 예전 규칙이 붙은 화면도 새로 바꿔 끼움
+    if (document.getElementById("sg-tr-style")?.dataset.v !== "3") { // v2: 대화 상대 목록 규칙 추가 — 예전 규칙이 붙은 화면도 새로 바꿔 끼움
       document.getElementById("sg-tr-style")?.remove();
-      const st = document.createElement("style"); st.id = "sg-tr-style"; st.dataset.v = "2";
+      const st = document.createElement("style"); st.id = "sg-tr-style"; st.dataset.v = "3";
       // 보기 방식은 <html data-sg-tr-mode="below|replace|off"> (문의 도우미 상자의 🌐 버튼이 바꾼다)
       // replace: 중국어 글자를 0 크기로 숨기고 한글만 보인다(마우스를 올리면 원문 말풍선 도움말). 페이지 글자(innerText)는 그대로라 답 읽기엔 영향 없음
       st.textContent = [
@@ -123,6 +129,9 @@ function chatDom(kind, arg) {
         // 사이트: 줄을 늘리지 않게 — 한글로는 제자리(inline), 아래 한글은 작게
         '[data-sg-site][data-sg-ko]::after{margin-top:1px;padding-top:0;border-top:0;font-size:11px;line-height:1.35;font-weight:400;white-space:normal}',
         'html[data-sg-tr-mode="replace"] [data-sg-site][data-sg-ko]::after{display:inline;white-space:normal}',
+        // v3 틀 깨짐 방지: 원래 한 줄이던 칸은 한글도 한 줄·원래 너비 안에서만(넘치면 … · 마우스를 올리면 원문) — 한글이 길어져 옆 칸을 밀거나 겹치지 않게
+        'html[data-sg-tr-mode="replace"] [data-sg-site][data-sg-1l][data-sg-ko]::after{display:inline-block;max-width:var(--sg-w,100%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}',
+        'html:not([data-sg-tr-mode="replace"]) [data-sg-site][data-sg-1l][data-sg-ko]::after{max-width:var(--sg-w,100%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
         // 대화 상대 목록: "아래 한글"이어도 한 줄 그대로 한글로 바꿔 보여 준다(겹침 방지, 2026-10-13) · 넘치면 … · 마우스를 올리면 중국어
         'html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko], html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko] *{font-size:0 !important;line-height:0 !important}',
         'html:not([data-sg-tr-mode="off"]) [data-sg-list][data-sg-ko]::after{display:block;margin:0;padding:0;border:0;color:inherit;font-weight:inherit;font-size:var(--sg-fs,13px) !important;line-height:var(--sg-lh,1.5) !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -131,7 +140,7 @@ function chatDom(kind, arg) {
     }
     const on = arg && arg.on !== false;
     if (arg && arg.mode) document.documentElement.setAttribute("data-sg-tr-mode", arg.mode); // 사이트: 메인이 정한 방식
-    document.getElementById("sg-tr-style").disabled = !on;
+    document.getElementById("sg-tr-style").disabled = !on || document.documentElement.hasAttribute("data-sg-tr-hold"); // hold: 자동 조작 중엔 원래 화면 그대로
     // 보기 방식: 도우미 상자는 바깥 페이지에만 있다 → 대화가 안쪽 프레임에 있어도 같은 방식이 되게
     //  ① 도우미가 보내는 postMessage ② 같은 출처면 localStorage ③ 바깥 페이지 html 속성
     const setMode = (m) => { if (!/^(below|replace|off)$/.test(m || "")) return; document.documentElement.setAttribute("data-sg-tr-mode", m); try { localStorage.setItem("sgTrMode", m); } catch (e) {} };
@@ -150,6 +159,10 @@ function chatDom(kind, arg) {
       const e = all('[data-sg-tr="' + it.id + '"]')[0];
       if (e && it.ko) {
         if (!e.style.getPropertyValue("--sg-fs")) { const cs = getComputedStyle(e); if (parseFloat(cs.fontSize) > 0) { e.style.setProperty("--sg-fs", cs.fontSize); e.style.setProperty("--sg-lh", cs.lineHeight === "normal" ? "1.4" : cs.lineHeight); } } // 한글로 바꿀 때 원래 글자 크기 유지
+        if (e.hasAttribute("data-sg-site") && !e.style.getPropertyValue("--sg-w")) { // 번역 전 크기를 재 둔다(틀 유지용)
+          const r0 = e.getBoundingClientRect(), lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.4 || 18;
+          if (r0.width > 0) { e.style.setProperty("--sg-w", Math.ceil(r0.width) + "px"); if (r0.height <= lh * 1.8) e.setAttribute("data-sg-1l", ""); }
+        }
         e.setAttribute("data-sg-ko", it.ko); e.setAttribute("data-sg-src", it.text); if (!e.title) e.title = it.text; n++;
       }
     }

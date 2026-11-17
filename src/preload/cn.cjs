@@ -288,6 +288,7 @@ async function autoImageSearch() {
   const scan = await sgScanStart(0, "1688 이미지 검색 칸 찾는 중"); // 🎤 발표 모드면 해커 화면
   const log = (t) => { ipcRenderer.send("cn:log", t); scan?.log(t); };
   log(`사진 받음 · 이미지 검색 칸 찾는 중 (${location.host}${location.pathname})`);
+  document.documentElement.setAttribute("data-sg-tr-hold", ""); { const st = document.getElementById("sg-tr-style"); if (st) st.disabled = true; } setTimeout(() => document.documentElement.removeAttribute("data-sg-tr-hold"), 60000); // 사진 올리고 검색 누르는 동안 🌐 번역을 쉰다(번역이 칸을 찌그러뜨려 버튼이 안 눌리는 일 방지). 결과 화면으로 넘어가면 자동으로 풀린다
   // 로그아웃 상태면 1688이 사진 업로드를 조용히 거부한다(0건·썸네일 깨짐) → 올리지 않고 로그인 안내. 사진은 남겨 두어 로그인 뒤 첫 화면으로 돌아오면 자동으로 이어진다
   // (2026-10-09: 앱 이름이 씨드핵으로 바뀌며 데이터 폴더가 옮겨져 1688 로그인이 풀린 채 검색이 계속 실패했음)
   await sleep(1200); // 머리글(로그인/닉네임)이 그려질 시간
@@ -377,6 +378,7 @@ async function autoImageSearch() {
     if (await waitFor(() => left, 3000)) return;
   }
   if (left) return;
+  document.documentElement.removeAttribute("data-sg-tr-hold");
   const why = blocker();
   const msg = why ? `1688 ${why}이 떠서 검색이 멈췄습니다 — 직접 처리한 뒤 이미지 검색 버튼을 눌러 주세요` : "1688 검색 결과 화면이 열리지 않았습니다 — 화면의 이미지 검색 버튼을 직접 눌러 주세요(사진은 올라가 있음)";
   const frames = [...document.querySelectorAll("iframe")].filter((f) => f.getBoundingClientRect().width > 150).map((f) => (f.src || "").replace(/\?.*/, "").slice(0, 80));
