@@ -10,6 +10,9 @@ rm -f dist/builder/latest.yml
 node scripts/hot-base.mjs
 npx electron-builder --win nsis --x64 --publish never
 grep -q "version: $V" dist/builder/latest.yml || { echo "✕ latest.yml 버전이 $V가 아닙니다"; exit 1; }
+# 고정 다운로드 링크용 복사본(버전 숫자 없음): https://github.com/$REPO/releases/latest/download/SeedHack-Setup.exe
+cp "dist/builder/CoupangSignal-Setup-$V.exe" dist/builder/SeedHack-Setup.exe
 gh release create "v$V" -R "$REPO" --title "$V" --notes "씨드핵 SEEDHACK $V" \
-  "dist/builder/CoupangSignal-Setup-$V.exe" "dist/builder/CoupangSignal-Setup-$V.exe.blockmap" dist/builder/latest.yml
+  "dist/builder/CoupangSignal-Setup-$V.exe" "dist/builder/CoupangSignal-Setup-$V.exe.blockmap" dist/builder/latest.yml dist/builder/SeedHack-Setup.exe
 echo "■ v$V 배포 완료 — 윈도우 설치판이 켜질 때 자동으로 받아 갑니다."
+echo "  고정 다운로드 링크: https://github.com/$REPO/releases/latest/download/SeedHack-Setup.exe"
