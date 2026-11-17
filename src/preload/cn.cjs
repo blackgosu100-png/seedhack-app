@@ -335,12 +335,24 @@ async function autoImageSearch() {
     log("사진은 올렸지만 검색 버튼을 못 찾았습니다 — 화면의 '搜索图片(이미지 검색)'을 눌러 주세요"); return;
   }
   if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
-  btn.click(); // 결과는 새 창(//s.1688.com/youyuan/…)으로 열리고, 앱이 같은 화면에 띄운다
+  // 결과는 새 창(//s.1688.com/youyuan/…)으로 열리고, 앱이 같은 화면에 띄운다.
+  // 1688이 코드로 누른 클릭을 무시해 "결과 화면이 열리지 않았습니다"가 반복됐다(2026-11) → 처음부터 진짜 마우스 클릭으로 누른다.
+  // 진행 화면(#sg-scan)이 버튼을 덮고 있으므로 누르는 동안만 마우스가 통과하게 한다
+  const realClick = async (el) => {
+    el.scrollIntoView({ block: "center", inline: "center" }); await sleep(200);
+    const r = el.getBoundingClientRect(), cover = document.getElementById("sg-scan");
+    if (cover) cover.style.pointerEvents = "none";
+    const ok = await ipcRenderer.invoke("cn:realClick", { x: r.left, y: r.top, width: r.width, height: r.height }).catch(() => false);
+    await sleep(300); if (cover) cover.style.pointerEvents = "";
+    return ok;
+  };
+  let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
+  const viaReal = await realClick(btn);
+  if (!viaReal) btn.click(); // 앱을 다시 켜기 전(진짜 클릭 기능 없음)이면 예전 방식
   scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
   // 사진은 아직 비우지 않는다 — 결과 화면에서 1688이 사진을 못 받았으면(썸네일 깨짐·0건) 결과 화면의 '上传图片'에 한 번 더 올린다(rankPanel)
   log("사진으로 이미지 검색을 시작했습니다 — 결과 화면에서 상품을 열면 '리스트업에 넣기' 상자가 뜹니다");
   // 결과 화면이 안 열리면(보안 인증·로그인 창이 떴거나 클릭이 안 먹음) 해커 화면이 그 창을 가린 채 끝없이 돈다 → 기다렸다가 한 번 더 누르고, 그래도 안 되면 화면을 걷고 이유를 보여 준다
-  let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
   const blocker = () => {
     if (isCaptcha()) return "보안 인증(슬라이더)";
     const fr = [...document.querySelectorAll("iframe")].filter((f) => { const r = f.getBoundingClientRect(); return r.width > 150 && r.height > 100; }).map((f) => f.src || "");
@@ -348,13 +360,18 @@ async function autoImageSearch() {
     if (fr.some((s) => /login|passport|havanaone/i.test(s))) return "로그인 창";
     return "";
   };
-  if (await waitFor(() => left, 12000)) return;
-  const b2 = findAdaptive("confirm");
+  if (await waitFor(() => left, 6000)) return;
+  let b2 = findAdaptive("confirm");
   if (b2 && b2.getBoundingClientRect().width > 0 && !blocker()) {
-    log("결과 화면이 안 열려 검색 버튼을 한 번 더 누릅니다");
+    log(`결과 화면이 안 열려 검색 버튼을 한 번 더 누릅니다 (${viaReal ? "진짜 클릭 → 코드 클릭" : "코드 클릭 → 진짜 클릭"})`);
+    if (viaReal) b2.click(); else await realClick(b2);
+    if (await waitFor(() => left, 5000)) return;
+    b2 = findAdaptive("confirm"); if (!b2 || !b2.getBoundingClientRect().width) b2 = null;
+  }
+  if (b2 && !blocker()) {
     const r = b2.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
     for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) b2.dispatchEvent(new (t.startsWith("pointer") ? PointerEvent : MouseEvent)(t, o));
-    if (await waitFor(() => left, 12000)) return;
+    if (await waitFor(() => left, 8000)) return;
   }
   const why = blocker();
   const msg = why ? `1688 ${why}이 떠서 검색이 멈췄습니다 — 직접 처리한 뒤 이미지 검색 버튼을 눌러 주세요` : "1688 검색 결과 화면이 열리지 않았습니다 — 화면의 이미지 검색 버튼을 직접 눌러 주세요(사진은 올라가 있음)";

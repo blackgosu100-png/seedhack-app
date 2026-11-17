@@ -29,6 +29,7 @@ import { combo, scan as kwScan, draw as kwDraw, famousBrands } from "./kw-combo.
 import { useServer, kwSource, hasLocalDb, rScan, rDraw, rState, rBonus, rLookup, rName, rBrands } from "./kw-remote.js"; // 🔑 키워드 DB 파일이 없는 PC(수강생)는 맥미니 키워드 서버에 묻는다
 import { STRATEGY_SYSTEM, STRATEGY_SCHEMA, renderStrategyInput } from "./strategy-prompt.js";
 import { runStructured } from "./detail/cli.js";
+import * as human from "./human.js"; // 진짜 마우스 클릭(1688 검색 버튼)
 import { initChat } from "./chat.js";
 import { initWave } from "./wave.js"; // 🌊 파도타기
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
@@ -1065,6 +1066,13 @@ ipcMain.handle("cn:pending", (e) => {
 });
 ipcMain.handle("cn:pendingDone", (e) => { if (isCnWc(e.sender)) cnPending = null; });
 // ✕ 1688 검색 취소: 잘못 누른 검색(예: 상세페이지 사진)을 멈춘다 — 올릴 사진·대상·옵션가 확인을 모두 비우고 1688 첫 화면으로
+// 1688 '이미지 검색' 버튼은 코드로 누른 클릭(가짜 클릭)을 무시할 때가 있다 → 크롬에 진짜 마우스 입력을 보내 누른다
+ipcMain.handle("cn:realClick", async (e, r) => {
+  if (!cnView || e.sender !== cnView.webContents) return false;
+  const rect = { x: Number(r?.x), y: Number(r?.y), width: Number(r?.width), height: Number(r?.height) };
+  if (![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width < 4 || rect.height < 4) return false;
+  try { await human.click(cnView.webContents, rect); return true; } catch { return false; }
+});
 ipcMain.handle("cn:cancel", (e) => {
   if (!isCnWc(e.sender)) return;
   log("stop", `■ 1688 검색 취소 · ${cnTarget?.name || ""}`);
