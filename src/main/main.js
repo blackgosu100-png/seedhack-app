@@ -61,6 +61,7 @@ let cleanTabs = [], cleanPart = null, tabSeq = 0;
 // 🛡 숨은 자동 화면(쿠폰가·상품 페이지 가격·연관검색어)은 사람이 보는 쿠팡 탭과 다른 세션을 쓴다(2026-11-17)
 //  같은 쿠키를 쓰면 자동 조회가 쿠팡에 "기계"로 찍힐 때 대표님이 누른 상품 링크까지 쿠팡 오류 화면이 떴다
 let bgPart = null;
+const cpWarm = new WeakSet(); // 쿠팡 홈을 한 번 거친 세션(그래야 상품 링크로 바로 들어가도 403이 안 난다)
 const bgPartition = () => (bgPart ||= `cpbg-${Date.now()}`);
 // 📦 1688 탭: 로그인 유지(persist:1688). 리스트업 행에서 🔍1688 → 이미지 검색 → 상품 페이지에서 "리스트업에 넣기"
 let cnView = null, cnTarget = null, cnPending = null; // cnPending: 1688 첫 화면에서 올릴 사진(한 번 쓰고 비움)
@@ -176,6 +177,7 @@ const DETAIL_PRICE_JS = `(() => {
 async function readDetailPrice(pid, vid) {
   const wc = coupangBgView("detail").webContents;
   const url = `https://www.coupang.com/vp/products/${encodeURIComponent(pid)}?vendorItemId=${encodeURIComponent(vid)}`;
+  if (!cpWarm.has(wc.session)) { try { await wc.loadURL(COUPANG_HOME); cpWarm.add(wc.session); await new Promise((r) => setTimeout(r, 900)); } catch {} } // 처음 세션이면 쿠팡 홈부터(바로 들어가면 403)
   try { await wc.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); } catch { /* 쿠팡이 뒤에서 주소를 바꿔도 화면은 뜬다 — 아래에서 읽어 봄 */ }
   for (let i = 0; i < 12; i++) { // 최대 약 6초
     const r = await wc.executeJavaScript(DETAIL_PRICE_JS, true).catch(() => null);
@@ -206,6 +208,22 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   view.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다: ${err?.message || err}`));
   ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => view.webContents.on(ev, sendTabs));
   // 🛡 쿠팡 오류 화면이 뜨면: 이 탭만 닫고 새 세션(쿠키 없음)으로 같은 주소를 한 번 다시 연다
+  // 🔁 처음 세션에서 상품 링크로 바로 들어가면 쿠팡이 403 「요청하신 페이지의 사용권한이 없습니다」를 보낸다(2026-11-17 대표님 확인)
+  //  쿠팡 홈을 한 번 거친 세션이면 같은 주소가 열린다 → 홈을 먼저 열고 이어서 그 주소로. 그래도 막히면 옵션 번호를 빼고 한 번 더
+  let denyTry = 0;
+  view.webContents.on("did-finish-load", () => {
+    const u = view.webContents.getURL();
+    if (/^https:\/\/www\.coupang\.com\/?$/.test(u)) { cpWarm.add(view.webContents.session); return; }
+    if (denyTry >= 2 || !/coupang\.com\/vp\/products\//.test(u)) return;
+    view.webContents.executeJavaScript(`(document.body?.innerText || "").slice(0, 300)`).then((tx) => {
+      if (!/사용권한이 (없습니다|제한된)/.test(tx)) { cpWarm.add(view.webContents.session); return; }
+      denyTry++;
+      const wc = view.webContents, target = denyTry === 1 ? u : u.split("?")[0];
+      log("sys", denyTry === 1 ? "▶ 쿠팡이 바로 들어가는 걸 막았어요 — 쿠팡 홈을 거쳐 다시 열어요" : "▶ 한 번 더 막혀서 옵션 번호를 빼고 상품 페이지를 열어요");
+      if (denyTry === 1) { wc.once("did-finish-load", () => setTimeout(() => !wc.isDestroyed() && wc.loadURL(target, { httpReferrer: COUPANG_HOME }), 900)); wc.loadURL(COUPANG_HOME); }
+      else wc.loadURL(target, { httpReferrer: COUPANG_HOME });
+    }).catch(() => {});
+  });
   if (!retried) view.webContents.once("did-finish-load", () => cpBlocked(view.webContents).then((b) => {
     if (!b || !cleanTabs.includes(t)) return;
     const u = view.webContents.getURL() || url, was = cleanView === view;
@@ -214,7 +232,11 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
     closeCleanTab(t.id, true);
     openCleanTab(u, was || activate, true);
   }));
-  view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
+  if (/coupang\.com\/vp\/products\//.test(url) && !cpWarm.has(view.webContents.session)) {
+    const wc = view.webContents; // 이 세션이 쿠팡 홈을 아직 안 거쳤다 → 홈 먼저(사람이 들어가는 순서)
+    wc.once("did-finish-load", () => setTimeout(() => !wc.isDestroyed() && wc.loadURL(url, { httpReferrer: COUPANG_HOME }), 900));
+    wc.loadURL(COUPANG_HOME);
+  } else view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
   if (activate || !cleanView) cleanView = view;
   if (activate) active = "clean"; // 뒤에서 열기(키워드 분석의 쿠폰가 읽기 등)는 지금 화면을 그대로 둔다
   layout(); sendTabs();
