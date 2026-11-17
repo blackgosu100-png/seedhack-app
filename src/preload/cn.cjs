@@ -324,20 +324,25 @@ async function autoImageSearch() {
   dt.items.add(new File([bytes], "coupang.jpg", { type: pend.type || "image/jpeg" }));
   input.files = dt.files;
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  await sleep(1500); // 미리보기 패널 대기
-  const btn = await waitFor(() => { const b = findAdaptive("confirm"); return b && b.getBoundingClientRect().width > 0 ? b : null; }, 8000);
-  if (!btn) {
-    const cands = [...document.querySelectorAll("button, [role=button], [class*='search' i] span, [class*='camera' i], [class*='image' i]")]
-      .filter((e) => e.getBoundingClientRect().width > 0 && (e.textContent || "").trim().length < 16).slice(0, 25)
-      .map((e) => `${e.tagName.toLowerCase()}.${String(e.className).split(/\s+/)[0].slice(0, 28)}="${(e.textContent || "").trim()}"`);
-    log(`진단: 패널=${!!document.querySelector('[class*="copy-image"], [class*="image-search-panel"]')} · 후보 ${cands.join(" | ")}`.slice(0, 900));
-    scan?.fail("사진은 올렸지만 검색 버튼을 못 찾았습니다");
-    log("사진은 올렸지만 검색 버튼을 못 찾았습니다 — 화면의 '搜索图片(이미지 검색)'을 눌러 주세요"); return;
-  }
-  if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
-  // 결과는 새 창(//s.1688.com/youyuan/…)으로 열리고, 앱이 같은 화면에 띄운다.
-  // 1688이 코드로 누른 클릭을 무시해 "결과 화면이 열리지 않았습니다"가 반복됐다(2026-11) → 처음부터 진짜 마우스 클릭으로 누른다.
-  // 진행 화면(#sg-scan)이 버튼을 덮고 있으므로 누르는 동안만 마우스가 통과하게 한다
+  await sleep(1200); // 미리보기 패널 대기
+  // ---- 검색 버튼 누르기 (2026-11-17 다시 씀) ----
+  // 1688 첫 화면이 두 가지다: 예전(사진 넣으면 "帮你找同款" 상자 · .search-btn)과 새 디자인(home/2026 · 숨은 상자 .cgf-image-search-panel 의 __confirm-btn).
+  // 예전 코드는 "비슷한 버튼 찾기"가 검색창의 일반 '搜索' 버튼을 잡을 수 있었고(눌러도 아무 일 없음), 숨은 상자는 못 찾았다.
+  // → 사진 상자 안의 버튼만 후보로 삼고, 업로드가 끝나(버튼이 켜질 때)까지 기다리며, 코드 클릭·진짜 클릭을 번갈아 25초 동안 시도한다.
+  const PANEL = '[class*="copy-image"], [class*="image-search-panel"], [class*="image-search-popover"], [class*="imageSearchPanel"], [class*="img-search-panel"]';
+  const BTN_TXT = /^(搜索图片|搜图|搜索|搜同款|找同款|以图搜款|确认|确定|이미지\s*검색|사진\s*검색|이미지로\s*검색|검색|찾기|찾다|확인|search)$/i;
+  const shown = (e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; };
+  const candidates = () => {
+    const set = new Set(document.querySelectorAll(CONFIRM));
+    for (const pn of document.querySelectorAll(PANEL)) for (const e of pn.querySelectorAll('button, [role="button"], a, div, span')) {
+      const orig = e.getAttribute("data-sg-zh") || ""; // 🌐 번역이 덮어쓴 경우 원문
+      if (e.children.length <= 2 && (BTN_TXT.test((e.textContent || "").trim()) || BTN_TXT.test(orig.trim()) || /confirm-btn|search-btn/i.test(String(e.className)))) set.add(e);
+    }
+    return [...set].filter((e) => e.closest(PANEL) && !/remove|upload-btn|close/i.test(String(e.className)) && e.type !== "file")
+      .sort((a, b) => Number(shown(b)) - Number(shown(a)) || Number(b.tagName === "BUTTON") - Number(a.tagName === "BUTTON") || Number(/confirm|search-btn/i.test(String(b.className))) - Number(/confirm|search-btn/i.test(String(a.className))));
+  };
+  // 꺼진 버튼을 감싼 칸·그 안 글자도 "꺼짐"으로 본다(업로드 중에 겉 칸을 눌러 봐야 소용없음)
+  const off = (e) => { const b = e.closest("button") || e.querySelector?.("button") || e; return b.disabled || e.disabled || b.getAttribute("aria-disabled") === "true" || /disabled|loading/i.test(String(b.className) + " " + String(e.className)); };
   const realClick = async (el) => {
     el.scrollIntoView({ block: "center", inline: "center" }); await sleep(200);
     const r = el.getBoundingClientRect(), cover = document.getElementById("sg-scan");
@@ -346,49 +351,49 @@ async function autoImageSearch() {
     await sleep(300); if (cover) cover.style.pointerEvents = "";
     return ok;
   };
-  let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
-  const viaReal = await realClick(btn);
-  if (!viaReal) btn.click(); // 앱을 다시 켜기 전(진짜 클릭 기능 없음)이면 예전 방식
-  scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
-  // 사진은 아직 비우지 않는다 — 결과 화면에서 1688이 사진을 못 받았으면(썸네일 깨짐·0건) 결과 화면의 '上传图片'에 한 번 더 올린다(rankPanel)
-  log("사진으로 이미지 검색을 시작했습니다 — 결과 화면에서 상품을 열면 '리스트업에 넣기' 상자가 뜹니다");
-  // 결과 화면이 안 열리면(보안 인증·로그인 창이 떴거나 클릭이 안 먹음) 해커 화면이 그 창을 가린 채 끝없이 돈다 → 기다렸다가 한 번 더 누르고, 그래도 안 되면 화면을 걷고 이유를 보여 준다
   const blocker = () => {
     if (isCaptcha()) return "보안 인증(슬라이더)";
     const fr = [...document.querySelectorAll("iframe")].filter((f) => { const r = f.getBoundingClientRect(); return r.width > 150 && r.height > 100; }).map((f) => f.src || "");
-    if (fr.some((s) => /punish|captcha|nocaptcha|_____tmd_____|baxia|x5sec/i.test(s)) || document.querySelector('[id*="nc_"][id*="wrapper" i], .nc-container, [class*="baxia" i]')) return "보안 인증(슬라이더)";
-    if (fr.some((s) => /login|passport|havanaone/i.test(s))) return "로그인 창";
+    if (fr.some((x) => /punish|captcha|nocaptcha|_____tmd_____|baxia|x5sec/i.test(x)) || document.querySelector('[id*="nc_"][id*="wrapper" i], .nc-container, [class*="baxia" i]')) return "보안 인증(슬라이더)";
+    if (fr.some((x) => /login|passport|havanaone/i.test(x))) return "로그인 창";
     return "";
   };
-  if (await waitFor(() => left, 6000)) return;
-  let b2 = findAdaptive("confirm");
-  if (b2 && b2.getBoundingClientRect().width > 0 && !blocker()) {
-    log(`결과 화면이 안 열려 검색 버튼을 한 번 더 누릅니다 (${viaReal ? "진짜 클릭 → 코드 클릭" : "코드 클릭 → 진짜 클릭"})`);
-    if (viaReal) b2.click(); else await realClick(b2);
-    if (await waitFor(() => left, 5000)) return;
-    b2 = findAdaptive("confirm"); if (!b2 || !b2.getBoundingClientRect().width) b2 = null;
+  let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
+  scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
+  const tried = []; let lastDiag = "";
+  for (let n = 0, t0 = Date.now(); Date.now() - t0 < 25000 && !left; n++) {
+    if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
+    if (blocker()) break;
+    let cs = candidates();
+    if (!cs.length && Date.now() - t0 > 6000) { const fb = findAdaptive("confirm"); if (fb && shown(fb)) cs = [fb]; } // 상자를 못 알아본 화면: 예전 방식으로라도
+    const ready = cs.filter((e) => !off(e));
+    lastDiag = `후보 ${cs.length}개(켜진 것 ${ready.length}) ${cs.slice(0, 3).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).split(/\s+/).slice(-1)[0].slice(0, 30)}${shown(e) ? "" : "[숨음]"}${off(e) ? "[꺼짐]" : ""}`).join(", ")}`;
+    if (!ready.length) { await sleep(800); continue; } // 업로드가 끝나 버튼이 켜질 때까지
+    const el = ready[n % ready.length], how = shown(el) && n % 2 === 1 ? "진짜" : "코드";
+    if (how === "진짜") { if (!(await realClick(el))) el.click(); } else el.click();
+    tried.push(how);
+    if (n === 0) log("사진으로 이미지 검색을 시작했습니다 — 결과 화면에서 상품을 열면 '리스트업에 넣기' 상자가 뜹니다");
+    else log(`결과 화면이 안 열려 검색 버튼을 다시 누릅니다 (${how} 클릭 · ${lastDiag})`);
+    if (await waitFor(() => left, 3000)) return;
   }
-  if (b2 && !blocker()) {
-    const r = b2.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
-    for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) b2.dispatchEvent(new (t.startsWith("pointer") ? PointerEvent : MouseEvent)(t, o));
-    if (await waitFor(() => left, 8000)) return;
-  }
+  if (left) return;
   const why = blocker();
   const msg = why ? `1688 ${why}이 떠서 검색이 멈췄습니다 — 직접 처리한 뒤 이미지 검색 버튼을 눌러 주세요` : "1688 검색 결과 화면이 열리지 않았습니다 — 화면의 이미지 검색 버튼을 직접 눌러 주세요(사진은 올라가 있음)";
   const frames = [...document.querySelectorAll("iframe")].filter((f) => f.getBoundingClientRect().width > 150).map((f) => (f.src || "").replace(/\?.*/, "").slice(0, 80));
-  log(`${msg} · 진단: 버튼=${b2 ? `"${(b2.textContent || "").trim().slice(0, 12)}"` : "없음"} 큰 iframe=${frames.join(", ") || "없음"}`);
+  log(`${msg} · 진단: ${lastDiag || "버튼 후보 없음"} · 시도 ${tried.join(">") || "없음"} · 큰 iframe=${[...document.querySelectorAll("iframe")].filter((f) => f.getBoundingClientRect().width > 150).map((f) => (f.src || "").replace(/\?.*/, "").slice(0, 60)).join(", ") || "없음"}`);
   scan?.close?.();
   if (!document.getElementById("sg-stuck")) {
     const el = document.createElement("div");
     el.id = "sg-stuck";
     el.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483647;background:#ffb454;color:#1f1300;font:700 14px -apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10px 16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.3)";
     el.textContent = msg;
+    const dg = document.createElement("div"); dg.style.cssText = "font:400 11px ui-monospace,Menlo,Consolas,monospace;opacity:.75;margin-top:4px"; dg.textContent = `${lastDiag || "버튼 후보 없음"} · 시도 ${tried.join(">") || "없음"}`; el.appendChild(dg);
     (document.body || document.documentElement).appendChild(el);
   }
 }
 
 // ---- 이미지 검색 결과 페이지: 판매자 추천 TOP 패널 ----
-const isResults = () => /(^|\.)1688\.com$/i.test(location.hostname) && /pc-image-search|youyuan/i.test(location.pathname + location.search);
+const isResults = () => /(^|\.)1688\.com$/i.test(location.hostname) && /pc-image-search|youyuan|tab=imageSearch/i.test(location.pathname + location.search);
 // 카드의 상품 번호: 카드 안 실제 상품 링크(detail.1688.com/offer/번호.html, …offerId=번호)에서 먼저 읽는다.
 // HTML 전체에서 "offerId" 근처 숫자를 찾으면 사진 번호(imageId, 19자리) 같은 다른 숫자를 잡아 "상품 열기"가 1688 '없는 상품' 화면으로 갔다(2026-10-10)
 const OFFER_RE = /(?:\/offer\/|[?&](?:offerId|offer_id|offerid)=)(\d{9,14})(?!\d)/;
@@ -874,7 +879,7 @@ async function showReviewBox() {
 
 // 진단: 이미지 검색 결과 화면 주소(영역 region 등)가 어떻게 바뀌는지 남긴다 — 1688이 받는 "전체 사진" 영역 형식을 찾기 위함
 function logResultsUrl() {
-  if (!/pc-image-search|youyuan/i.test(location.pathname + location.search)) return;
+  if (!/pc-image-search|youyuan|tab=imageSearch/i.test(location.pathname + location.search)) return;
   let last = "";
   const tick = () => { if (location.href !== last) { last = location.href; ipcRenderer.send("cn:log", `진단 결과주소: ${location.href.replace(/^https:\/\/[^/]+/, "").slice(0, 600)}`); } };
   tick(); setInterval(tick, 1000);
