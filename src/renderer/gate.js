@@ -43,7 +43,7 @@
     const [lead, sub] = STATUS[s.vendor.status] || STATUS.error;
     $("gvLead").textContent = lead;
     $("gvSub").textContent = `판매자ID ${s.vendor.id} · ${sub}`;
-    $("gvApply").hidden = !s.vendor.formUrl;
+    $("gvApply").hidden = s.vendor.status !== "unregistered"; // 신청 전에만(대기 중이면 '다시 확인')
   }
 
   $("gateLogin").addEventListener("submit", async (e) => {
@@ -61,7 +61,20 @@
     render(await api.invoke("auth:recheck"));
     $("gvRecheck").disabled = false; $("gvRecheck").textContent = "다시 확인";
   });
-  $("gvApply").addEventListener("click", () => st?.vendor.formUrl && api.invoke("auth:open", st.vendor.formUrl));
+  // 🎫 라이선스 신청: 앱이 바로 신청(대시보드 API) → 실패하면 예전 구글폼을 연다
+  $("gvApply").addEventListener("click", async () => {
+    const b = $("gvApply"); b.disabled = true; b.textContent = "신청 중…";
+    const s = await api.invoke("auth:apply");
+    b.disabled = false; b.textContent = "라이선스 신청하기";
+    if (s?.applyError) {
+      render(st);
+      $("gvSub").textContent = `${s.applyError} — 구글폼으로 신청 창을 열어요.`;
+      if (st?.vendor.formUrl) api.invoke("auth:open", st.vendor.formUrl);
+      return;
+    }
+    render(s);
+    if (s.vendor.status === "pending") $("gvLead").textContent = "✅ 신청됐어요. 운영진 승인을 기다리는 중입니다.";
+  });
   $("gSignup").addEventListener("click", (e) => { e.preventDefault(); st && api.invoke("auth:open", st.signupUrl); });
   $("gReset").addEventListener("click", (e) => { e.preventDefault(); st && api.invoke("auth:open", st.resetUrl); });
   $("gvOut").addEventListener("click", async (e) => { e.preventDefault(); render(await api.invoke("auth:signout")); });

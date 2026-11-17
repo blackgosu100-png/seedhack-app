@@ -13,7 +13,7 @@ import { buildPool, defaultPicks, buildNames, checkName } from "../shared/name-c
 import { searchKeyword } from "./kwsearch.js";
 import { buildListupXlsx, buildCollectXlsx } from "./listup-excel.js";
 import { upsertPage, upsertMetric, listCollect, removeCollect, countCollect, pickCollect } from "./collect.js";
-import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId, accessToken } from "./auth.js";
+import { signIn, signOut, restore, checkVendor, licensed, memberOk, state as authState, GATE_ON, wingVendorId, accessToken, applyLicense } from "./auth.js";
 import { DASHBOARD_URL } from "./auth-config.js";
 import * as hot from "./hot.js"; // ⬆ 화면만 바로 업데이트
 import { recommendViaCli, cliAvailable } from "./ai-cli.js";
@@ -500,6 +500,12 @@ ipcMain.handle("auth:signout", () => { signOut(); active = "wing"; layout(); sen
 ipcMain.handle("auth:recheck", async () => {
   if (!memberOk()) await restore(); // 회원 승인 대기였다면 최신 승인 상태를 다시 받아 온다
   await checkVendor(true); sendAuth(); return authState();
+});
+ipcMain.handle("auth:apply", async () => {
+  const r = await applyLicense();
+  if (r.error) { log("stop", `✕ 라이선스 신청 실패: ${r.error}`); return { ...authState(), applyError: r.error }; }
+  log("sys", r.already ? `▶ 이미 신청된 판매자ID예요 (${r.status})` : "▶ 라이선스 신청 완료 — 승인되면 '다시 확인'을 눌러 주세요");
+  await checkVendor(true); sendAuth(); return { ...authState(), applied: true };
 });
 ipcMain.handle("auth:open", (_e, url) => { if (/^https:\/\/(rocketgrowth-sale-dashboard\.vercel\.app|docs\.google\.com)\//.test(String(url))) shell.openExternal(url); });
 

@@ -102,6 +102,20 @@ const isAdmin = (email) => ADMIN_EMAILS.includes(String(email || "").toLowerCase
 export const memberOk = () => !!user && (isAdmin(user.email) || (user.confirmed && user.approval === "approved"));
 export const licensed = () => !GATE_ON || (memberOk() && vendor.status === "approved");
 
+// 🎫 라이선스 바로 신청(2026-11-17): 구글폼 대신 대시보드 API가 판매자ID를 승인 대기로 넣는다(구글폼 경로는 신청이 사라지고 있었다)
+export async function applyLicense() {
+  const id = await wingVendorId();
+  if (!id) return { error: "Wing에 먼저 로그인해 주세요" };
+  const t = await accessToken();
+  if (!t) return { error: "앱 로그인이 만료됐어요. 다시 로그인해 주세요" };
+  try {
+    const r = await net.fetch(`${DASHBOARD_URL}/api/license/apply`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: t, vendor_id: id }), cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) return { error: j.error || `신청 실패(${r.status})` };
+    return { ok: true, status: j.status, already: !!j.already };
+  } catch (e) { return { error: "인터넷 연결을 확인해 주세요" }; }
+}
+
 export function state() {
   return {
     gate: GATE_ON, licensed: licensed(),
