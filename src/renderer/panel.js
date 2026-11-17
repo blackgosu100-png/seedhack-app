@@ -879,6 +879,10 @@
   let hotOnly = false;
   api.on("hot", (h) => { if (!h || (!$("bUpdate").hidden && !hotOnly)) return; hotOnly = true; $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ 새 버전 ${h.label} · 바로 적용`; $("bUpdate").title = h.notes || "고친 화면을 바로 적용해요(몇 초 뒤 다시 켜짐)"; });
   api.on("update", () => { hotOnly = false; });
+  // 🔒 수강생 확인 화면이 위를 덮어 '바로 적용'이 안 보이던 문제(2026-11-17) → 확인 화면 안에도 같은 버튼
+  new MutationObserver(() => { const b = $("bUpdate"); ["gUpdate1", "gUpdate2"].forEach((id) => { const g = $(id); if (!g) return; g.hidden = b.hidden; g.textContent = b.textContent; g.disabled = b.disabled; }); })
+    .observe($("bUpdate"), { attributes: true, childList: true, characterData: true, subtree: true });
+  ["gUpdate1", "gUpdate2"].forEach((id) => $(id)?.addEventListener("click", () => $("bUpdate").click()));
   $("bUpdate").onclick = () => { $("bUpdate").disabled = true; $("bUpdate").textContent = hotOnly ? "적용 중…" : "설치 중…"; api.invoke(hotOnly ? "hot:apply" : "update:install"); };
   const showVer = (v) => { if (!v) return; $("appVer").textContent = `v${v}`; $("gateVer").textContent = `v${v}`; document.querySelector(".side .brand").title = `씨드핵 SEEDHACK v${v} — 매일 한 톨, 시스템처럼.`; };
   api.on("version", showVer);
