@@ -519,6 +519,13 @@ async function rankPanel() {
   // 전체 사진으로 검색: 1688 영역 형식은 region=왼쪽,오른쪽,위,아래 "올린 사진의 픽셀" 기준(2026-10-11 확인: 물체 조각을 고르면 region=30,191,73,209).
   // 1688은 기본으로 사진 속 물체 하나만 잘라 찾아(목베개 사진 → 목 아래 조각, 빨래건조대 → 기둥) 엉뚱한 상품이 나온다 → 처음 열릴 때 한 번 전체 사진 영역으로 다시 연다.
   // (사람이 결과 화면에서 다른 조각을 고르면 region이 붙어 있으므로 건드리지 않는다)
+  // 새 결과 화면(/kapp/1688-global/sales/search)은 카드 구조가 달라 못 읽는다 → 15초 기다렸다 사진을 다시 올리며 화면이 여러 번 새로 열렸다(2026-11-18 "브라우저가 자꾸 다시 시작").
+  // → 같은 사진 번호로 예전 결과 화면(pc-image-search)을 바로 연다. 아래 "전체 사진" 영역도 이 한 번에 같이 붙인다
+  if (/1688-global\/sales\/search/.test(u.pathname) && u.searchParams.get("imageId") && !sessionStorage.getItem("sg-oldpage:" + u.searchParams.get("imageId"))) {
+    sessionStorage.setItem("sg-oldpage:" + u.searchParams.get("imageId"), "1");
+    u.pathname = "/kapp/1688-search/pc-image-search/";
+    ipcRenderer.send("cn:log", "새 결과 화면 → 읽을 수 있는 결과 화면으로 바로 이동");
+  }
   const fullKey = "sg-fullregion:" + (u.searchParams.get("imageId") || "");
   if (!u.searchParams.has("region") && u.searchParams.get("imageId") && !sessionStorage.getItem(fullKey)) {
     const pend0 = await ipcRenderer.invoke("cn:pending");
@@ -534,6 +541,7 @@ async function rankPanel() {
       }
     }
   }
+  if (u.pathname !== location.pathname) { location.replace(u.href); return; } // (사진 크기를 몰라 영역을 못 붙인 경우에도) 결과 화면만은 옮긴다
   if (u.searchParams.get("region") === "0,360,0,360" && !sessionStorage.getItem(noRegionKey)) {
     sessionStorage.setItem(noRegionKey, "1");
     u.searchParams.delete("region");

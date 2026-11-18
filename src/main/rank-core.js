@@ -160,10 +160,17 @@ export function rankCards(cards, opts = {}) {
     if (x.cons != null) { x.fit += x.cons * 3; if (x.cons < 0.34 && !placeHit) { x.fit -= 3; (x.notes ||= []).push("닮은 상품들과 종류가 달라 보임"); x.oddOne = true; } }
     if (x.featClash.length) (x.notes ||= []).push(`쿠팡 상품과 다른 특징: ${x.featClash.join("·")}`);
   }
-  const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5; // 특징이 같으면: 판매자 점수 + 사진 유사 순서 가산(1위 +30 … 12위 +2.5)
+  // 순서(2026-11-18 대표님 기준): 사진 유사 위쪽 안에서 ① 허용 소싱가를 넘는 것 ② 쿠팡과 다른 특징(투명인데 검정) ③ 종류가 달라 보이는 것은 뒤로,
+  // 남은 것끼리는 "판매자 점수(판매량·재구매율·업력) + 1688 사진 유사 순서 + 특징 일치 가산"이 높은 순.
+  // 제목에 '透明'이 없다고 투명이 아닌 건 아니므로(사진은 투명) 특징 일치는 작은 가산점으로만 쓴다 — 예전엔 이게 순서를 뒤집어 허용가 넘는 12위 상품이 1번이 됐다
+  const allowY = opts.allow ?? null;
+  const over = (x) => { const p = x.realPrice ?? x.price; return allowY != null && p != null && p > allowY ? 1 : 0; }; // 목록가는 옵션 중 최저가 → 그것조차 허용가를 넘으면 확실히 초과
+  for (const x of scored) if (!x.excluded && over(x)) { x.overAllow = true; (x.notes ||= []).push(`허용 소싱가 ¥${allowY.toFixed(1)} 초과`); }
+  const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5 + Math.min(6, (x.featHit || []).length * 3); // 1위 +30 … 12위 +2.5 · 특징 일치 +3씩(최대 6)
+  const demote = (x) => over(x) * 4 + ((x.featClash || []).length ? 2 : 0) + (x.oddOne ? 1 : 0);
   // 같은 회사는 가장 앞선 상품 하나만
   const seen = new Set(); const out = [];
-  for (const s of scored.filter((x) => !x.excluded).sort((a, b) => a.simTier - b.simTier || b.fit - a.fit || near(b) - near(a) || (a.rank ?? 99) - (b.rank ?? 99))) {
+  for (const s of scored.filter((x) => !x.excluded).sort((a, b) => demote(a) - demote(b) || a.simTier - b.simTier || near(b) - near(a) || (a.rank ?? 99) - (b.rank ?? 99))) {
     const key = s.company || s.offerId; if (seen.has(key)) continue; seen.add(key); out.push(s);
   }
   // 사진 검색이 빗나갔는지: 제목을 읽을 수 있는 후보가 충분한데 쿠팡 상품명과 닮은 게 하나도 없으면(가장 닮은 것도 20% 미만) 결과 전체가 엉뚱한 것
