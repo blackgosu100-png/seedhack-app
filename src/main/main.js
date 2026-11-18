@@ -642,7 +642,14 @@ function keepYuan() {
   const set = () => ses.cookies.set({ url: "https://www.1688.com/", domain: ".1688.com", path: "/", name: "overseacurrency", value: "CNY", expirationDate: Math.floor(Date.now() / 1000) + 365 * 86400 }).catch(() => {});
   set();
   if (yuanHooked) return; yuanHooked = true;
-  ses.cookies.on("changed", (_e, c, _cause, removed) => { if (c.name === "overseacurrency" && /1688\.com$/.test(c.domain || "") && (removed || c.value !== "CNY")) setTimeout(set, 50); });
+  // 사이트가 계속 다른 값으로 되돌리면 서로 고쳐 쓰다 화면이 거듭 새로 열릴 수 있다 → 1분에 3번까지만 되돌린다
+  const hits = [];
+  ses.cookies.on("changed", (_e, c, _cause, removed) => {
+    if (c.name !== "overseacurrency" || !/1688\.com$/.test(c.domain || "") || (!removed && c.value === "CNY")) return;
+    const now = Date.now(); while (hits.length && now - hits[0] > 60000) hits.shift();
+    if (hits.length >= 3) return;
+    hits.push(now); setTimeout(set, 50);
+  });
 }
 function createCn(url = CN_HOME) {
   keepYuan();
