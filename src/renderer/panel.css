@@ -587,3 +587,8 @@ body.p-empty[data-view="cat"] #catHistBar { display: none; }
 .nav-item.on .lbl::after { content: "_"; margin-left: 2px; font-family: var(--mono); animation: sh-blink 1s steps(1) infinite; }
 .nav-item .cnt { background: rgba(61,220,132,.12); color: var(--neon); box-shadow: inset 0 0 0 1px rgba(61,220,132,.35); }
 .nav-item .cnt.gray { background: var(--side2); color: var(--side-text); box-shadow: none; }
+
+/* ⬆ 업데이트 버튼: 놓치지 않게 깜빡임(1.2초 주기 · 누르는 중엔 멈춤 · 움직임 줄이기 설정이면 테두리만) */
+button.upd:not([hidden]):not(:disabled){background:#f97316 !important;border-color:#f97316 !important;color:#fff !important;font-weight:800;animation:sg-upd 1.2s ease-in-out infinite}
+@keyframes sg-upd{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(249,115,22,.55)}50%{opacity:.55;box-shadow:0 0 0 7px rgba(249,115,22,0)}}
+@media (prefers-reduced-motion:reduce){button.upd:not([hidden]):not(:disabled){animation:none;box-shadow:0 0 0 3px rgba(249,115,22,.35)}}
