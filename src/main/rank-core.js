@@ -127,7 +127,8 @@ export function rankCards(cards, opts = {}) {
   const rels = cards.map((c) => relevance(c.titleKo || c.title, opts.target || {})); // titleKo: 중국어 제목을 번역한 것
   const cut = opts.target ? relevanceGate(rels) : null;
   const scored = cards.map((c, i) => {
-    if (cut != null && (rels[i] == null || rels[i] < cut)) return { ...c, rel: rels[i], score: 0, parts: {}, verdict: "exclude", notes: ["다른 상품 의심 — 쿠팡 상품명과 제목이 거의 안 겹침"], excluded: true, offTarget: true };
+    // 사진 유사 위쪽 12개는 제목이 안 겹쳐도 빼지 않는다(번역 낱말 차이로 진짜 같은 상품이 빠졌음, 2026-11-18)
+    if (cut != null && (c.rank ?? 99) > 12 && (rels[i] == null || rels[i] < cut)) return { ...c, rel: rels[i], score: 0, parts: {}, verdict: "exclude", notes: ["다른 상품 의심 — 쿠팡 상품명과 제목이 거의 안 겹침"], excluded: true, offTarget: true };
     return { ...c, rel: rels[i], ...scoreCard(c, { ...opts, medianPrice, realPrice: c.realPrice ?? null }) };
   });
   // ── 순서 원칙(2026-11-18 대표님 지적): "같은 상품이 먼저, 판매자 점수는 그다음" ──
@@ -135,6 +136,14 @@ export function rankCards(cards, opts = {}) {
   // 많이 팔리는 다른 상품(아크릴 소품 정리함)이 추천 1번이 됐다. → ① 1688 사진 유사 순서 위쪽(SIM_TOP)을 먼저 본다
   // ② 그 안에서 쿠팡 상품명의 핵심 특징(투명·아크릴·접이식…)과 종류 낱말(욕조…)이 제목에 맞는 것을 앞에 ③ 그다음이 판매자 점수.
   const SIM_TOP = 12;
+  // 다수결: 1688이 사진과 가장 닮았다고 본 위쪽 8개 제목에 공통으로 나오는 낱말(예: 浴缸·置物架)이 "이 사진의 상품 종류"다.
+  // 그 낱말이 없는 후보(예: 化妆品 收纳架)는 닮은 사진에 섞여 나온 다른 상품일 가능성이 높다 → 뒤로. 언어·번역과 무관하게 중국어 원문으로 본다
+  const AD = /跨境|爆款|批发|新款|厂家|直销|直供|家用|热卖|现货|代发|工厂|定制|外贸|亚马逊|网红|同款|多功能|创意|简约|高档|大号|小号/g;
+  const zg = (t) => { const o = new Set(); for (const w of String(t || "").replace(AD, " ").match(/[\u4e00-\u9fff]{2,}/g) || []) for (let i = 0; i + 1 < w.length; i++) o.add(w.slice(i, i + 2)); return o; };
+  const topN = scored.filter((x) => !x.excluded && (x.rank ?? 99) <= 8), df = new Map();
+  for (const x of topN) for (const g of zg(x.title)) df.set(g, (df.get(g) || 0) + 1);
+  const dom = [...df.entries()].filter(([, n]) => n >= Math.max(3, Math.ceil(topN.length * 0.4))), domSum = dom.reduce((a, [, n]) => a + n, 0);
+  const consensus = (x) => { if (!domSum) return null; const g = zg(x.title); return dom.reduce((a, [k, n]) => a + (g.has(k) ? n : 0), 0) / domSum; };
   const feats = featuresOf(`${opts.target?.name || ""} ${opts.target?.keyword || ""}`);
   for (const x of scored) {
     if (x.excluded) continue;
@@ -143,9 +152,12 @@ export function rankCards(cards, opts = {}) {
     x.featMiss = feats.filter((f) => !f.re.test(t)).map((f) => f.ko);
     x.featClash = clashOf(feats, t);
     x.simTier = (x.rank ?? 99) <= SIM_TOP ? 0 : (x.rank ?? 99) <= SIM_TOP * 2.5 ? 1 : 2;
-    // 맞는 특징 가중치: 쓰는 곳·종류(욕조) 3 > 소재 2 > 색 1.5 > 형태 1 · 반대 특징(투명인데 검정·대나무)은 −3
-    const W = { place: 3, mat: 2, color: 1.5, form: 1 };
+    // 맞는 특징 가중치: 쓰는 곳·종류(욕조) 3 > 소재·색 2.5 > 형태 1 · 반대 특징(투명인데 검정·대나무)은 −3
+    const W = { place: 3, mat: 2.5, color: 2.5, form: 1 };
     x.fit = feats.filter((f) => f.re.test(t)).reduce((a, f) => a + W[f.group], 0) - x.featClash.length * 3;
+    x.cons = consensus(x);
+    const placeHit = feats.some((f) => f.group === "place" && f.re.test(t));
+    if (x.cons != null) { x.fit += x.cons * 3; if (x.cons < 0.34 && !placeHit) { x.fit -= 3; (x.notes ||= []).push("닮은 상품들과 종류가 달라 보임"); x.oddOne = true; } }
     if (x.featClash.length) (x.notes ||= []).push(`쿠팡 상품과 다른 특징: ${x.featClash.join("·")}`);
   }
   const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5; // 특징이 같으면: 판매자 점수 + 사진 유사 순서 가산(1위 +30 … 12위 +2.5)
