@@ -137,12 +137,13 @@ function buildPayload(snap) {
 
 // 🔰 첫 실행 안내(renderer/onboard.js): "login" = 앱 로그인만 창 전체(사이트 화면 숨김) · "wing" = Wing 화면 둘레에 빛나는 테두리 자리(ONB_PAD)를 비움
 let onbPhase = null;
+let bandH = 0; // 🔔 위쪽 업데이트 안내 띠 높이(renderer 가 ui:band 로 알림) — 그만큼 사이트 화면을 내린다
 const ONB_PAD = 10;
 function layout() {
   if (!win) return;
   if (onbPhase === "login") { [wingView, dashView, chat.view(), cnView, ...cnTabs.map((t) => t.view), ...cleanTabs.map((t) => t.view)].forEach((v) => v?.setVisible(false)); return; }
   const [w, h] = win.getContentSize();
-  const sw = Math.round(sideW * ZOOM), bh = Math.round(BAR_H * ZOOM), st = Math.round(stripW * ZOOM);
+  const sw = Math.round(sideW * ZOOM), bh = Math.round((BAR_H + bandH) * ZOOM), st = Math.round(stripW * ZOOM);
   const b = { x: sw, y: bh, width: Math.max(200, w - sw), height: Math.max(200, h - bh) };
   const th = Math.round(TAB_H * ZOOM);
   const bc = { ...b, y: b.y + th, height: Math.max(200, b.height - th) }; // 쿠팡 탭은 위에 탭 줄 자리
@@ -253,7 +254,6 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   if (activate) send("nav", { tab: "clean", url });
   return t;
 }
-function selectCleanTab(id) {
 // 🏠 앱을 켜면 쿠팡 탭 세션으로 홈을 미리 열어 둔다(뒤에서, 화면 전환 없음) — 사람이 브라우저를 켜면 홈부터 뜨는 것과 같은 순서
 let cleanWarm = null; // 쿠팡 화면이 정상으로 한 번 뜬 세션(파티션) 이름
 function warmCoupang() {
@@ -261,6 +261,7 @@ function warmCoupang() {
   if (SELFTEST && process.env.SELFTEST_SITES !== "1") return; // 자체 점검은 실제 쿠팡에 접속하지 않는다
   openCleanTab(COUPANG_HOME, false);
 }
+function selectCleanTab(id) {
   const t = cleanTabs.find((x) => x.id === id);
   if (!t) return;
   cleanView = t.view; active = "clean"; layout(); sendTabs();
@@ -397,8 +398,8 @@ function createWindow() {
   if (!SELFTEST) wingView.webContents.loadURL(WING_HOME);
   // 🏠 1688 첫 화면도 미리 열어 둔다(뒤에서, 화면 전환 없음) — 🔍1688을 누를 때 첫 화면이 이미 떠 있어 사진 올리기가 바로 시작된다(2026-11-18)
   if (!SELFTEST) setTimeout(() => { if (!win) return; if (!cnView) { createCn(CN_HOME); layout(); } else if (/^about:blank/.test(cnView.webContents.getURL() || "about:blank")) cnView.webContents.loadURL(CN_HOME); }, 800); // 켜자마자(0.8초 뒤) — 5초 뒤에 열면 탭을 먼저 눌렀을 때 로딩을 보게 된다
-
   if (!SELFTEST) setTimeout(warmCoupang, 3000); // Wing 첫 화면이 뜬 뒤 쿠팡 홈을 뒤에서 미리
+
   win.on("resize", layout);
   win.webContents.on("did-finish-load", () => {
     layout();
@@ -436,7 +437,7 @@ function startUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true; // 버튼을 안 눌러도 다음에 끌 때 설치
   autoUpdater.on("update-available", (i) => log("sys", `▶ 새 버전 ${i.version}을 내려받는 중입니다 (사용은 계속 가능)`));
-  autoUpdater.on("update-downloaded", (i) => { updateReady = i.version; send("update", { version: i.version }); log("go", `■ 새 버전 ${i.version} 준비됨 — 위쪽 '다시 시작해 업데이트'를 누르거나 다음에 끌 때 자동 설치`); });
+  autoUpdater.on("update-downloaded", (i) => { updateReady = i.version; send("update", { version: i.version }); log("go", `■ 새 버전 ${i.version} 준비됨 — 위쪽 노란 띠의 '지금 업데이트'를 누르거나 다음에 끌 때 자동 설치`); });
   autoUpdater.on("error", (e) => console.log("[업데이트]", e?.message || e));
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8000);
@@ -1361,6 +1362,9 @@ ipcMain.handle("check:status", () => {
   };
 });
 ipcMain.handle("app:version", () => app.getVersion());
+ipcMain.handle("ui:band", (_e, h) => { bandH = Math.max(0, Math.min(60, Number(h) || 0)); layout(); return true; });
+// 시험용: SEEDHACK_FAKE_UPDATE=1118-1121 로 켜면 업데이트 안내 띠만 띄워 본다(실제 업데이트는 없음)
+if (process.env.SEEDHACK_FAKE_UPDATE) setTimeout(() => send("update", { version: process.env.SEEDHACK_FAKE_UPDATE }), 6000);
 // 🚚 로켓그로스 요금표: 앱에 들어 있는 rg-fees.json + GitHub 최신본(버전이 더 크면 사용, 받은 것은 저장해 두고 오프라인에도 사용)
 const RG_REMOTE = "https://raw.githubusercontent.com/blackgosu100-png/coupang-signal-releases/main/rg-fees.json";
 let rgCache = null;

@@ -874,13 +874,15 @@
     const it = catData.items[idx];
   });
   // 자동 업데이트: 새 버전을 다 받으면 버튼 표시
-  api.on("update", ({ version }) => { $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ 업데이트 ${version}`; $("bUpdate").title = `새 설치판 ${version} — 누르면 다시 시작하며 업데이트해요`; });
+  api.on("update", ({ version }) => { $("bUpdate").hidden = false; $("bUpdate").textContent = "지금 업데이트"; $("updVer").textContent = `(${version})`; $("bUpdate").title = `새 설치판 ${version} — 누르면 다시 시작하며 업데이트해요`; });
   // ⬆ 화면만 바로 업데이트(main/hot.js) — 설치 파일 업데이트가 같이 있으면 설치 파일 쪽이 우선
   let hotOnly = false;
-  api.on("hot", (h) => { if (!h || (!$("bUpdate").hidden && !hotOnly)) return; hotOnly = true; $("bUpdate").hidden = false; $("bUpdate").textContent = `⬆ 업데이트 ${h.label}`; $("bUpdate").title = `${h.notes || "고친 내용을 적용해요"} · 누르면 몇 초 뒤 다시 켜져요`; });
+  api.on("hot", (h) => { if (!h || (!$("bUpdate").hidden && !hotOnly)) return; hotOnly = true; $("bUpdate").hidden = false; $("bUpdate").textContent = "지금 업데이트"; $("updVer").textContent = `(${h.label})`; $("bUpdate").title = `${h.notes || "고친 내용을 적용해요"} · 누르면 몇 초 뒤 다시 켜져요`; });
   api.on("update", () => { hotOnly = false; });
   // 🔒 수강생 확인 화면이 위를 덮어 '바로 적용'이 안 보이던 문제(2026-11-17) → 확인 화면 안에도 같은 버튼
-  new MutationObserver(() => { const b = $("bUpdate"); ["gUpdate1", "gUpdate2"].forEach((id) => { const g = $(id); if (!g) return; g.hidden = b.hidden; g.textContent = b.textContent; g.disabled = b.disabled; }); })
+  // 🔔 위쪽 노란 안내 띠(2026-11-18): 띠 높이만큼 사이트 화면을 아래로 내리라고 main 에 알림
+  let bandOn = null;
+  new MutationObserver(() => { const b = $("bUpdate"); if (bandOn !== !b.hidden) { bandOn = !b.hidden; api.invoke("ui:band", bandOn ? 34 : 0).catch(() => {}); } ["gUpdate1", "gUpdate2"].forEach((id) => { const g = $(id); if (!g) return; g.hidden = b.hidden; g.textContent = b.textContent; g.disabled = b.disabled; }); })
     .observe($("bUpdate"), { attributes: true, childList: true, characterData: true, subtree: true });
   ["gUpdate1", "gUpdate2"].forEach((id) => $(id)?.addEventListener("click", () => $("bUpdate").click()));
   $("bUpdate").onclick = () => { $("bUpdate").disabled = true; $("bUpdate").textContent = "업데이트 중…"; api.invoke(hotOnly ? "hot:apply" : "update:install"); };
