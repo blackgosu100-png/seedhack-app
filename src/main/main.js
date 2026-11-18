@@ -654,7 +654,7 @@ function keepYuan() {
   });
 }
 function createCn(url = CN_HOME) {
-  keepYuan();
+  // keepYuan(); — 끔(2026-11-18): 통화 쿠키를 앱이 고쳐 쓰면 1688이 계정 설정값으로 되돌리며 첫 화면을 거듭 새로 열었다. 통화는 1688 화면 오른쪽 위에서 직접 CNY로 바꾸게 안내한다(cn.cjs)
   if (!cnView) {
     cnView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/cn.cjs") } });
     win.contentView.addChildView(cnView);

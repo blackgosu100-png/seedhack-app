@@ -706,6 +706,9 @@ async function rankPanel() {
     if (r?.nothing || r?.error) { panel.__want = false; ipcRenderer.invoke("cn:ai"); }
   });
   ipcRenderer.on("cn:rankUpdate", (_e, r) => renderRank(panel, r));
+  // 가격이 달러·원화로 보이면(1688 통화 설정) 위안 기준 계산이 틀어진다 → 직접 바꾸게 안내(앱이 설정을 고치면 1688이 화면을 거듭 새로 연다)
+  { const all = cards.map((c) => c.lines.join(" ")).join(" "), yen = (all.match(/[¥￥]\s?\d/g) || []).length, other = (all.match(/[$₩]\s?\d/g) || []).length;
+    if (other > yen * 2 && other >= 5) { ipcRenderer.send("cn:log", `가격이 위안이 아닌 통화로 표시됨(¥ ${yen} · $/₩ ${other})`); sgBand("sg-cur", "1688 가격이 위안(¥)이 아닌 통화로 보입니다 — 1688 화면 오른쪽 위 🌐(KR-…-USD)를 눌러 통화를 CNY로 바꿔 주세요. 한 번만 하면 됩니다", 15000); } }
   const r = await ipcRenderer.invoke("cn:rank", { cards });
   if (r?.error) { scan?.fail(r.error); panel.querySelector(".st").textContent = r.error; return; }
   if (scan) await scan.rank(r, cards); // 판매자 점수로 도장 → 추천 후보 → 닫히면 추천 패널이 보인다
