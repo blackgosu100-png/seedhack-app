@@ -379,6 +379,8 @@ function createWindow() {
   hookView(wingView, "wing");
   watchWing(wingView.webContents, onWingSnap, log); // 사람이 Wing 탭에서 직접 카테고리를 열어도 판정
   if (!SELFTEST) wingView.webContents.loadURL(WING_HOME);
+  // 🏠 1688 첫 화면도 미리 열어 둔다(뒤에서, 화면 전환 없음) — 🔍1688을 누를 때 첫 화면이 이미 떠 있어 사진 올리기가 바로 시작된다(2026-11-18)
+  if (!SELFTEST) setTimeout(() => { if (win && !cnView) { createCn(CN_HOME); layout(); } }, 5000);
 
   win.on("resize", layout);
   win.webContents.on("did-finish-load", () => {
