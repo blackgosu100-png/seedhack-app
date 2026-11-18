@@ -170,8 +170,10 @@ export function rankCards(cards, opts = {}) {
   const allowY = opts.allow ?? null;
   const over = (x) => { const p = x.realPrice ?? x.price; return allowY != null && p != null && p > allowY ? 1 : 0; }; // 목록가는 옵션 중 최저가 → 그것조차 허용가를 넘으면 확실히 초과
   for (const x of scored) if (!x.excluded && over(x)) { x.overAllow = true; (x.notes ||= []).push(`허용 소싱가 ¥${allowY.toFixed(1)} 초과`); }
-  const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5 + Math.min(6, (x.featHit || []).length * 3); // 1위 +30 … 12위 +2.5 · 특징 일치 +3씩(최대 6)
-  const demote = (x) => over(x) * 4 + ((x.featClash || []).length ? 2 : 0) + (x.oddOne ? 1 : 0);
+  const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5 + Math.min(6, (x.featHit || []).length * 3) + (x.vis?.same === "yes" ? 8 : 0); // 1위 +30 … 12위 +2.5 · 특징 일치 +3씩(최대 6)
+  // 👁 사진 확인(cn-vision.js) 결과가 있으면 그게 가장 세다: "다른 상품"이면 맨 뒤로, "같은 상품"이면 제목 규칙의 감점(종류 달라 보임)을 무시한다
+  const demote = (x) => (x.vis?.same === "no" ? 16 : 0) + over(x) * 4 + (x.vis?.same === "yes" ? 0 : ((x.featClash || []).length ? 2 : 0) + (x.oddOne ? 1 : 0));
+  for (const x of scored) if (!x.excluded && x.vis?.same === "no") (x.notes ||= []).push(`사진이 다름: ${x.vis.why || ""}`);
   // 같은 회사는 가장 앞선 상품 하나만
   const seen = new Set(); const out = [];
   for (const s of scored.filter((x) => !x.excluded).sort((a, b) => demote(a) - demote(b) || a.simTier - b.simTier || near(b) - near(a) || (a.rank ?? 99) - (b.rank ?? 99))) {

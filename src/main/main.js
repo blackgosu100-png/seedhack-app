@@ -32,6 +32,7 @@ import { runStructured } from "./detail/cli.js";
 import * as human from "./human.js"; // 진짜 마우스 클릭(1688 검색 버튼)
 import { initChat } from "./chat.js";
 import { initWave } from "./wave.js"; // 🌊 파도타기
+import { visionCheck } from "./cn-vision.js"; // 👁 추천 후보 사진 확인
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
 import { handleExtAction } from "./dash-ext.js"; // 📊 마진 대시보드의 확장 요청(Wing 정산 받기)을 앱이 대신
 
@@ -900,6 +901,26 @@ let probeView = null, probeQueue = [], probeCur = null, probeTimer = null;
 const PROBE_MAX = 3, PROBE_TIMEOUT_MS = 25000; // 추천은 3개라 3개만 확인(예전 5개)
 const probeGapFast = () => 1500 + Math.floor(Math.random() * 1500); // 빠른 확인(페이지 글만 받기) 사이 1.5~3초
 const probeGap = () => 8000 + Math.floor(Math.random() * 7000); // 8~15초 무작위 — 사람이 상품을 하나씩 열어 보는 속도. 1688 보안 인증을 덜 부른다
+// 👁 사진 확인: 지금 추천 위쪽 6개 중 아직 안 본 후보의 썸네일을 쿠팡 사진과 함께 AI에게 보여 준다. 다르다고 나오면 뒤로 → 새로 올라온 후보를 한 번 더(최대 2번)
+async function startVision() {
+  const mine = cnRank;
+  if (!mine || mine.visBusy || (mine.visRounds || 0) >= 2 || !cnPhoto?.b64) return;
+  const todo = (mine.ranked || []).slice(0, 6).filter((c) => !c.vis && c.img && c.offerId);
+  if (!todo.length) return;
+  mine.visBusy = true; mine.visRounds = (mine.visRounds || 0) + 1; pushRank();
+  try {
+    const ses = cnView?.webContents.session || session.fromPartition("persist:1688");
+    const r = await visionCheck({ ref: Buffer.from(cnPhoto.b64, "base64"), name: cnTarget?.name || "", items: todo.map((c) => ({ offerId: c.offerId, title: c.title, img: c.img })), log,
+      fetchImg: async (u) => { const x = await ses.fetch(u, { headers: { Referer: "https://s.1688.com/" } }); if (!x.ok) throw new Error("HTTP " + x.status); return Buffer.from(await x.arrayBuffer()); } });
+    if (cnRank !== mine) return;
+    if (r.ok) {
+      for (const it of r.items) { const c = mine.cards.find((x) => x.offerId === it.offerId); if (c) c.vis = { same: it.same, why: it.why }; }
+      log("dim", `  👁 사진 확인 ${r.items.length}개 (${(r.ms / 1000).toFixed(1)}초 · ${r.model}) · ${r.items.map((x) => `${x.same === "yes" ? "○" : x.same === "no" ? "✕" : "?"}${x.why}`).join(" / ")}`);
+    } else { log("dim", `  👁 사진 확인 실패: ${r.error}`); mine.visRounds = 2; }
+  } catch (e) { log("dim", `  👁 사진 확인 오류: ${String(e?.message || e).slice(0, 120)}`); mine.visRounds = 2; }
+  mine.visBusy = false;
+  if (cnRank === mine) { pushRank(); startVision(); }
+}
 function rankNow() {
   if (!cnRank) return null;
   const weights = { ...DEFAULT_WEIGHTS, ...(store.get("settings")?.rankWeights || {}) };
@@ -908,7 +929,7 @@ function rankNow() {
   if (r.mismatch && !cnRank.mismatchLogged) { cnRank.mismatchLogged = true; log("stop", `✕ 1688 결과가 쿠팡 상품(${(cnTarget?.name || "").slice(0, 24)})과 닮은 게 없습니다 — 사진 검색이 빗나간 것 같습니다`); }
   const top = r.ranked.slice(0, 8).map((x) => ({ ...x, verdictKo: VERDICT_KO[x.verdict] || x.verdict }));
   return { top, total: cnRank.cards.length, excluded: r.excluded.length, allow: cnTarget?.allow ?? null, medianPrice: r.medianPrice,
-    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, captcha: !!cnRank.captcha, cost: costNow(), mismatch: !!r.mismatch };
+    probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, visBusy: !!cnRank.visBusy, visDone: cnRank.cards.filter((c) => c.vis).length, captcha: !!cnRank.captcha, cost: costNow(), mismatch: !!r.mismatch };
 }
 // 원가 기준: AI 추천(없으면 점수) 상위 3개 → 1순위의 확인된 옵션가, 애매하면 확인된 것들의 중간값
 function costNow() {
@@ -922,7 +943,7 @@ const pushRank = () => { const r = rankNow(); if (r && cnView) cnView.webContent
 ipcMain.handle("cn:rank", async (e, p) => {
   if (!isCnWc(e.sender) || !cnTarget) return { error: "리스트업에서 🔍1688로 들어온 검색이 아닙니다" };
   const cards = (Array.isArray(p?.cards) ? p.cards : []).slice(0, 80).map((c, i) => parseCard(c.lines, { rank: i + 1, offerId: String(c.offerId || ""), img: c.img || "" }))
-    .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
+    .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, vis: o.vis ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
   // 1688 원문 제목이 중국어면 "같은 상품인지"(쿠팡 상품명·대표키워드 겹침)를 볼 수 없다 → 제목만 번역해(저장해 둔 번역 재사용) 판단에 쓴다. 8초 넘으면 번역 없이 진행
   const zh = cards.filter((c) => /[\u4e00-\u9fff]/.test(c.title || "") && !/[가-힣]{2}/.test(c.title || ""));
   if (zh.length) {
@@ -932,6 +953,7 @@ ipcMain.handle("cn:rank", async (e, p) => {
   }
   cnRank = { cards };
   const r = rankNow();
+  startVision(); // 👁 위쪽 후보를 사진으로 확인(뒤에서) — 끝나면 순서를 다시 매겨 보드에 보낸다
   // 후보를 하나도 못 읽었으면 실제 카드 글자를 남긴다(1688 표기·언어가 바뀌었을 때 규칙을 맞추는 근거)
   if (!r.top.length && cnTarget.auto) setTimeout(() => autoFail("1688 후보가 없음"), 0);
   if (!r.top.length && p?.cards?.length) log("dim", `  1688 카드를 못 읽음 · 예: ${(p.cards[0].lines || []).map((x) => String(x).trim()).filter(Boolean).join(" | ").slice(0, 400)}`);
