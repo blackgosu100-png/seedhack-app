@@ -100,6 +100,27 @@ export function relevanceGate(rels) {
   return known.filter((r) => r >= cut).length >= 3 ? cut : null;
 }
 
+// 쿠팡 상품명에서 읽는 "핵심 특징"(소재·색·형태·쓰는 곳) → 1688 제목(중국어 원문·한글 번역)에서 찾을 낱말
+const FEATS = [
+  ["투명", /투명|클리어/, /透明|亚克力|压克力|水晶|투명|아크릴/, "color"], ["아크릴", /아크릴/, /亚克力|压克力|아크릴/, "mat"],
+  ["블랙", /블랙|검정|검은/, /黑|블랙|검정|검은/, "color"], ["화이트", /화이트|흰색|하얀/, /白|화이트|흰/, "color"],
+  ["스테인리스", /스테인|스텐/, /不锈钢|스테인/, "mat"], ["대나무", /대나무|뱀부/, /竹|대나무/, "mat"], ["원목", /원목|우드|나무/, /实木|木质|木|원목|나무/, "mat"],
+  ["실리콘", /실리콘/, /硅胶|실리콘/, "mat"], ["유리", /유리|글라스/, /玻璃|유리/, "mat"], ["철제", /철제|스틸|메탈/, /铁|金属|碳钢|철제|금속/, "mat"], ["플라스틱", /플라스틱|PP\b/i, /塑料|PP|플라스틱/, "mat"],
+  ["접이식", /접이식|폴더블|폴딩/, /折叠|접이|접는/, "form"], ["길이조절", /길이\s*조절|확장형|신축/, /伸缩|可调|신축|조절/, "form"], ["무타공", /무타공/, /免打孔|无痕|무타공|펀칭.*없/, "form"],
+  ["욕조", /욕조/, /浴缸|泡澡|욕조/, "place"], ["욕실", /욕실|화장실/, /浴室|卫生间|욕실|화장실/, "place"], ["주방", /주방|부엌|싱크대/, /厨房|주방|부엌/, "place"], ["냉장고", /냉장고/, /冰箱|냉장고/, "place"],
+  ["차량", /차량|자동차/, /车载|汽车|차량|자동차/, "place"], ["벽걸이", /벽걸이/, /壁挂|挂墙|벽걸이/, "form"],
+];
+export function featuresOf(name) { return FEATS.filter(([, k]) => k.test(String(name || ""))).map(([ko, , re, group]) => ({ ko, re, group })); }
+// 같은 묶음(색·소재)에서 쿠팡과 다른 값이 제목에 있고 쿠팡 값은 없으면 "다른 특징"
+function clashOf(feats, title) {
+  const out = [];
+  for (const g of ["color", "mat"]) {
+    const want = feats.filter((f) => f.group === g); if (!want.length || want.some((f) => f.re.test(title))) continue;
+    const other = FEATS.filter(([ko, , , grp]) => grp === g && !want.some((f) => f.ko === ko)).filter(([, , re]) => re.test(title)).map(([ko]) => ko);
+    if (other.length) out.push(other[0]);
+  }
+  return out;
+}
 export function rankCards(cards, opts = {}) {
   const prices = cards.map((c) => c.price).filter((p) => p > 0).sort((a, b) => a - b);
   const medianPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
@@ -109,9 +130,28 @@ export function rankCards(cards, opts = {}) {
     if (cut != null && (rels[i] == null || rels[i] < cut)) return { ...c, rel: rels[i], score: 0, parts: {}, verdict: "exclude", notes: ["다른 상품 의심 — 쿠팡 상품명과 제목이 거의 안 겹침"], excluded: true, offTarget: true };
     return { ...c, rel: rels[i], ...scoreCard(c, { ...opts, medianPrice, realPrice: c.realPrice ?? null }) };
   });
-  // 같은 회사는 가장 점수 높은 상품 하나만
+  // ── 순서 원칙(2026-11-18 대표님 지적): "같은 상품이 먼저, 판매자 점수는 그다음" ──
+  // 예전엔 판매량·재구매율 점수만으로 줄 세워, 1688이 사진과 가장 닮았다고 맨 위에 준 상품(욕조 트레이)을 제치고
+  // 많이 팔리는 다른 상품(아크릴 소품 정리함)이 추천 1번이 됐다. → ① 1688 사진 유사 순서 위쪽(SIM_TOP)을 먼저 본다
+  // ② 그 안에서 쿠팡 상품명의 핵심 특징(투명·아크릴·접이식…)과 종류 낱말(욕조…)이 제목에 맞는 것을 앞에 ③ 그다음이 판매자 점수.
+  const SIM_TOP = 12;
+  const feats = featuresOf(`${opts.target?.name || ""} ${opts.target?.keyword || ""}`);
+  for (const x of scored) {
+    if (x.excluded) continue;
+    const t = `${x.title || ""} ${x.titleKo || ""}`;
+    x.featHit = feats.filter((f) => f.re.test(t)).map((f) => f.ko);
+    x.featMiss = feats.filter((f) => !f.re.test(t)).map((f) => f.ko);
+    x.featClash = clashOf(feats, t);
+    x.simTier = (x.rank ?? 99) <= SIM_TOP ? 0 : (x.rank ?? 99) <= SIM_TOP * 2.5 ? 1 : 2;
+    // 맞는 특징 가중치: 쓰는 곳·종류(욕조) 3 > 소재 2 > 색 1.5 > 형태 1 · 반대 특징(투명인데 검정·대나무)은 −3
+    const W = { place: 3, mat: 2, color: 1.5, form: 1 };
+    x.fit = feats.filter((f) => f.re.test(t)).reduce((a, f) => a + W[f.group], 0) - x.featClash.length * 3;
+    if (x.featClash.length) (x.notes ||= []).push(`쿠팡 상품과 다른 특징: ${x.featClash.join("·")}`);
+  }
+  const near = (x) => x.score + Math.max(0, 13 - (x.rank ?? 99)) * 2.5; // 특징이 같으면: 판매자 점수 + 사진 유사 순서 가산(1위 +30 … 12위 +2.5)
+  // 같은 회사는 가장 앞선 상품 하나만
   const seen = new Set(); const out = [];
-  for (const s of scored.filter((x) => !x.excluded).sort((a, b) => b.score - a.score || (a.rank ?? 99) - (b.rank ?? 99))) {
+  for (const s of scored.filter((x) => !x.excluded).sort((a, b) => a.simTier - b.simTier || b.fit - a.fit || near(b) - near(a) || (a.rank ?? 99) - (b.rank ?? 99))) {
     const key = s.company || s.offerId; if (seen.has(key)) continue; seen.add(key); out.push(s);
   }
   // 사진 검색이 빗나갔는지: 제목을 읽을 수 있는 후보가 충분한데 쿠팡 상품명과 닮은 게 하나도 없으면(가장 닮은 것도 20% 미만) 결과 전체가 엉뚱한 것
