@@ -143,6 +143,9 @@ export function rankCards(cards, opts = {}) {
   const topN = scored.filter((x) => !x.excluded && (x.rank ?? 99) <= 8), df = new Map();
   for (const x of topN) for (const g of zg(x.title)) df.set(g, (df.get(g) || 0) + 1);
   const dom = [...df.entries()].filter(([, n]) => n >= Math.max(3, Math.ceil(topN.length * 0.4))), domSum = dom.reduce((a, [, n]) => a + n, 0);
+  // 핵심 낱말: 위쪽 8개 중 60% 이상에 나오는 낱말(예: 浴缸·置物). 이 중 절반도 없으면 닮은 사진에 섞여 든 다른 상품으로 본다
+  const core = [...df.entries()].filter(([, n]) => n >= Math.max(4, Math.ceil(topN.length * 0.6))).map(([k]) => k);
+  const coreCov = (x) => { if (core.length < 2) return null; const g = zg(x.title); return core.filter((k) => g.has(k)).length / core.length; };
   const consensus = (x) => { if (!domSum) return null; const g = zg(x.title); return dom.reduce((a, [k, n]) => a + (g.has(k) ? n : 0), 0) / domSum; };
   const feats = featuresOf(`${opts.target?.name || ""} ${opts.target?.keyword || ""}`);
   for (const x of scored) {
@@ -157,7 +160,8 @@ export function rankCards(cards, opts = {}) {
     x.fit = feats.filter((f) => f.re.test(t)).reduce((a, f) => a + W[f.group], 0) - x.featClash.length * 3;
     x.cons = consensus(x);
     const placeHit = feats.some((f) => f.group === "place" && f.re.test(t));
-    if (x.cons != null) { x.fit += x.cons * 3; if (x.cons < 0.34 && !placeHit) { x.fit -= 3; (x.notes ||= []).push("닮은 상품들과 종류가 달라 보임"); x.oddOne = true; } }
+    x.coreCov = coreCov(x);
+    if (x.cons != null) { x.fit += x.cons * 3; if ((x.cons < 0.34 || (x.coreCov != null && x.coreCov < 0.5)) && !placeHit) { x.fit -= 3; (x.notes ||= []).push("닮은 상품들과 종류가 달라 보임"); x.oddOne = true; } }
     if (x.featClash.length) (x.notes ||= []).push(`쿠팡 상품과 다른 특징: ${x.featClash.join("·")}`);
   }
   // 순서(2026-11-18 대표님 기준): 사진 유사 위쪽 안에서 ① 허용 소싱가를 넘는 것 ② 쿠팡과 다른 특징(투명인데 검정) ③ 종류가 달라 보이는 것은 뒤로,
