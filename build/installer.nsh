@@ -33,4 +33,7 @@
 ; 설치가 끝나면 옛 한글 이름 실행 파일(0.5.1 이하)을 지운다
 !macro customInstall
   Delete "$INSTDIR\쿠팡 소싱 신호등.exe"
+  ; 이름 통일(SeedHack): 옛 이름 바로가기를 지운다 — 새 바로가기 "SeedHack" 이 따로 만들어진다
+  Delete "$DESKTOP\쿠팡 소싱 신호등.lnk"
+  Delete "$SMPROGRAMS\쿠팡 소싱 신호등.lnk"
 !macroend

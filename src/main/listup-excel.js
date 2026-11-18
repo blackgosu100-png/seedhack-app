@@ -27,7 +27,7 @@ export const COLS = [
 
 export async function buildListupXlsx(rows, s, filePath) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "쿠팡 소싱 신호등";
+  wb.creator = "SeedHack";
   const ws = wb.addWorksheet("리스트업", { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
   const cfg = wb.addWorksheet("설정");
   cfg.columns = [{ width: 22 }, { width: 12 }, { width: 50 }];
@@ -86,7 +86,7 @@ export async function buildListupXlsx(rows, s, filePath) {
 // 📦 수집함 원본 — 필터로 보이는 그대로. 엑셀에서 피벗·추가 필터용
 export async function buildCollectXlsx(rows, s, filePath) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "쿠팡 소싱 신호등";
+  wb.creator = "SeedHack";
   const ws = wb.addWorksheet("수집함", { views: [{ state: "frozen", ySplit: 1 }] });
   const AD = { go: "광고 시 여유", warn: "광고 시 빠듯", stop: "광고 시 적자" };
   ws.columns = [

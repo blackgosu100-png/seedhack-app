@@ -9,10 +9,10 @@ const LT = { go: "초록", warn: "노랑", stop: "빨강" };
 
 export async function buildXlsx(payload, filePath, log) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "쿠팡 소싱 신호등";
+  wb.creator = "SeedHack";
   const ws = wb.addWorksheet("상품 판정", { views: [{ state: "frozen", ySplit: 4 }] });
   ws.mergeCells("A1:Q1");
-  ws.getCell("A1").value = `쿠팡 소싱 신호등 — ${payload.path ? payload.path + " > " : ""}${payload.name} (${payload.date})`;
+  ws.getCell("A1").value = `SeedHack — ${payload.path ? payload.path + " > " : ""}${payload.name} (${payload.date})`;
   ws.getCell("A1").font = { bold: true, size: 14 };
   ws.mergeCells("A2:Q2");
   ws.getCell("A2").value = `카테고리 판정: ${payload.verdict}  ·  1688 허용 소싱가: ${payload.yuan > 0 ? "¥" + payload.yuan.toFixed(1) + " 이하" : "없음"}  ·  목표 판매가 ${payload.target ? payload.target.toLocaleString() + "원" : "-"}  ·  데이터: Wing 쿠팡 트렌드 실데이터`;

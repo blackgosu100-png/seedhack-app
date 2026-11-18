@@ -2,7 +2,7 @@
   "name": "coupang-signal-app",
   "productName": "씨드핵",
   "version": "0.6.5",
-  "description": "Wing·쿠팡 실데이터로 소싱 시장을 신호등으로 판정하는 데스크톱 프로그램",
+  "description": "SeedHack — Wing·쿠팡 실데이터 기반 소싱 데스크톱 프로그램",
   "type": "module",
   "main": "src/boot.js",
   "seedhackShell": 1,
@@ -31,7 +31,7 @@
   "build": {
     "appId": "kr.blackgosu.coupangsignal",
     "productName": "쿠팡 소싱 신호등",
-    "artifactName": "CoupangSignal-Setup-${version}.${ext}",
+    "artifactName": "SeedHack-Setup-${version}.${ext}",
     "files": [
       "src/**/*",
       "package.json",
@@ -66,7 +66,7 @@
       "oneClick": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "shortcutName": "쿠팡 소싱 신호등",
+      "shortcutName": "SeedHack",
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     },

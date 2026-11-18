@@ -103,7 +103,7 @@ if (!GOT_LOCK) {
 }
 
 const send = (ch, data) => win && !win.isDestroyed() && win.webContents.send(ch, data);
-const log = (cls, text) => { send("console", { cls, text }); console.log(`[신호등] ${text}`); }; // 패널 콘솔 + 터미널
+const log = (cls, text) => { send("console", { cls, text }); console.log(`[SeedHack] ${text}`); }; // 패널 콘솔 + 터미널
 
 function settings() {
   const st = store.get("settings") || {};
@@ -1466,7 +1466,7 @@ ipcMain.handle("exact:stop", () => stopExact());
 ipcMain.handle("budget:get", () => ({ budget: Number(store.get("budget")) || 0, used: ((store.get("limit") || {}).day || []).filter((t) => Date.now() - t < 864e5).length }));
 
 ipcMain.handle("excel:save", async (_e, payload) => {
-  const def = path.join(app.getPath("downloads"), `쿠팡소싱신호등_${payload.name}_${payload.date}.xlsx`.replace(/[\\/:*?"<>|]/g, "_"));
+  const def = path.join(app.getPath("downloads"), `SeedHack_${payload.name}_${payload.date}.xlsx`.replace(/[\\/:*?"<>|]/g, "_"));
   const out = SELFTEST ? path.join(app.getPath("temp"), "signal-selftest.xlsx")
     : (await dialog.showSaveDialog(win, { title: "엑셀로 저장", defaultPath: def, filters: [{ name: "Excel", extensions: ["xlsx"] }] })).filePath;
   if (!out) return { cancelled: true };
