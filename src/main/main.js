@@ -237,7 +237,16 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
     closeCleanTab(t.id, true);
     openCleanTab(u, was || activate, true);
   }));
-  view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
+  // 🏠 홈 먼저: 이 세션에서 쿠팡 화면이 아직 한 번도 정상으로 뜨지 않았는데 상품·검색 주소로 바로 가면 쿠팡이 막는다
+  //  → 브라우저처럼 홈을 먼저 열고, 홈이 다 뜬 뒤 잠깐 있다가 원래 주소로 간다(앱 시작 때는 warmCoupang 이 홈을 미리 열어 둠, 2026-11-18)
+  const part = cleanPart;
+  view.webContents.on("did-finish-load", () => { if (/^https:\/\/(www|m)\.coupang\.com\//.test(view.webContents.getURL())) cpBlocked(view.webContents).then((b) => { if (!b && cleanPart === part) cleanWarm = part; }); });
+  const homeFirst = cleanWarm !== cleanPart && url !== COUPANG_HOME && /^https:\/\/(www|m)\.coupang\.com\//.test(url);
+  if (homeFirst) {
+    log("dim", "  🏠 쿠팡 홈을 먼저 열고 이어서 이동해요 (바로 들어가면 쿠팡이 막아요)");
+    view.webContents.once("did-finish-load", () => setTimeout(() => { if (cleanTabs.includes(t) && !view.webContents.isDestroyed() && view.webContents.getURL().replace(/[?#].*$/, "") === COUPANG_HOME) view.webContents.loadURL(url, { httpReferrer: COUPANG_HOME }); }, 2500));
+    view.webContents.loadURL(COUPANG_HOME);
+  } else view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
   if (activate || !cleanView) cleanView = view;
   if (activate) active = "clean"; // 뒤에서 열기(키워드 분석의 쿠폰가 읽기 등)는 지금 화면을 그대로 둔다
   layout(); sendTabs();
@@ -245,6 +254,13 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   return t;
 }
 function selectCleanTab(id) {
+// 🏠 앱을 켜면 쿠팡 탭 세션으로 홈을 미리 열어 둔다(뒤에서, 화면 전환 없음) — 사람이 브라우저를 켜면 홈부터 뜨는 것과 같은 순서
+let cleanWarm = null; // 쿠팡 화면이 정상으로 한 번 뜬 세션(파티션) 이름
+function warmCoupang() {
+  if (!win || cleanTabs.length) return;
+  if (SELFTEST && process.env.SELFTEST_SITES !== "1") return; // 자체 점검은 실제 쿠팡에 접속하지 않는다
+  openCleanTab(COUPANG_HOME, false);
+}
   const t = cleanTabs.find((x) => x.id === id);
   if (!t) return;
   cleanView = t.view; active = "clean"; layout(); sendTabs();
@@ -382,6 +398,7 @@ function createWindow() {
   // 🏠 1688 첫 화면도 미리 열어 둔다(뒤에서, 화면 전환 없음) — 🔍1688을 누를 때 첫 화면이 이미 떠 있어 사진 올리기가 바로 시작된다(2026-11-18)
   if (!SELFTEST) setTimeout(() => { if (!win) return; if (!cnView) { createCn(CN_HOME); layout(); } else if (/^about:blank/.test(cnView.webContents.getURL() || "about:blank")) cnView.webContents.loadURL(CN_HOME); }, 800); // 켜자마자(0.8초 뒤) — 5초 뒤에 열면 탭을 먼저 눌렀을 때 로딩을 보게 된다
 
+  if (!SELFTEST) setTimeout(warmCoupang, 3000); // Wing 첫 화면이 뜬 뒤 쿠팡 홈을 뒤에서 미리
   win.on("resize", layout);
   win.webContents.on("did-finish-load", () => {
     layout();
