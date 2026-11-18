@@ -634,7 +634,18 @@ ipcMain.handle("nav:home", () => (active === "wing" ? wingView.webContents.loadU
   : active === "dash" ? dashView?.webContents.loadURL(`${DASHBOARD_URL}/dashboard?tab=${encodeURIComponent(dashTab || "margin")}&embed=1`) : cleanView?.webContents.loadURL(COUPANG_HOME)));
 
 // ---------- 📦 1688 ----------
+// 💴 1688 가격은 늘 위안(¥)으로: 1688 해외판은 쿠키 overseacurrency(USD·KRW…)에 따라 달러·원화로 바꿔 보여 준다 → 가격 읽기(¥ 기준)·허용 소싱가 비교가 틀어진다.
+// 1688 세션에 overseacurrency=CNY 를 넣고, 사이트가 다른 값으로 바꾸면 다시 CNY 로 되돌린다(2026-11-18)
+let yuanHooked = false;
+function keepYuan() {
+  const ses = session.fromPartition("persist:1688");
+  const set = () => ses.cookies.set({ url: "https://www.1688.com/", domain: ".1688.com", path: "/", name: "overseacurrency", value: "CNY", expirationDate: Math.floor(Date.now() / 1000) + 365 * 86400 }).catch(() => {});
+  set();
+  if (yuanHooked) return; yuanHooked = true;
+  ses.cookies.on("changed", (_e, c, _cause, removed) => { if (c.name === "overseacurrency" && /1688\.com$/.test(c.domain || "") && (removed || c.value !== "CNY")) setTimeout(set, 50); });
+}
 function createCn(url = CN_HOME) {
+  keepYuan();
   if (!cnView) {
     cnView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/cn.cjs") } });
     win.contentView.addChildView(cnView);
