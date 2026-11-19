@@ -505,7 +505,8 @@ function renderRank(panel, r) {
     const id = b.dataset.id, href = cardHref.get(id);
     const url = /^\d{9,14}$/.test(id) ? `https://detail.1688.com/offer/${id}.html` : href || "";
     ipcRenderer.send("cn:log", `상품 열기 · 번호 ${id || "없음"} → ${url.slice(0, 120) || "주소 없음"}`);
-    if (url) location.href = url;
+    // 새 탭으로 연다(검색 결과·추천 보드는 그대로 남는다) — 앱이 1688 상품 주소의 새 창을 "1688 탭"으로 받아 준다. 막히면 예전처럼 같은 화면에서
+    if (url) { const w = window.open(url, "_blank"); if (w === undefined) location.href = url; }
     else if (cardEl.get(id)?.isConnected) cardEl.get(id).click(); // 1688이 직접 상품을 연다(새 창 → 같은 화면)
   }));
 }
