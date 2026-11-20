@@ -218,6 +218,10 @@ function sendTabs() {
 // 쿠팡 오류·차단 화면인지(제목·첫 글자들로만 판단)
 const CP_BLOCK = /서버에서 오류가 발생|Access Denied|요청하신 페이지를 처리하는 중|잠시 후 다시 시도/;
 const cpBlocked = (wc) => wc.executeJavaScript(`(document.title + " " + (document.body?.innerText || "").slice(0, 400))`).then((t) => CP_BLOCK.test(t) && !cpNormal(t)).catch(() => false);
+// 🚫 쿠팡이 접속 자체를 제한한 화면("사용권한이 제한된 페이지" · Ref: …_IP) — 새 세션으로 다시 열어도 같은 결과라 다시 시도하지 않고 안내만 한다(2026-11-20)
+const CP_DENIED = /사용권한이 제한된 페이지/;
+const cpDenied = (wc) => wc.executeJavaScript(`(document.body?.innerText || "").slice(0, 400)`).then((t) => CP_DENIED.test(t)).catch(() => false);
+let deniedAt = 0;
 const cpNormal = (t) => /장바구니|바로구매|로켓배송/.test(t); // 정상 쿠팡 화면이면 이런 말이 보인다
 function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   if (!cleanPart) cleanPart = `clean-${Date.now()}`;
@@ -242,7 +246,10 @@ function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
   // 🏠 홈 먼저: 이 세션에서 쿠팡 화면이 아직 한 번도 정상으로 뜨지 않았는데 상품·검색 주소로 바로 가면 쿠팡이 막는다
   //  → 브라우저처럼 홈을 먼저 열고, 홈이 다 뜬 뒤 잠깐 있다가 원래 주소로 간다(앱 시작 때는 warmCoupang 이 홈을 미리 열어 둠, 2026-11-18)
   const part = cleanPart;
-  view.webContents.on("did-finish-load", () => { if (/^https:\/\/(www|m)\.coupang\.com\//.test(view.webContents.getURL())) cpBlocked(view.webContents).then((b) => { if (!b && cleanPart === part) cleanWarm = part; }); });
+  view.webContents.on("did-finish-load", () => { if (/^https:\/\/(www|m)\.coupang\.com\//.test(view.webContents.getURL())) Promise.all([cpBlocked(view.webContents), cpDenied(view.webContents)]).then(([b, d]) => {
+    if (d) { if (cleanWarm === part) cleanWarm = null; if (Date.now() - deniedAt > 60000) { deniedAt = Date.now(); log("stop", "✕ 쿠팡이 지금 이 인터넷(IP)의 접속을 잠시 제한했어요 — 프로그램 문제가 아니에요. 10~30분 쉬었다가 ⌂ 홈부터 다시 열어 주세요. 그동안 Wing·1688·수집함은 그대로 쓸 수 있어요"); } return; }
+    if (!b && cleanPart === part) cleanWarm = part;
+  }); });
   const homeFirst = cleanWarm !== cleanPart && url !== COUPANG_HOME && /^https:\/\/(www|m)\.coupang\.com\//.test(url);
   if (homeFirst) {
     log("dim", "  🏠 쿠팡 홈을 먼저 열고 이어서 이동해요 (바로 들어가면 쿠팡이 막아요)");
