@@ -18,6 +18,7 @@ import { DASHBOARD_URL } from "./auth-config.js";
 import * as hot from "./hot.js"; // ⬆ 화면만 바로 업데이트
 import { recommendViaCli, cliAvailable } from "./ai-cli.js";
 import { parseSpecs } from "./spec-core.js";
+import { buildIndex, findCat, pathOfCodes } from "./cat-core.js"; // 📂 리스트업 카테고리 자동 찾기
 import updaterPkg from "electron-updater";
 const { autoUpdater } = updaterPkg;
 import { DEFAULTS, buildMarkets, judge, isPB, pbList } from "../shared/strategy-core.js";
@@ -1397,7 +1398,8 @@ if (process.env.SEEDHACK_FAKE_UPDATE) setTimeout(() => send("update", { version:
 // 🚚 로켓그로스 요금표: 앱에 들어 있는 rg-fees.json + GitHub 최신본(버전이 더 크면 사용, 받은 것은 저장해 두고 오프라인에도 사용)
 const RG_REMOTE = "https://raw.githubusercontent.com/blackgosu100-png/coupang-signal-releases/main/rg-fees.json";
 let rgCache = null;
-ipcMain.handle("rg:config", async () => {
+ipcMain.handle("rg:config", () => rgConfig());
+async function rgConfig() {
   if (rgCache) return rgCache;
   let best = JSON.parse(fs.readFileSync(path.join(__dirname, "../shared/rg-fees.json"), "utf8"));
   const saved = store.get("rgFees");
@@ -1410,7 +1412,7 @@ ipcMain.handle("rg:config", async () => {
   }
   rgCache = best;
   return best;
-});
+}
 ipcMain.handle("view:zoom", (_e, z) => {
   ZOOM = Math.min(1.6, Math.max(1, +z || 1));
   win.webContents.setZoomFactor(ZOOM);
@@ -1818,6 +1820,46 @@ ipcMain.handle("calc:get", () => calc());
 ipcMain.handle("calc:set", (_e, patch) => { store.set("calc", { ...calc(), ...patch }); return calc(); });
 ipcMain.handle("listup:get", () => store.get("listup") || []);
 ipcMain.handle("listup:save", (_e, rows) => { store.set("listup", rows); return rows.length; });
+// 📂 리스트업 카테고리 자동 찾기: [{id,pid,keyword,name}] → { id: {cat, path, sure, how} } (쿠팡에서 받은 분류만 · 못 찾으면 빠짐)
+let catIdx = null; // { ts, idx(이름→분류), byCode(번호→경로) } — 카테고리 목록이 바뀔 때만 다시 만든다
+ipcMain.handle("listup:cat", async (_e, list) => {
+  const cats = (await rgConfig()).categories || [];
+  const tree = store.get("cattree");
+  if (tree?.nodes?.length && catIdx?.ts !== tree.ts) catIdx = { ts: tree.ts, idx: buildIndex(tree.nodes), byCode: new Map(tree.nodes.map((n) => [String(n.code), n.path])) };
+  const byPid = new Map(), bySnapName = new Map();
+  for (const s of Object.values(store.get("snapshots") || {})) {
+    if (s.code && s.name && s.path) bySnapName.set(String(s.name).replace(/[\s·,()\[\]]/g, "").toLowerCase(), `${s.path}>${s.name}`);
+    for (const it of s.items || []) if (it.leaf && it.pid != null) byPid.set(String(it.pid), it.leaf);
+  }
+  const pidCat = store.get("pidCat") || {};
+  const src = { byPid, bySnapName, idx: catIdx?.idx, wingCat: (pid) => { const v = pidCat[pid]; return String(v || "").startsWith("#") ? pathOfCodes(v, catIdx?.byCode) : v || ""; } };
+  const out = {}, ask = [];
+  for (const r of Array.isArray(list) ? list : []) {
+    const f = findCat(r, src, cats);
+    if (f) out[r.id] = f;
+    if (!f?.sure && /^\d+$/.test(String(r.pid || "")) && !catAsked.has(String(r.pid))) ask.push(r);
+  }
+  // 확실한 분류가 없는 상품은 Wing 상품 매칭으로 한 번만 물어본다(4초 간격·하루 예산 안에서 · 끝나면 화면에 알려 다시 채움)
+  if (ask.length && !SELFTEST && licensed() && wingView && !wingView.webContents.isDestroyed()) {
+    ask.slice(0, 20).forEach((r) => catAsked.add(String(r.pid)));
+    (async () => {
+      let got = 0;
+      // 앱을 막 켠 직후에는 Wing 화면이 아직 뜨는 중이다 → 준비될 때까지 최대 1분 기다린다
+      for (let i = 0; i < 30 && !(/^https:\/\/wing\.coupang\.com\//.test(wingView.webContents.getURL() || "") && !wingView.webContents.isLoading()); i++) await sleep(2000);
+      for (const r of ask.slice(0, 20)) {
+        if (isPB({ name: r.name, brand: "" }, pbList(settings()))) continue;
+        const x = await lookupOne({ pid: String(r.pid), vid: "", iid: "", name: String(r.name || "") }, wingView.webContents, { needCat: true }).catch((e) => ({ error: e?.message || String(e) }));
+        const cat = (store.get("pidCat") || {})[String(r.pid)];
+        log("dim", `  📂 쿠팡 분류 조회 · ${String(r.name || r.pid).slice(0, 20)} — ${cat ? "받음" : x?.error || "응답에 분류 없음"}`);
+        if (x?.paused || x?.auth) { ask.forEach((q) => catAsked.delete(String(q.pid))); break; } // 한도·로그인 문제면 다음에 다시
+        if (cat) got++;
+      }
+      if (got) { log("go", `📂 리스트업 카테고리 · 쿠팡 분류 ${got}개 확인 → 자동으로 넣었습니다`); send("listup:catReady", got); }
+    })();
+  }
+  return out;
+});
+const catAsked = new Set(); // 이번 실행에서 이미 물어본 상품(같은 상품을 거듭 묻지 않는다)
 ipcMain.handle("listup:export", async (_e, rows) => {
   const stamp = new Date().toISOString().slice(0, 10);
   const def = path.join(app.getPath("downloads"), `소싱리스트업_${stamp}.xlsx`);
@@ -1841,6 +1883,25 @@ async function selftest() {
     const [c] = await ses.cookies.get({ name: "selftest_sess" });
     console.log("WING_COOKIE", c ? `session=${c.session} 남은 일수=${c.expirationDate ? Math.round((c.expirationDate - Date.now() / 1000) / 86400) : "-"}` : "없음");
     await ses.cookies.remove("https://xauth.coupang.com/", "selftest_sess");
+  }
+  if (process.env.SELFTEST_CAT) { // 📂 리스트업 카테고리 자동: 쿠팡 분류 4가지 경로(진단 상품·Wing 매칭 번호·키워드 이름·못 찾음)를 넣고 화면 캡처(접속 없음)
+    const nd = (code, p) => ({ code, name: p.split(">").at(-1), path: p, depth: p.split(">").length, leaf: true });
+    store.set("cattree", { ts: Date.now(), nodes: [nd("101", "가구/홈데코>침구>담요"), nd("102", "반려/애완용품>강아지/고양이 겸용>하우스/침대/방석>담요/이불"), nd("64463", "생활용품>세탁용품>빨래건조대"), nd("80720", "주방용품>주방수납/정리>기타수납/정리용품")] });
+    store.putSnapshot({ id: "c:80720|BEST_SELLING|t", key: "c:80720|BEST_SELLING", date: "t", ts: Date.now(), code: "80720", name: "기타수납/정리용품", path: "주방용품>주방수납/정리", items: [{ pid: "1001", leaf: "주방용품>주방수납/정리>기타수납/정리용품" }] });
+    store.set("pidCat", { 1002: "#64463" });
+    await new Promise((r) => setTimeout(r, 1500));
+    const go = (js) => win.webContents.executeJavaScript(`(async () => { ${js} })()`).catch((e) => ({ err: e.message }));
+    const r = await go(`document.getElementById("tList").click();
+      const add = (pid, keyword, name) => window.Listup.add({ pid, keyword, name, benchPrice: 12900, subs: [] });
+      add("1001", "수납함", "아윤 식탁 위 칸막이 정리함 L"); add("1002", "캠핑옷걸이", "접이식 건조대 휴대용"); add("1003", "담요", "두꺼운 양털 담요"); add("1004", "발가락양말", "남성용 중목 발가락 양말 10켤레");
+      await new Promise((r) => setTimeout(r, 1200));
+      const s = [...document.querySelectorAll('#luBody select[data-f="cat"]')];
+      s[2].value = "생활용품"; s[2].dispatchEvent(new Event("input", { bubbles: true })); // 직접 고르면 자동이 덮지 않는다
+      await window.Listup.autoCat(); await new Promise((r) => setTimeout(r, 400));
+      return [...document.querySelectorAll('#luBody select[data-f="cat"]')].map((e) => ({ v: e.value, cls: e.className, tip: e.title.split("\\n")[0] }));`);
+    console.log("CAT", JSON.stringify(r, null, 1));
+    fs.writeFileSync(path.join(out, "listup-cat.png"), (await win.webContents.capturePage()).toPNG());
+    console.log("SELFTEST_OK", out); app.quit(); return;
   }
   if (process.env.SELFTEST_NAME) { // ✍ 상품명 짓기 화면: 강의 예시(팬티스타킹) 상위 상품을 저장된 검색 결과로 넣고 화면 캡처(Wing 접속 없음)
     const nm = (name, brand, sales) => ({ name, brand, pid: String(sales), ex: { sales, price: 11590 }, reviews: 100 });

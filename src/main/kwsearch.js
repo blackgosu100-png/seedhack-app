@@ -2,7 +2,8 @@
 // Wing 상품 매칭 검색에 키워드를 넣어 요청 1번에 여러 상품을 받는다(로켓그로스 확장 "쿠팡 지표 보기"와 같은 경로).
 // 정확한 지표 조회와 같은 속도 제한·하루 예산을 함께 쓰고, 같은 키워드는 7일 동안 저장된 결과를 재사용한다.
 import { store } from "./store.js";
-import { wingShip, runInWing, classify, gate, mark, markDaily, markBlocked, sleep, MIN_GAP, num } from "./exact.js";
+import { catOfWingItem, codesOfWingItem } from "./cat-core.js";
+import { rememberCat, wingShip, runInWing, classify, gate, mark, markDaily, markBlocked, sleep, MIN_GAP, num } from "./exact.js";
 
 const FRESH = 7 * 24 * 60 * 60 * 1000;
 
@@ -40,6 +41,7 @@ export function parseItems(data, startOrder = 0) {
       rating: num(first(x, ["rating", "ratingAverage", "averageRating"])),
       img: String(first(x, ["imagePath", "image", "imageUrl", "thumbnailUrl", "representativeImageUrl", "productImage"]) || ""),
       ex: views != null || sales != null ? { ts: Date.now(), views, sales, price, ship: wingShip(x) } : null,
+      cat: catOfWingItem(x) || codesOfWingItem(x), // 📂 쿠팡 분류(응답에 있을 때만)
     });
   }
   return { items, raw: nodes.length, fields: nodes[0] ? Object.keys(nodes[0]).slice(0, 50) : [] }; // raw = 같은 상품 합치기 전 Wing이 준 개수(키워드마다 상품 수가 다른 원인 확인용)
@@ -85,6 +87,7 @@ export async function searchKeyword(keyword, pages, wc, log, force = false, save
   }
   // 받은 지표는 정확한 지표 캐시에도 넣어 다른 화면(카테고리 카드)에서도 재사용
   all.forEach((it) => { if (it.ex) store.putExact(`${it.pid}:${it.vid ?? ""}`, it.ex); });
+  all.forEach((it) => { if (it.cat) rememberCat(it.pid, it.cat); });
   const res = { keyword: kw, ts: Date.now(), pages, items: all, raw, fields };
   cache[kw] = res;
   const keys = Object.keys(cache);

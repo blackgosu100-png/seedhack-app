@@ -139,6 +139,7 @@ table.lu { border-collapse: separate; border-spacing: 0; font-size: 12px; backgr
 
 /* 🚚 로켓그로스 자동 입출고비 */
 .lu td.in input.auto { color: #1d4ed8; font-weight: 700; }
+.lu td.in select.auto { color: #1d4ed8; font-weight: 700; } .lu td.in select.auto.est { color: #b45309; } .lu td.in select.auto option { color: var(--s-text); font-weight: 400; }
 .lu td.rgs { text-align: center; font-size: 11.5px; }
 
 /* 리스트업 관리: ☑ 선택 · ⠿ 끌어서 순서 · 선택 막대 · ↶ 되돌리기 */

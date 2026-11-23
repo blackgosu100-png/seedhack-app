@@ -3,6 +3,7 @@
 //   요청 간격 4초 · 10분 60건 · 최근 24시간 하루 예산 · "검색 한도 초과"면 24시간 정지 · 403/429·접근 제한이면 60분 정지
 //   같은 상품은 7일 동안 다시 조회하지 않음
 import { store } from "./store.js";
+import { catOfWingItem, codesOfWingItem } from "./cat-core.js";
 
 const MIN_INTERVAL = 4000, WINDOW = 10 * 60 * 1000, MAX_PER_WINDOW = 60;
 const DAY = 24 * 60 * 60 * 1000, BLOCK = 60 * 60 * 1000, CACHE_TTL = 7 * DAY;
@@ -10,6 +11,19 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_GAP = MIN_INTERVAL;
 const keyOf = (it) => `${it.pid}:${it.vid ?? ""}`;
 export const num = (v) => { if (v == null || v === "") return null; const n = typeof v === "number" ? v : Number(String(v).replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : null; };
+
+// 📂 Wing 상품 매칭 응답에 쿠팡 분류가 들어 있으면 상품 번호별로 기억해 둔다(리스트업 카테고리 자동 넣기에 씀)
+export function rememberCat(pid, x) {
+  const p = typeof x === "string" ? x : catOfWingItem(x) || codesOfWingItem(x); // 경로 글이 없으면 분류 번호("#…")
+  if (!p && x && typeof x === "object") store.set("catDiag", { ts: Date.now(), pid, displayCategoryInfo: x.displayCategoryInfo ?? null, categoryId: x.categoryId ?? null }); // 분류를 못 읽은 응답의 모양(원인 확인용)
+  if (!p || pid == null) return;
+  const m = store.get("pidCat") || {};
+  if (m[pid] === p) return;
+  m[pid] = p;
+  const keys = Object.keys(m);
+  if (keys.length > 8000) keys.slice(0, keys.length - 8000).forEach((k) => delete m[k]);
+  store.set("pidCat", m);
+}
 
 // Wing 화면 안에서 실행할 코드 (로그인 세션 사용)
 export const pageFetch = (keyword, page = 0) => `(async () => {
@@ -150,6 +164,7 @@ export async function runExact(items, wc, emit) {
       if (x && (views != null || sales != null)) {
         const ex = { ts: Date.now(), views, sales, price: num(x.salePrice) };
         store.putExact(key, ex);
+        rememberCat(it.pid, x);
         ok++;
         emit("item", { key, ex });
         emit("progress", { pos: i + 1, total, status: "running", msg: `✔ ${it.name.slice(0, 24)} — 28일 조회 ${views ?? "-"} / 판매 ${sales ?? "-"}` });
@@ -180,13 +195,13 @@ export function wingShip(x) {
 let oneQueue = Promise.resolve();
 let nonJsonRun = 0;
 const recentFail = new Map(); // pid → { ts, error } — 매칭 실패 상품은 10분 동안 다시 조회하지 않는다(예산 낭비 방지)
-export function lookupOne(it, wc) {
+export function lookupOne(it, wc, opt = {}) { // opt.needCat: 저장값이 있어도 쿠팡 분류를 모르면 한 번 더 조회(리스트업 카테고리 자동)
   const f = recentFail.get(it.pid);
   if (f && Date.now() - f.ts < 10 * 60 * 1000) return Promise.resolve({ error: f.error, recent: true });
   const run = oneQueue.then(async () => {
     const c = store.get("exactCache") || {};
     const hit = c[keyOf(it)] || Object.entries(c).find(([k, v]) => k.startsWith(`${it.pid}:`) && Date.now() - v.ts < CACHE_TTL)?.[1];
-    if (hit && Date.now() - hit.ts < CACHE_TTL) return { ex: hit, cached: true };
+    if (hit && Date.now() - hit.ts < CACHE_TTL && !(opt.needCat && !(store.get("pidCat") || {})[it.pid])) return { ex: hit, cached: true };
     const g = gate();
     if (g) return /10분/.test(g.reason) ? { error: g.reason, soft: true, until: g.until } // 10분 한도는 기다리면 풀림
       : { error: `${g.reason} — ${new Date(g.until).toLocaleString("ko-KR")} 이후`, paused: true, until: g.until };
@@ -206,6 +221,7 @@ export function lookupOne(it, wc) {
     if (!x || (views == null && sales == null)) { recentFail.set(it.pid, { ts: Date.now(), error: "Wing 상품 매칭 실패" }); return { error: "Wing 상품 매칭 실패" }; }
     const ex = { ts: Date.now(), views, sales, price: num(x.salePrice), ship: wingShip(x) };
     store.putExact(keyOf({ pid: it.pid, vid: it.vid || (x.vendorItemId != null ? String(x.vendorItemId) : "") }), ex);
+    rememberCat(it.pid, x);
     return { ex };
   });
   oneQueue = run.catch(() => {});

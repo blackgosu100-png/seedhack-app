@@ -181,7 +181,9 @@
     if (k === "link") return `<td class="ro">${v ? `<a href="${esc(v)}" target="_blank" title="${esc(v)}">쿠팡 ↗</a>` : ""}</td>`;
     if (k === "cat") {
       const cats = window.RG?.config?.categories || [];
-      return `<td class="in"><select data-r="${ri}" data-f="${f}"><option value="">선택…</option>${cats.map((c) => `<option ${c === v ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></td>`;
+      const ca = r.catAuto && v ? r.catAuto : null; // 📂 쿠팡 분류로 자동 넣은 값: 파랑 = 쿠팡에서 받은 분류, 주황 = 이름으로 찾은 추정
+      const tip = ca ? `${ca.sure ? "자동" : "추정 — 맞는지 확인해 주세요"} · 쿠팡 분류: ${String(ca.path || "").replace(/>/g, " › ")}\n${ca.how || ""}\n직접 고르면 그 값을 씁니다` : v ? "" : "쿠팡 분류를 아직 못 찾았어요 · 직접 골라 주세요";
+      return `<td class="in"><select class="${ca ? (ca.sure ? "auto" : "auto est") : ""}" title="${esc(tip)}" data-r="${ri}" data-f="${f}"><option value="">선택…</option>${cats.map((c) => `<option ${c === v ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></td>`;
     }
     if (k === "sub") {
       const opts = (r.subs || []).map((s) => `<option value="${esc(s.kw)}" ${s.kw === v ? "selected" : ""}>${esc(s.kw)} (${won(s.m1)})${s.brand ? " · 브랜드" : ""}</option>`).join("");
@@ -300,6 +302,21 @@
     totals();
     renderTop(false);
   }
+  // 📂 카테고리 자동: 비어 있거나 "추정"인 행을 쿠팡 분류로 채운다(직접 고른 값은 그대로). 쿠팡에서 받아 둔 자료만 보고, 새 요청은 보내지 않는다
+  async function autoCat(list = rows) {
+    const need = list.filter((r) => r && !r.catManual && (!r.cat || (r.catAuto && !r.catAuto.sure)));
+    if (!need.length) return;
+    const got = await api.invoke("listup:cat", need.map((r) => ({ id: r.id, pid: r.pid ?? null, keyword: r.keyword || "", name: r.name || "" }))).catch(() => null);
+    let hit = 0;
+    for (const r of need) {
+      const g = got?.[r.id];
+      if (!g || r.catManual || (r.cat === g.cat && r.catAuto?.sure === g.sure && r.catAuto?.path === g.path)) continue;
+      if (r.cat && r.catAuto && !g.sure) continue; // 추정 → 추정으로는 바꾸지 않는다
+      r.cat = g.cat; r.catAuto = { sure: !!g.sure, path: g.path, how: g.how }; hit++;
+    }
+    if (hit) { render(); save(); }
+  }
+  api.on("listup:catReady", () => autoCat()); // Wing에서 쿠팡 분류를 새로 받았을 때
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => api.invoke("listup:save", rows), 400); };
 
   // 입력
@@ -317,6 +334,7 @@
     if (f === "strategy") r.strategyAuto = false; // 직접 쓴 판매전략은 AI가 덮지 않는다
     if (f === "price" && (r.myPrice === "" || r.myPrice == null || String(r.myPrice) === String(r.price))) r.myPrice = val; // 양식의 "내판매가"도 같이
     if (f === "logi") r.logiAuto = val === "" ? true : false;
+    if (f === "cat") { r.catAuto = null; r.catManual = val !== ""; el.className = ""; el.title = ""; } // 직접 고른 카테고리는 자동이 덮지 않는다(비우면 다시 자동)
     if (f === "subKw") {
       r.subVol = (r.subs || []).find((s) => s.kw === val)?.m1 ?? r.subVol;
       const sv = $("luBody").querySelector(`input[data-r="${ri}"][data-f="subVol"]`);
@@ -466,6 +484,7 @@
     r.cnAuto = auto || null; // 사람이 1688 상품 페이지에서 넣으면 자동 표시를 지운다
     setTimeout(() => window.PanelHooks?.onListupChange(), 0); // 검색 카드의 "경쟁사 월 순이익"도 같이 갱신
     // 1688 상세에서 읽은 크기(mm)·무게(g): 비어 있을 때만 채운다(직접 넣은 값은 유지) → 입출고비 자동 계산
+    autoCat([r]);
     if (specs) { if (specs.dims && !r.dims) r.dims = specs.dims; if (specs.wt && !r.wt) r.wt = specs.wt; if (specs.cartonQty && !r.cartonQty) r.cartonQty = specs.cartonQty; }
     render(); save();
     const i = rows.indexOf(r);
@@ -588,6 +607,7 @@
       const nr = rows.push({ id: Date.now() + Math.random(), reason: "", strategy: "", cnUrl: "", yuan: "", size: "", logi: 2200, logiAuto: true, cat: "", dims: "", wt: "",
         ...row, myPrice: row.recPrice ?? row.benchPrice ?? "", price: row.recPrice ?? row.benchPrice ?? "" }); // 🎯 추천 판매가(경쟁사보다 체감 할인)가 있으면 그 값
       render(); save();
+      autoCat([rows[nr - 1]]);
       return rows[nr - 1];
     },
     // 🎯 담기 → 1688 자동 조사 줄에 넣기(사진 있는 행만). 끝나면 위안 칸이 채워지고 알림
@@ -595,7 +615,7 @@
       if (!r?.img || (r.yuan !== "" && r.yuan != null)) return;
       api.invoke("cn:queue", { rowId: r.id, name: r.name || r.keyword || "", keyword: r.keyword || "", img: r.img, allow: calc(r).allow, price: r.price }).catch(() => {});
     },
-    render,
+    render, autoCat,
     async reloadCfg() { cfg = await api.invoke("calc:get"); render(); },
   };
 
@@ -604,5 +624,6 @@
     cfg = c || cfg;
     render();
     window.PanelHooks?.onListupChange();
+    autoCat();
   });
 })();
