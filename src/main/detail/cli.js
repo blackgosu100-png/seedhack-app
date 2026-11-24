@@ -9,6 +9,10 @@ import os from "node:os";
 import { relayStructured, forceServer, relayEnabled } from "./relay.js";
 import { geminiStructured } from "./gemini-text.js";
 import { googleConnected } from "./google-conn.js";
+import { codexBin, codexStructured } from "./codex-bin.js";
+// 🧪 GPT 를 고르면(설정 "한글화 그리기 엔진" = GPT) 글도 이 컴퓨터의 GPT 명령줄로 쓴다 — index.js 가 설정을 읽어 켠다
+let textEngine = process.env.SEEDHACK_AI === "codex" ? "codex" : "";
+export function setTextEngine(v) { textEngine = v === "codex" ? "codex" : ""; }
 
 const CANDIDATES = [process.env.CLAUDE_CLI, path.join(os.homedir(), ".local/bin/claude"), "/opt/homebrew/bin/claude", "/usr/local/bin/claude"].filter(Boolean);
 export function cliPath() { return CANDIDATES.find((p) => existsSync(p)) || null; }
@@ -16,6 +20,7 @@ const localCli = () => !forceServer() && !!cliPath();
 // 어떤 AI 로 부를지: SEEDHACK_AI=claude|gemini|server 가 있으면 그것. 없으면 로컬 Claude CLI → claude, 수강생 구글 연결 → gemini, 그 밖 → server(대표님 서버 중계)
 export function aiProvider() {
   const want = process.env.SEEDHACK_AI;
+  if (textEngine === "codex" && (!want || want === "codex") && codexBin()) return "codex";
   if (want === "gemini" && googleConnected()) return "gemini";
   if (want === "server" && relayEnabled()) return "server";
   if (want === "claude" && cliPath()) return "claude";
@@ -35,6 +40,7 @@ const RELAY_PURPOSES = new Set((process.env.SEEDHACK_RELAY_PURPOSES ?? "localize
 // → { ok, result, model, usage, costUsd } 또는 { error }
 export function runStructured({ system, schema, text, model = process.env.SIGNAL_AI_MODEL || "sonnet", timeoutMs = 180000, allowedTools = null, purpose = "other", log } = {}) {
   let prov = aiProvider();
+  if (prov === "codex") { if (!system || !schema) return Promise.resolve({ error: "지시문(system)과 스키마(schema)가 필요합니다" }); return codexStructured({ bin: codexBin(), system, schema, text, timeoutMs: Math.max(timeoutMs, 240000), readFiles: Array.isArray(allowedTools) && allowedTools.includes("Read") }); }
   // 번역(원본 한글화)만은 수강생 구글이어도 서버 중계(Claude) — 2026-10-23 비교: 두 심판이 같은 쪽을 고른 줄 Claude 37 : Gemini 19 (카피·기획·검수는 비슷)
   if (prov === "gemini" && RELAY_PURPOSES.has(purpose) && relayEnabled() && process.env.SEEDHACK_AI !== "gemini") prov = "server";
   if (prov === "gemini") { // 수강생 구글: 결제·권한 문제(무료 체험 끝 등)면 서버 중계로 한 번 더

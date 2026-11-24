@@ -59,7 +59,7 @@
         <div class="dt-opts"><label><input type="checkbox" id="dtOptReview"> 렌더 직전에 구성 한 번 더 확인(사람 손 30초 — 사진 교체·헤드라인 수정)</label><label><input type="checkbox" id="dtOptPresentAuto" checked> 발표 모드에서는 확인 없이 자동 진행</label>
           <div class="dt-key"><span>🎨 이미지 생성 키(Gemini)</span><input id="dtKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza… (저장만 하고 어디에도 기록하지 않습니다)"><select id="dtKeyModel" title="이미지 생성 모델"><option value="gemini-2.5-flash-image">gemini-2.5-flash-image (기본)</option><option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview-image-generation</option></select><button id="dtKeySave" class="sec" type="button">저장</button><button id="dtKeyClear" class="sec" type="button" title="저장된 키 지우기">지우기</button><small id="dtKeyState"></small></div>
           <div class="dt-key"><span>🖼 GPT 키(OpenAI · 선택)</span><input id="dtOaKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-… (저장만 하고 어디에도 기록하지 않습니다)"><button id="dtOaSave" class="sec" type="button">저장</button><button id="dtOaClear" class="sec" type="button" title="저장된 키 지우기">지우기</button><small id="dtOaState"></small></div>
-          <div class="dt-key" id="dtEngRow" hidden><span>🧪 한글화 그리기 엔진</span><select id="dtEng"><option value="">구글 (기본)</option><option value="codex">GPT · 이 컴퓨터의 ChatGPT 로그인</option></select><small id="dtEngState"></small></div>
+          <div class="dt-key" id="dtEngRow" hidden><span>🧪 만드는 AI</span><select id="dtEng"><option value="">구글 (기본)</option><option value="codex">GPT · 이 컴퓨터의 ChatGPT 로그인</option></select><small id="dtEngState"></small></div>
           <div class="dt-gc" id="dtGc">
             <div class="dt-gc-head"><b>🔗 내 구글 클라우드</b><span id="dtGcState">연결 안 됨</span><small id="dtGcTrial"></small></div>
             <div class="dt-gc-main"><button id="dtGcOAuth" class="dt-go dt-gc-oauth" type="button">🔗 구글로 연결</button><small id="dtGcOAuthNote">버튼 → 구글 로그인 → (처음이면) 카드 등록. 나머지는 자동이에요</small></div>
@@ -320,7 +320,7 @@
   $("dtGcTest").onclick = async () => { $("dtGcState").textContent = "확인 중…"; showGc(await api.invoke("detail:google:test").catch(() => null)); };
   $("dtGcClear").onclick = async () => { showGc(await api.invoke("detail:google:clear").catch(() => null)); loadOpts(); };
   root.querySelectorAll("[data-gc]").forEach((b) => { b.onclick = () => api.invoke("detail:google:open", { what: b.dataset.gc }); });
-  function engState(o) { $("dtEngRow").hidden = !o?.codexReady; $("dtEng").value = o?.bakeEngine || ""; $("dtEngState").textContent = o?.bakeEngine === "codex" ? "ChatGPT 로그인으로 그려요 · 장당 1분쯤" : ""; }
+  function engState(o) { $("dtEngRow").hidden = !o?.codexReady; $("dtEng").value = o?.bakeEngine || ""; $("dtEngState").textContent = o?.bakeEngine === "codex" ? "글·사진·한글화 모두 GPT로 만들어요 · 그림 장당 1분쯤" : ""; }
   $("dtEng").onchange = async () => { const o = await api.invoke("detail:settings", { detailBakeEngine: $("dtEng").value }).catch(() => null); if (o) engState(o); };
   function oaState(o) { $("dtOaState").textContent = o?.hasOpenaiKey ? `✔ 키 저장됨 ${o.openaiKeyHint || ""}` : "키 없음"; }
   $("dtOaSave").onclick = async () => { const k = $("dtOaKey").value.trim(); if (!k) return flash("키를 붙여 넣고 저장을 눌러 주세요"); const o = await api.invoke("detail:settings", { openaiKey: k }).catch(() => null); $("dtOaKey").value = ""; if (o) oaState(o); };

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { googleConnected, googleAuth } from "./google-conn.js";
+import { codexBin, codexImage, codexSceneTail } from "./codex-bin.js";
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image";
 export const DEFAULT_OPENAI_MODEL = "gpt-image-1";
@@ -63,6 +64,7 @@ export function createRegionRouter({ regions = DEFAULT_SCENE_REGIONS, perRegion 
   };
 }
 export function resolveProvider({ provider, settings = {}, env = process.env } = {}) {
+  if ((provider || env.SEEDHACK_BAKE_ENGINE || settings.bakeEngine) === "codex") { const bin = codexBin(); if (bin) return { provider: "codex", key: bin, model: "gpt-codex" }; } // 🧪 GPT 를 고르면 장면 사진도 GPT 명령줄로
   const local = resolveLocalProvider({ provider, settings, env });
   // 수강생 구글 클라우드 연결(google-conn.js): 이 PC 에 키가 없으면 그 프로젝트의 Vertex 로(무료 체험 크레딧)
   if (!local.key && env.SEEDHACK_RELAY !== "server" && googleConnected()) return { provider: "google", key: "google", location: DEFAULT_VERTEX_LOCATION, model: settings.vertexImageModel || settings.geminiImageModel || DEFAULT_GEMINI_MODEL };
@@ -264,7 +266,7 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
   log("dim", `  🎨 장면 생성 ${shots.length}컷 · ${total}장 (${prov.provider} · ${prov.model}${router ? ` · 지역 ${router.regions.length}곳 × ${perRegion}` : ""}${concurrency > 1 ? ` · 동시 ${concurrency}` : ""})`);
   const runShot = async (s) => {
     const sAspect = s.aspect || aspect, sn = nOf(s);
-    let model = s.model && !badModels.has(s.model) ? s.model : prov.model;
+    let model = prov.provider !== "codex" && s.model && !badModels.has(s.model) ? s.model : prov.model;
     const prompt = `${lang === "ko" ? s.prompt_ko : s.prompt_en || s.prompt_ko} ${aspectLine(sAspect)}`.trim();
     const files = [];
     let error = null, modelNote = null, usedRegion = null;
@@ -294,6 +296,7 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
           }
           return null;
         }
+        if (prov.provider === "codex") { const g = await codexImage({ bin: prov.key, images: imgs, prompt, tail: codexSceneTail(sAspect) }); if (g.error) { error = g.error; return null; } error = null; return g; }
         for (let a = 0; ; a++) { // gemini(AI Studio) 키: 한 엔드포인트 — 429/5xx 는 잠깐 쉬었다 다시
           try { const g = (await geminiOnce({ key: prov.key, model, images: imgs, prompt, aspect: sAspect, fetchImpl, timeoutMs, vertex, server: prov.provider === "server" }))[0]; error = null; if (g.region) usedRegion = g.region; return g; }
           catch (e) {
@@ -347,7 +350,7 @@ export async function generateScenes({ productImages = [], shots = [], aspect = 
       results[i] = abort ? { id: s.id, purpose: s.purpose, files: [], ok: false, error: abort } : await runShot(s);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, shots.length)) }, worker));
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(prov.provider === "codex" ? 3 : concurrency, shots.length)) }, worker)); // GPT 명령줄은 장마다 프로그램을 켠다 → 동시 3장까지
   if (router) { results.stats = { regions: router.stats(), total429: router.total429() }; log("dim", `  🎨 지역별 성공 ${Object.entries(router.stats()).filter(([, v]) => v.ok || v.e429).map(([r, v]) => `${r} ${v.ok}${v.e429 ? `(429×${v.e429})` : ""}`).join(" · ")}`); }
   return results;
 }

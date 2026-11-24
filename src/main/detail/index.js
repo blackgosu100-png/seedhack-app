@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { offerUrl } from "./extract-core.js"; // 📄 주소 칸 입력 → 1688 상품 주소(순수 함수, extract-core.test.js)
 import { routeProductUrl, cnWall, CN_WALL_PROBE_JS, SITE_NAME, isKoSite, buildKoRaw, koWallMessage } from "./site-core.js"; // ▶ 주소로 만들기: 1688·타오바오/티몰·쿠팡·네이버·오늘의집 주소 가려내기(site-core.test.js)
-import { codexBin } from "./codex-bin.js"; // 🧪 GPT 명령줄 그리기(있을 때만 선택 칸이 보인다)
+import { codexBin } from "./codex-bin.js";
+import { setTextEngine } from "./cli.js"; // 🧪 GPT 명령줄 그리기(있을 때만 선택 칸이 보인다)
 import { newClock, clockKey, clockTick, clockStop, clockResume, clockSummary, fmtDur } from "./clock-core.js"; // ⏱ 버튼 누른 순간~완성까지 단계별 실제 시간(clock-core.test.js)
 import { addUsage, summarize as summarizeUsage } from "./usage-core.js"; // 🎨 이미지 생성 사용량(usage-core.test.js)
 import { createStore as createTemplateStore, themeAsTemplate, overrideChips, sourceKey as templateSourceKey, defaultName as templateDefaultName, newId as templateNewId } from "./templates.js"; // 🧲 내 템플릿 보관함(2단계, templates.test.js)
@@ -304,7 +305,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
 
   // ---------- v5: 섹션별 장면 생성 · 검수 · 1회 재생성 · 섹션 다시 만들기 ----------
   const recordImageUsage = (ev) => store.set("imageUsage", addUsage(store.get("imageUsage"), ev)); // 받은 이미지 1장마다
-  const sceneSettingsNow = () => { const st = store.get("settings") || {}; return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", bakeEngine: st.detailBakeEngine || "", openaiImageModel: st.openaiImageModel || "", vertexProject: st.vertexProject || "", sceneConcurrency: st.detailSceneConcurrency || 6, /* A2 다지역 라우터(지역당 2) — 동시 6 */ sceneModelHero: st.detailSceneModelHero || "" }; };
+  const sceneSettingsNow = () => { const st = store.get("settings") || {}; try { setTextEngine(st.detailBakeEngine === "codex" ? "codex" : ""); } catch {} /* 🧪 GPT 를 고르면 글 AI 도 GPT 명령줄로 */ return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", bakeEngine: st.detailBakeEngine || "", openaiImageModel: st.openaiImageModel || "", vertexProject: st.vertexProject || "", sceneConcurrency: st.detailSceneConcurrency || 6, /* A2 다지역 라우터(지역당 2) — 동시 6 */ sceneModelHero: st.detailSceneModelHero || "" }; };
   // 생성본을 원본 제품 사진과 대조(Claude CLI·Read): same_product · has_text · score — 통과 = 같은 제품·글자 없음·3점 이상
   // 배경 소품의 흐릿한·작은 글자(포장지·패턴)는 허용 — 브랜드 로고·상표는 불가
   const smallTextOk = (m) => m.has_text && (Number(m.score) || 0) >= 4 && /(흐릿|작은|미세|포장지|패턴|희미)/.test(m.note || "") && !/(로고|브랜드|상표|DELL|애플|Apple|Cuisinart|Nespresso|네스프레소)/i.test(m.note || "");
@@ -1742,6 +1743,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
   let pageReadT0 = 0; // ⏱ 주소로 만들기: 버튼 누른 시각(상품 화면을 여는·읽는 시간을 잰다)
   let planFirstNext = false; // 다음 새 작업 한 번만: 기획안 확인 화면에서 멈춘다
   function start({ source, jobId, templateId, reuse, fresh = [], review, phase, regen = null, skipQa = false, theme = null, bg = false, mode = null, reference = null, templateRef = null, keepExtra = null, auto = false, readMs = 0 }) {
+    sceneSettingsNow(); // 🧪 만드는 AI 설정(GPT)을 글 AI 에도 반영
     if (jobId && reference) { const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.templateRef; writeJson(f, { ...inf, reference: String(reference), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
     if (jobId && templateRef) { if (!isMine(templateRef)) return { error: "그 템플릿이 보관함에 없습니다" }; const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.reference; writeJson(f, { ...inf, templateRef: String(templateRef), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
     // 가드: v5 작업(sections.json 이 있거나 plan v5)에서 다른 템플릿을 고르면 옛 v1 구성으로 다시 짜지 않고 card 엔진 테마만 바꾼다
@@ -2003,7 +2005,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       store.set("settings", next);
     }
     const st = store.get("settings") || {};
-    const codexReady = !!codexBin();
+    const codexReady = !!codexBin(); sceneSettingsNow();
     let imageGen = { provider: "", connected: false, project: "" };
     try { const pv = mods0.scene?.resolveProvider ? mods0.scene.resolveProvider({ settings: sceneSettingsNow() }) : null; if (pv) imageGen = { provider: pv.provider, connected: !!pv.key, project: pv.project || "", model: pv.model || "" }; } catch {}
     return { imageGen, detailReview: st.detailReview === true, detailPresentAuto: st.detailPresentAuto !== false, detailTemplate: st.detailTemplate || "clean", bakeEngine: st.detailBakeEngine === "codex" && codexReady ? "codex" : "", codexReady, hasOpenaiKey: !!st.openaiKey, openaiKeyHint: st.openaiKey ? `…${String(st.openaiKey).slice(-4)}` : "", hasGeminiKey: !!(st.geminiKey || process.env.GEMINI_API_KEY), geminiKeyHint: st.geminiKey ? `…${String(st.geminiKey).slice(-4)}` : "", geminiImageModel: st.geminiImageModel || "gemini-2.5-flash-image" };
