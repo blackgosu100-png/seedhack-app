@@ -747,6 +747,37 @@ function captchaNotice() {
 }
 
 // ---- 💬 판매자 문의: 상품 페이지 왼쪽 아래 버튼. 누르면 앱이 판매자 연락(旺旺) 버튼을 사람처럼 눌러 채팅을 열고 질문을 3단계로 나눠 보낸다 ----
+// 🖐 띄운 버튼을 끌어서 옮기기 + 마지막 자리 기억(앱이 저장 → 1688 어느 화면에서나 같은 자리). 5px 넘게 움직이면 끌기, 아니면 그냥 누르기.
+// 화면 밖으로는 못 나간다.
+let uiPosCache = null;
+const uiPos = async () => (uiPosCache ||= await ipcRenderer.invoke("ui:posGet").catch(() => { try { return JSON.parse(localStorage.getItem("sg-ui-pos") || "{}"); } catch { return {}; } }));
+function makeDraggable(el, key) {
+  if (!el || el.__sgDrag) return; el.__sgDrag = true;
+  const place = (x, y) => {
+    const r = el.getBoundingClientRect();
+    const cx = Math.max(4, Math.min(innerWidth - r.width - 4, x)), cy = Math.max(4, Math.min(innerHeight - r.height - 4, y));
+    el.style.left = cx + "px"; el.style.top = cy + "px"; el.style.right = "auto"; el.style.bottom = "auto";
+  };
+  const save = (v) => { uiPosCache = { ...(uiPosCache || {}) }; if (v) uiPosCache[key] = v; else delete uiPosCache[key];
+    ipcRenderer.invoke("ui:posSet", v ? { key, ...v } : { key, reset: true }).catch(() => {}); try { localStorage.setItem("sg-ui-pos", JSON.stringify(uiPosCache)); } catch {} };
+  uiPos().then((all) => { const p = all && all[key]; if (p && Number.isFinite(p.x)) requestAnimationFrame(() => place(p.x, p.y)); });
+  if (!el.title) el.title = "끌어서 옮길 수 있어요";
+  let d = null;
+  el.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; const r = el.getBoundingClientRect(); d = { sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false, id: e.pointerId }; }, true);
+  addEventListener("pointermove", (e) => {
+    if (!d) return;
+    if (!d.moved) { if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return; d.moved = true; try { el.setPointerCapture(d.id); } catch {} el.style.cursor = "grabbing"; el.style.userSelect = "none"; }
+    place(e.clientX - d.ox, e.clientY - d.oy); e.preventDefault();
+  }, true);
+  addEventListener("pointerup", () => {
+    if (!d) return; const moved = d.moved; d = null; el.style.cursor = "";
+    if (!moved) return;
+    const r = el.getBoundingClientRect(); save({ x: r.left, y: r.top });
+    const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; // 끌고 놓을 때 버튼이 눌리지 않게(이번 한 번만)
+    el.addEventListener("click", eat, { capture: true, once: true }); setTimeout(() => el.removeEventListener("click", eat, true), 300);
+  }, true);
+  addEventListener("resize", () => { const p = uiPosCache && uiPosCache[key]; if (p) place(p.x, p.y); });
+}
 async function askPill() {
   if (document.getElementById("sg-ask") || !/(^|\.)1688\.com$/i.test(location.hostname)) return;
   if (await ipcRenderer.invoke("cn:probeMode")) return;
@@ -760,6 +791,7 @@ async function askPill() {
     + (isOffer() ? `<button type="button" class="wave" style="${b};background:#0b0f14;color:#3ddc84" title="파도타기 — 이 상품 중국어 제목에서 핵심 키워드를 뽑아 타오바오·1688을 판매순으로 다시 훑고, 처음 보는 상품을 사진으로 국내 확인">🌊 파도타기</button>` : "")
     + `<button type="button" class="tb" style="${b};background:#ff5000;color:#fff" title="같은 쿠팡 사진으로 타오바오에서 같은 상품 찾기 — 직접 촬영한 판매자 상세·구매자 리뷰 사진을 참고 자료로">🛍 타오바오</button>`;
   (document.body || document.documentElement).appendChild(el);
+  makeDraggable(el, "cn-bar");
   const boxBtn = el.querySelector(".box");
   ipcRenderer.on("chat:count", (_e, n) => { boxBtn.hidden = !n; boxBtn.querySelector(".n").textContent = n || ""; });
   boxBtn.addEventListener("click", () => ipcRenderer.invoke("chat:act", { a: "show" }));
@@ -875,6 +907,7 @@ async function reviewPill() {
   pill.textContent = "📷 리뷰 사진 모으기";
   pill.title = "리뷰(评价) 칸을 열고 누르세요 — 화면에 뜬 구매자 사진·글을 모읍니다. 더 내려서 다시 누르면 쌓입니다";
   (document.body || document.documentElement).appendChild(pill);
+  makeDraggable(pill, "tb-review");
   pill.addEventListener("click", async () => {
     const n = readTbReviews();
     ipcRenderer.send("tb:log", `리뷰 사진 ${n}장 새로 읽음 (모두 ${tbReviews.size}장) · ${location.pathname}`);
@@ -1410,7 +1443,7 @@ async function detailButton() {
     } catch (e) { say("✕ " + String(e?.message || e).replace(/^Error invoking remote method '[^']+': /, "").slice(0, 160), "err"); }
     btn.disabled = false; btn.textContent = "📄 상세페이지 만들기";
   });
-  const mount = () => { if (!wrap.isConnected) (document.body || document.documentElement).appendChild(wrap); if (!style.isConnected) document.documentElement.appendChild(style); };
+  const mount = () => { if (!wrap.isConnected) (document.body || document.documentElement).appendChild(wrap); makeDraggable(wrap, "cn-detail"); if (!style.isConnected) document.documentElement.appendChild(style); };
   mount();
   setInterval(mount, 1500);
 }

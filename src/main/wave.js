@@ -41,6 +41,14 @@ export function initWave({ ipcMain, store, log, getCnView, fromCn, getTarget }) 
     return { ok: true, ctx };
   });
   ipcMain.handle("wave:ctx", (e) => (fromCn(e) ? ctx : null));
+  // 🖐 1688 화면에 띄우는 버튼들(상세페이지 만들기 · AI 문의/번역/타오바오/파도타기 묶음 · 리뷰 사진)의 마지막 자리 — 1688은 화면마다 주소(출처)가 달라 앱이 대신 기억한다
+  ipcMain.handle("ui:posGet", (e) => (fromCn(e) ? store.get("uiPos") || {} : {}));
+  ipcMain.handle("ui:posSet", (e, p = {}) => {
+    if (!fromCn(e) || !/^[a-z-]{2,20}$/.test(String(p.key || ""))) return;
+    const all = { ...(store.get("uiPos") || {}) };
+    if (p.reset) delete all[p.key]; else if (Number.isFinite(p.x) && Number.isFinite(p.y)) all[p.key] = { x: Math.round(p.x), y: Math.round(p.y) };
+    store.set("uiPos", all);
+  });
   ipcMain.handle("wave:addKeyword", (e, zh) => {
     if (!fromCn(e) || !ctx) return null;
     const k = String(zh || "").trim().slice(0, 16);
