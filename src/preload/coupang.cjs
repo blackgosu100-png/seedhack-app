@@ -4,6 +4,30 @@ const { ipcRenderer } = require("electron");
 
 const BLOCK_RE = /사용권한이 없습니다|권한이 제한된 페이지|비정상적인 접근|Access Denied|자동입력 방지/i;
 
+// 🖐 쿠팡 화면에 띄운 버튼을 끌어서 옮기기 + 마지막 자리 기억(이 화면 저장소). 5px 넘게 움직이면 끌기, 아니면 그냥 누르기. 화면 밖으로는 못 나간다.
+function cpDrag(el, key, when = () => true) {
+  if (!el || el.__sgDrag) return; el.__sgDrag = true;
+  const KEY = "sg-ui-pos:" + key;
+  const place = (x, y) => {
+    const r = el.getBoundingClientRect();
+    el.style.left = Math.max(4, Math.min(innerWidth - r.width - 4, x)) + "px"; el.style.top = Math.max(4, Math.min(innerHeight - r.height - 4, y)) + "px";
+    el.style.right = "auto"; el.style.bottom = "auto"; el.style.transform = "none"; el.__sgMoved = true;
+  };
+  el.__sgRestore = () => { if (!when() || !el.isConnected) return; try { const p = JSON.parse(localStorage.getItem(KEY) || "null"); if (p && Number.isFinite(p.x)) place(p.x, p.y); } catch {} };
+  let d = null;
+  el.addEventListener("pointerdown", (e) => { if (e.button !== 0 || !when()) return; const r = el.getBoundingClientRect(); d = { sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false, id: e.pointerId }; }, true);
+  addEventListener("pointermove", (e) => {
+    if (!d) return;
+    if (!d.moved) { if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return; d.moved = true; try { el.setPointerCapture(d.id); } catch {} }
+    place(e.clientX - d.ox, e.clientY - d.oy); e.preventDefault();
+  }, true);
+  addEventListener("pointerup", () => {
+    if (!d) return; const moved = d.moved; d = null; if (!moved) return;
+    const r = el.getBoundingClientRect(); try { localStorage.setItem(KEY, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch {}
+    const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    el.addEventListener("click", eat, { capture: true, once: true }); setTimeout(() => el.removeEventListener("click", eat, true), 300);
+  }, true);
+}
 function start() {
   const testPage = location.protocol === "file:" && /fake-coupang/.test(location.pathname); // 자체 테스트용 가짜 쿠팡 화면
   if (!testPage && (!/(^|\.)coupang\.com$/i.test(location.hostname) || /^wing\./.test(location.hostname))) return;
@@ -359,7 +383,7 @@ function start() {
   const mount = () => {
     const host = document.body || document.documentElement;
     if (!style.isConnected) (document.head || document.documentElement).appendChild(style);
-    if (!btn.isConnected) host.appendChild(btn);
+    if (!btn.isConnected) { host.appendChild(btn); cpDrag(btn, "cp-metric"); btn.__sgRestore?.(); }
   };
   mount();
   setInterval(mount, 1500);
@@ -451,8 +475,10 @@ function start() {
       const imgs = [...document.querySelectorAll("img")].map((i) => ({ i, r: i.getBoundingClientRect() })).filter((x) => x.r.width >= 150 && x.r.height >= 150).sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height);
       hoverImg = imgs[0]?.i || document.querySelector("img") || null;
     }
-    [pickBtn, cnBtn].forEach((b) => { b.style.left = "auto"; b.style.top = "auto"; b.style.width = "auto"; b.style.height = "auto"; b.style.display = "block"; b.style.bottom = "90px"; b.style.fontSize = "13px"; b.style.padding = "8px 12px"; });
-    pickBtn.style.right = "20px"; cnBtn.style.right = `${20 + pickBtn.offsetWidth + 8}px`;
+    cpDrag(pickBtn, "cp-pick", () => !!detailPid()); cpDrag(cnBtn, "cp-1688", () => !!detailPid());
+    [pickBtn, cnBtn].filter((b) => !b.__sgMoved).forEach((b) => { b.style.left = "auto"; b.style.top = "auto"; b.style.width = "auto"; b.style.height = "auto"; b.style.display = "block"; b.style.bottom = "90px"; b.style.fontSize = "13px"; b.style.padding = "8px 12px"; });
+    if (!pickBtn.__sgMoved) pickBtn.style.right = "20px"; if (!cnBtn.__sgMoved) cnBtn.style.right = `${20 + pickBtn.offsetWidth + 8}px`;
+    if (!pickBtn.__sgMoved) pickBtn.__sgRestore?.(); if (!cnBtn.__sgMoved) cnBtn.__sgRestore?.();
   };
   const mountCn = () => { if (!pickBtn.isConnected) (document.body || document.documentElement).appendChild(pickBtn); if (!cnBtn.isConnected) (document.body || document.documentElement).appendChild(cnBtn); detailMount(); if (!cnStyle.isConnected) (document.head || document.documentElement).appendChild(cnStyle); };
   mountCn();
@@ -912,8 +938,8 @@ function start() {
     const want = onDetail() ? "📝 리뷰 분석" : "📝 리뷰 기록";
     if (testPage) { if (revBtn.isConnected) revBtn.remove(); return; }
     if (revBtn.textContent !== want) revBtn.textContent = want;
-    if (!revBtn.isConnected) (document.body || document.documentElement).appendChild(revBtn);
-    if (onDetail()) { if (!histBtn.isConnected) (document.body || document.documentElement).appendChild(histBtn); if (!tplBtn.isConnected) (document.body || document.documentElement).appendChild(tplBtn); }
+    if (!revBtn.isConnected) { (document.body || document.documentElement).appendChild(revBtn); cpDrag(revBtn, "cp-review"); revBtn.__sgRestore?.(); }
+    if (onDetail()) { if (!histBtn.isConnected) { (document.body || document.documentElement).appendChild(histBtn); cpDrag(histBtn, "cp-hist"); histBtn.__sgRestore?.(); } if (!tplBtn.isConnected) { (document.body || document.documentElement).appendChild(tplBtn); cpDrag(tplBtn, "cp-tpl"); tplBtn.__sgRestore?.(); } }
     else { if (histBtn.isConnected) histBtn.remove(); if (tplBtn.isConnected) tplBtn.remove(); }
   };
   histBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); openHistory(); }, true);

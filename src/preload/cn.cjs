@@ -202,7 +202,7 @@ async function start() {
     const r = await ipcRenderer.invoke("cn:pick", { url, yuan: input.value, title: readTitle(), option: box.dataset.option || "", specs: box.__specs || null });
     box.querySelector(".h").innerHTML = r?.ok ? `<span class="ok">✔ 넣었습니다</span>` : String(r?.error || "넣지 못했습니다");
   });
-  const mount = () => { if (!box.isConnected) (document.body || document.documentElement).appendChild(box); if (!style.isConnected) document.documentElement.appendChild(style); };
+  const mount = () => { if (!box.isConnected) { (document.body || document.documentElement).appendChild(box); makeDraggable(box, "cn-box", { skip: ".alts" }); } if (!style.isConnected) document.documentElement.appendChild(style); };
   mount();
   setInterval(mount, 1500);
 
@@ -685,6 +685,7 @@ async function rankPanel() {
     <div class="pipe"></div><div class="nums"></div><div class="st" hidden></div><div class="ai" hidden></div><div class="body"></div>
     <div class="foot"><button type="button" class="go" disabled>▶ 딸깍 추천</button></div>`;
   (document.body || document.documentElement).appendChild(panel);
+  panel.querySelector(".hd").style.cursor = "move"; makeDraggable(panel, "cn-rank", { handle: ".hd", fixSize: true }); // 머리줄을 잡고 옮긴다
   setInterval(() => { if (!panel.__t0) return; const s = `${((Date.now() - panel.__t0) / 1000).toFixed(1)}s`; panel.querySelectorAll(".bt").forEach((t) => (t.textContent = s)); }, 100); // 진행 중 경과 시간
   // ✕ = 숨기기(지우지 않음): 보드가 ✕ 자리의 "🎯 추천 보기" 버튼으로 줄어든다. 버튼은 끌어서 옮길 수 있고 마지막 자리를 기억한다.
   // 숨겨 둔 동안에도 옵션가·AI 결과는 계속 갱신된다
@@ -751,9 +752,11 @@ function captchaNotice() {
 // 화면 밖으로는 못 나간다.
 let uiPosCache = null;
 const uiPos = async () => (uiPosCache ||= await ipcRenderer.invoke("ui:posGet").catch(() => { try { return JSON.parse(localStorage.getItem("sg-ui-pos") || "{}"); } catch { return {}; } }));
-function makeDraggable(el, key) {
+// opts.handle: 이 부분을 잡았을 때만 끌기(큰 창은 머리줄만) · opts.skip: 이 안에서는 끌지 않음(스크롤 칸 등) · opts.fixSize: 위아래로 늘어난 창은 옮길 때 지금 크기로 고정
+function makeDraggable(el, key, opts = {}) {
   if (!el || el.__sgDrag) return; el.__sgDrag = true;
   const place = (x, y) => {
+    if (opts.fixSize && !el.__sgSized) { const r0 = el.getBoundingClientRect(); if (r0.height > 0) { el.style.height = Math.min(r0.height, innerHeight - 8) + "px"; el.style.width = r0.width + "px"; el.__sgSized = true; } }
     const r = el.getBoundingClientRect();
     const cx = Math.max(4, Math.min(innerWidth - r.width - 4, x)), cy = Math.max(4, Math.min(innerHeight - r.height - 4, y));
     el.style.left = cx + "px"; el.style.top = cy + "px"; el.style.right = "auto"; el.style.bottom = "auto";
@@ -763,7 +766,7 @@ function makeDraggable(el, key) {
   uiPos().then((all) => { const p = all && all[key]; if (p && Number.isFinite(p.x)) requestAnimationFrame(() => place(p.x, p.y)); });
   if (!el.title) el.title = "끌어서 옮길 수 있어요";
   let d = null;
-  el.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; const r = el.getBoundingClientRect(); d = { sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false, id: e.pointerId }; }, true);
+  el.addEventListener("pointerdown", (e) => { if (e.button !== 0 || e.target.closest("input, textarea, select, [contenteditable]") || (opts.handle && !e.target.closest(opts.handle)) || (opts.skip && e.target.closest(opts.skip))) return; const r = el.getBoundingClientRect(); d = { sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false, id: e.pointerId }; }, true);
   addEventListener("pointermove", (e) => {
     if (!d) return;
     if (!d.moved) { if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return; d.moved = true; try { el.setPointerCapture(d.id); } catch {} el.style.cursor = "grabbing"; el.style.userSelect = "none"; }
@@ -926,6 +929,7 @@ async function showReviewBox() {
     <div class="g" style="flex:1;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
     <button type="button" class="sv" style="margin-top:10px;border:0;border-radius:10px;padding:11px;background:#3ddc84;color:#06240f;font-weight:800;cursor:pointer">고른 사진 저장 (폴더 열기)</button>`;
   (document.body || document.documentElement).appendChild(box);
+  box.firstElementChild.style.cursor = "move"; box.firstElementChild.classList.add("sg-hd"); makeDraggable(box, "tb-rvbox", { handle: ".sg-hd", fixSize: true });
   box.querySelector(".x").addEventListener("click", () => box.remove());
   const g = box.querySelector(".g");
   g.innerHTML = list.map((x, i) => `<label style="display:block;background:#05070a;border:1px solid #2b3a4c;border-radius:10px;padding:6px;cursor:pointer">
@@ -958,7 +962,7 @@ function logResultsUrl() {
 const WAVE_CSS = `
 #sg-wave{position:fixed;right:14px;top:14px;bottom:14px;width:420px;z-index:2147483646;background:#fff;color:#18181b;border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.18);font:14px/1.45 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;display:flex;flex-direction:column;overflow:hidden}
 #sg-wave .hd{padding:14px 16px 10px;border-bottom:1px solid #f4f4f5}
-#sg-wave .hd .t{display:flex;justify-content:space-between;align-items:center} #sg-wave .hd b{font-size:17px}
+#sg-wave .hd .t{display:flex;justify-content:space-between;align-items:center;cursor:move} #sg-wave .hd b{font-size:17px}
 #sg-wave .x{background:none;border:0;font-size:18px;color:#71717a;cursor:pointer;padding:4px 8px}
 #sg-wave .sub{font-size:12px;color:#71717a;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #sg-wave .kws{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -1015,6 +1019,7 @@ function waveChooser(ctx) {
   };
   draw();
   (document.body || document.documentElement).appendChild(box);
+  makeDraggable(box, "wave-pick", { handle: ".hd .t" });
 }
 // 검색 결과 카드 읽기 (1688: data-renderkey 끝 번호 · 타오바오: 상품 링크의 id=)
 function waveCards() {
@@ -1052,6 +1057,7 @@ async function waveBoard() {
   const kw = decodeURIComponent((location.search.match(/[?&](?:q|keywords)=([^&]+)/) || [])[1] || "").replace(/\+/g, " ");
   const box = document.createElement("div"); box.id = "sg-wave";
   (document.body || document.documentElement).appendChild(box);
+  makeDraggable(box, "wave-board", { handle: ".hd .t", fixSize: true });
   const S = { cards: [], fresh: new Set(), kr: new Map(), tr: new Map(), onlyNew: false, onlyKr: false, first: false, since: null };
   const log = (t) => ipcRenderer.send("cn:log", "🌊 " + t);
   const read = async () => {
