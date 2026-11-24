@@ -182,7 +182,7 @@ export function rankCards(cards, opts = {}) {
   // 사진 검색이 빗나갔는지: 제목을 읽을 수 있는 후보가 충분한데 쿠팡 상품명과 닮은 게 하나도 없으면(가장 닮은 것도 20% 미만) 결과 전체가 엉뚱한 것
   const known = rels.filter((r) => r != null), bestRel = known.length ? Math.max(...known) : null;
   const mismatch = !!opts.target && known.length >= 8 && bestRel != null && bestRel < 0.2;
-  return { ranked: out, excluded: scored.filter((x) => x.excluded), medianPrice, bestRel, mismatch };
+  return { ranked: out, excluded: scored.filter((x) => x.excluded), medianPrice, bestRel, mismatch, all: scored };
 }
 
 export const VERDICT_KO = { green: "🟢 샘플 후보", yellow: "🟡 비교 대상", red: "🔴 보류", candidate: "⚪ 후보 (가격 확인 전)", low: "· 낮음", exclude: "✕ 제외" };
@@ -205,4 +205,29 @@ export function decideCost(list) {
   if (first.real && oMed != null && first.price < oMed * 0.7) out.warn = `1순위 ¥${first.price}가 다른 후보(¥${oMed})보다 ${Math.round((1 - first.price / oMed) * 100)}% 싸요 — 옵션·품질 확인`;
   if (known.length >= 2) out.range = [known[0], known[known.length - 1]];
   return out;
+}
+
+// 🧺 사람이 담은 후보끼리 비교(2026-11-24 대표님 결정: "같은 상품 고르기는 사람이, 숫자 비교는 앱이")
+// picks: [{ offerId, price(목록 최저가), realPrice, sales, repeat, years, moq }] (담은 순서) → { text, best(offerId), over:[번호] }
+export function comparePicks(picks, allow = null) {
+  const L = (picks || []).map((p, i) => ({ ...p, no: i + 1, p: p.realPrice ?? p.price ?? null }));
+  if (!L.length) return null;
+  if (L.length === 1) return { text: "1개 담음 — 2개 이상 담으면 가격·재구매율·판매량을 비교해 드려요", best: null, over: [] };
+  const priced = L.filter((x) => x.p != null), ok = allow != null ? priced.filter((x) => x.p <= allow) : priced;
+  const over = allow != null ? priced.filter((x) => x.p > allow).map((x) => x.no) : [];
+  const by = (arr, f) => arr.filter((x) => f(x) != null).sort((a, b) => f(b) - f(a))[0] || null;
+  const cheap = (ok.length ? ok : priced).slice().sort((a, b) => a.p - b.p)[0] || null;
+  const rep = by(L, (x) => x.repeat), sal = by(L, (x) => x.sales);
+  const bits = [];
+  if (cheap) bits.push(`가장 싼 건 ${cheap.no}번 ¥${cheap.p}${allow ? `(허용가의 ${Math.round((cheap.p / allow) * 100)}%)` : ""}`);
+  if (rep) bits.push(rep.no === cheap?.no ? "재구매율도 가장 높아요" : `재구매율은 ${rep.no}번 ${rep.repeat}%`);
+  if (sal) bits.push(sal.no === cheap?.no && rep?.no === cheap?.no ? "판매량도 1등" : `판매량은 ${sal.no}번`);
+  if (over.length) bits.push(`허용가 초과: ${over.join("·")}번`);
+  if (priced.some((x) => x.realPrice == null)) bits.push("목록가는 최저 옵션 기준 — 옵션가 확인 중");
+  // 종합 1순위: 허용가 이하 중 (재구매율·판매량·가격) 순위 합이 가장 좋은 것
+  const pool = ok.length ? ok : priced.length ? priced : L;
+  const rankOf = (arr, f, asc) => { const s2 = arr.slice().sort((a, b) => (asc ? 1 : -1) * ((f(a) ?? (asc ? 1e9 : -1)) - (f(b) ?? (asc ? 1e9 : -1)))); return new Map(s2.map((x, i) => [x.offerId, i])); };
+  const r1 = rankOf(pool, (x) => x.p, true), r2 = rankOf(pool, (x) => x.repeat, false), r3 = rankOf(pool, (x) => x.sales, false);
+  const best = pool.slice().sort((a, b) => (r1.get(a.offerId) + r2.get(a.offerId) + r3.get(a.offerId)) - (r1.get(b.offerId) + r2.get(b.offerId) + r3.get(b.offerId)))[0];
+  return { text: `${L.length}개 중 ${bits.join(" · ")}`, best: best?.offerId || null, over };
 }

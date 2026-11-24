@@ -25,7 +25,7 @@ import { DEFAULTS, buildMarkets, judge, isPB, pbList } from "../shared/strategy-
 import { REVIEW_CAP } from "../shared/review-core.js";
 import { summarize as hyojaSummarize, pagePrice } from "../shared/hyoja-core.js";
 import { dhashFromGray, grayFromBGRA, rankBySimilarity, specRerank, decidePrice, koHint, toNum } from "./sku-core.js";
-import { parseCard, rankCards, decideCost, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
+import { comparePicks, parseCard, rankCards, decideCost, VERDICT_KO, DEFAULT_WEIGHTS } from "./rank-core.js";
 import { combo, scan as kwScan, draw as kwDraw, famousBrands } from "./kw-combo.js";
 import { useServer, kwSource, hasLocalDb, rScan, rDraw, rState, rBonus, rLookup, rName, rBrands } from "./kw-remote.js"; // 🔑 키워드 DB 파일이 없는 PC(수강생)는 맥미니 키워드 서버에 묻는다
 import { STRATEGY_SYSTEM, STRATEGY_SCHEMA, renderStrategyInput } from "./strategy-prompt.js";
@@ -1231,8 +1231,8 @@ const probeGap = () => 8000 + Math.floor(Math.random() * 7000); // 8~15초 무�
 // 👁 사진 확인: 지금 추천 위쪽 6개 중 아직 안 본 후보의 썸네일을 쿠팡 사진과 함께 AI에게 보여 준다. 다르다고 나오면 뒤로 → 새로 올라온 후보를 한 번 더(최대 2번)
 async function startVision() {
   const mine = cnRank;
-  if (!mine || mine.visBusy || (mine.visRounds || 0) >= 2 || !cnPhoto?.b64) return;
-  const todo = (mine.ranked || []).slice(0, 6).filter((c) => !c.vis && c.img && c.offerId);
+  if (!mine || mine.visBusy || (mine.visRounds || 0) >= 6 || !cnPhoto?.b64) return;
+  const todo = mine.cards.filter((c) => c.picked && !c.vis && c.img && c.offerId).slice(0, 6); // 담은 상품만
   if (!todo.length) return;
   mine.visBusy = true; mine.visRounds = (mine.visRounds || 0) + 1; pushRank();
   try {
@@ -1243,7 +1243,7 @@ async function startVision() {
     if (r.ok) {
       for (const it of r.items) { const c = mine.cards.find((x) => x.offerId === it.offerId); if (c) c.vis = { same: it.same, why: it.why }; }
       log("dim", `  👁 사진 확인 ${r.items.length}개 (${(r.ms / 1000).toFixed(1)}초 · ${r.model}) · ${r.items.map((x) => `${x.same === "yes" ? "○" : x.same === "no" ? "✕" : "?"}${x.why}`).join(" / ")}`);
-    } else { log("dim", `  👁 사진 확인 실패: ${r.error}`); mine.visRounds = 2; }
+    } else { log("dim", `  👁 사진 확인 실패: ${r.error}`); mine.visRounds = 6; }
   } catch (e) { log("dim", `  👁 사진 확인 오류: ${String(e?.message || e).slice(0, 120)}`); mine.visRounds = 2; }
   mine.visBusy = false;
   if (cnRank === mine) { pushRank(); startVision(); }
@@ -1255,13 +1255,17 @@ function rankNow() {
   cnRank.ranked = r.ranked; cnRank.medianPrice = r.medianPrice; cnRank.offTarget = r.excluded.filter((x) => x.offTarget).length;
   if (r.mismatch && !cnRank.mismatchLogged) { cnRank.mismatchLogged = true; log("stop", `✕ 1688 결과가 쿠팡 상품(${(cnTarget?.name || "").slice(0, 24)})과 닮은 게 없습니다 — 사진 검색이 빗나간 것 같습니다`); }
   const top = r.ranked.slice(0, 8).map((x) => ({ ...x, verdictKo: VERDICT_KO[x.verdict] || x.verdict }));
-  return { top, total: cnRank.cards.length, excluded: r.excluded.length, allow: cnTarget?.allow ?? null, medianPrice: r.medianPrice,
+  // 🧺 담은 후보(담은 순서) — 점수·특징 표시는 전체 채점 결과에서 가져온다(같은 회사 중복 정리·제외와 상관없이 담은 건 다 보여 준다)
+  const picks = cnRank.cards.filter((c) => c.picked).sort((a, b) => a.picked - b.picked).map((c) => ({ ...(r.all.find((x) => x.offerId === c.offerId) || c), picked: c.picked }));
+  const compare = comparePicks(picks, cnTarget?.allow ?? null);
+  return { picks, compare, top, total: cnRank.cards.length, excluded: r.excluded.length, allow: cnTarget?.allow ?? null, medianPrice: r.medianPrice,
     probing: !!probeCur || probeQueue.length > 0, probeLeft: probeQueue.length + (probeCur ? 1 : 0), ai: cnRank.ai || null, aiBusy: !!cnRank.aiBusy, visBusy: !!cnRank.visBusy, visDone: cnRank.cards.filter((c) => c.vis).length, captcha: !!cnRank.captcha, cost: costNow(), mismatch: !!r.mismatch };
 }
 // 원가 기준: AI 추천(없으면 점수) 상위 3개 → 1순위의 확인된 옵션가, 애매하면 확인된 것들의 중간값
 function costNow() {
   const card = (id) => cnRank.cards.find((o) => o.offerId === id) || {};
-  const picks = cnRank.ai?.picks?.length ? cnRank.ai.picks : (cnRank.ranked || []);
+  const mine = cnRank.cards.filter((c) => c.picked).sort((a, b) => a.picked - b.picked); // 🧺 사람이 담은 것이 있으면 그것이 원가 기준
+  const picks = mine.length ? mine : cnRank.ai?.picks?.length ? cnRank.ai.picks : (cnRank.ranked || []);
   const list = picks.slice(0, 3).map((p) => { const c = card(p.offerId), price = p.price ?? c.realPrice ?? c.price ?? null;
     return { offerId: p.offerId, price, real: c.realPrice != null, sure: c.realPrice != null && !!c.priceSure && price === c.realPrice }; });
   return decideCost(list);
@@ -1270,7 +1274,7 @@ const pushRank = () => { const r = rankNow(); if (r && cnView) cnView.webContent
 ipcMain.handle("cn:rank", async (e, p) => {
   if (!isCnWc(e.sender) || !cnTarget) return { error: "리스트업에서 🔍1688로 들어온 검색이 아닙니다" };
   const cards = (Array.isArray(p?.cards) ? p.cards : []).slice(0, 80).map((c, i) => parseCard(c.lines, { rank: i + 1, offerId: String(c.offerId || ""), img: c.img || "" }))
-    .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, vis: o.vis ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
+    .map((c) => { const o = cnRank?.cards.find((x) => x.offerId === c.offerId) || {}; return { ...c, realPrice: o.realPrice ?? null, option: o.option ?? null, picked: o.picked ?? null, vis: o.vis ?? null, priceSure: !!o.priceSure, priceHow: o.priceHow || "" }; }); // 다시 읽어도 확인한 옵션가·확신 유지
   // 1688 원문 제목이 중국어면 "같은 상품인지"(쿠팡 상품명·대표키워드 겹침)를 볼 수 없다 → 제목만 번역해(저장해 둔 번역 재사용) 판단에 쓴다. 8초 넘으면 번역 없이 진행
   const zh = cards.filter((c) => /[\u4e00-\u9fff]/.test(c.title || "") && !/[가-힣]{2}/.test(c.title || ""));
   if (zh.length) {
@@ -1280,7 +1284,8 @@ ipcMain.handle("cn:rank", async (e, p) => {
   }
   cnRank = { cards };
   const r = rankNow();
-  startVision(); // 👁 위쪽 후보를 사진으로 확인(뒤에서) — 끝나면 순서를 다시 매겨 보드에 보낸다
+  // (2026-11-24) 자동 사진 확인은 끔 — 같은 상품 고르기는 사람이 한다(🧺 담기). 사진 확인은 담은 상품에만(pickToggle)
+  // startVision(); // 👁 위쪽 후보를 사진으로 확인(뒤에서) — 끝나면 순서를 다시 매겨 보드에 보낸다
   // 후보를 하나도 못 읽었으면 실제 카드 글자를 남긴다(1688 표기·언어가 바뀌었을 때 규칙을 맞추는 근거)
   if (!r.top.length && cnTarget.auto) setTimeout(() => autoFail("1688 후보가 없음"), 0);
   if (!r.top.length && p?.cards?.length) log("dim", `  1688 카드를 못 읽음 · 예: ${(p.cards[0].lines || []).map((x) => String(x).trim()).filter(Boolean).join(" | ").slice(0, 400)}`);
@@ -1288,6 +1293,24 @@ ipcMain.handle("cn:rank", async (e, p) => {
   if (off) log("dim", `  1688 다른 상품 의심 ${off}개 뺌 (쿠팡 상품명·대표키워드와 제목이 거의 안 겹침 — 사진 일부만 잘라 찾은 결과)`);
   log("sys", `▶ 1688 후보 ${cards.length}개 읽음 · 상위 ${r.top.slice(0, 3).map((x) => `${x.score}점`).join("/")}${cnTarget.allow ? ` · 허용 소싱가 ¥${cnTarget.allow.toFixed(1)}` : " · 허용 소싱가 없음(리스트업 판매가 필요)"}`);
   return r;
+});
+// 🧺 담기/빼기: 결과 화면 카드의 "＋ 담기" · 보드의 ✕. 담으면 그 상품의 진짜 옵션가를 바로 읽고(1초 안팎), 잠시 뒤 담은 것들만 사진 확인
+let visTimer = null;
+ipcMain.handle("cn:pickToggle", async (e, p = {}) => {
+  if (!isCnWc(e.sender) || !cnRank) return { error: "먼저 결과 목록을 읽어야 합니다" };
+  const id = String(p.offerId || ""), c = cnRank.cards.find((x) => x.offerId === id);
+  if (!c) return { error: "이 상품을 목록에서 못 찾았습니다 — ↻ 새로고침 후 다시" };
+  const on = p.on ?? !c.picked;
+  if (on && !c.picked && cnRank.cards.filter((x) => x.picked).length >= 8) return { error: "8개까지 담을 수 있어요" };
+  c.picked = on ? Date.now() : null;
+  log("dim", `  🧺 ${on ? "담음" : "뺌"} · ${String(c.titleKo || c.title || "").slice(0, 30)} · 목록가 ¥${c.price ?? "?"}`);
+  pushRank();
+  if (on) {
+    const mine = cnRank;
+    if (c.realPrice == null) fastProbe(id).then((r) => { if (cnRank !== mine || !r || r.captcha) return; markProbe(id, r); log("dim", `  🧺 옵션가 · ${id} → ${r.price != null ? "¥" + r.price : "없음"} · ${r.how || ""}`); pushRank(); }).catch(() => {});
+    clearTimeout(visTimer); visTimer = setTimeout(() => startVision(), 2500);
+  }
+  return { ok: true, picked: !!c.picked };
 });
 // 카드 하나만 진짜 옵션가 확인(보드의 "옵션가 확인" 버튼)
 ipcMain.handle("cn:probeOne", async (e, offerId) => {

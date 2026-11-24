@@ -445,7 +445,7 @@ function readCards() {
       const attrs = [...c.querySelectorAll("*")].flatMap((e) => [...e.attributes].filter((a) => /offer|item|id|href|click|spm|data-/i.test(a.name)).map((a) => `${a.name}=${String(a.value).slice(0, 60)}`)).slice(0, 25);
       ipcRenderer.send("cn:log", `진단: 카드 상품 번호 못 읽음 · renderkey=${(c.getAttribute("data-renderkey") || c.querySelector("[data-renderkey]")?.getAttribute("data-renderkey") || "없음").slice(0, 160)} · 태그 ${c.tagName.toLowerCase()}.${String(c.className).slice(0, 40)} · 부모링크 ${c.closest("a[href]")?.href?.slice(0, 120) || "없음"} · 링크 ${hrefs.join(" , ") || "없음"} · 숫자 ${nums.join(" | ") || "없음"} · 속성 ${attrs.join(" ; ")}`);
     }
-    return { offerId: m ? m[1] : "", lines: (c.innerText || "").split("\n"), img: (c.querySelector("img")?.currentSrc || c.querySelector("img")?.src || "").slice(0, 300) };
+    return { offerId: m ? m[1] : "", lines: (c.innerText || "").split("\n").filter((l) => !/^\s*(＋ 담기|✓ 담김|✕ .{0,18})\s*$/.test(l)), img: (c.querySelector("img")?.currentSrc || c.querySelector("img")?.src || "").slice(0, 300) };
   }).filter((c) => c.lines.length > 3);
 }
 const fmt = (n) => (n == null ? "-" : n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, "") + "만" : String(n));
@@ -492,30 +492,46 @@ function renderRank(panel, r) {
     : r.top.slice(0, 3).map((x) => ({ ...x, price: x.realPrice ?? x.price, real: x.realPrice != null, sure: x.realPrice != null && !!x.priceSure, reason: x.realPrice != null ? (x.option?.ko || x.option?.label || "") : "" }));
   list.forEach((x) => { if (!x.img) x.img = panel.__img.get(x.offerId) || ""; });
   // 내용이 바뀌면(옵션가 확인·AI 결과) 카드를 다시 띄우고 반짝인다
-  const sigNow = JSON.stringify(list.map((x) => [x.offerId, x.price, x.verdict, !!ai]));
+  const sigNow = JSON.stringify([list.map((x) => [x.offerId, x.price, x.verdict, !!ai]), (r.picks || []).map((x) => [x.offerId, x.realPrice])]);
   const changed = panel.__drawn && panel.__sig !== sigNow; panel.__sig = sigNow;
   const first = !panel.__drawn || changed; panel.__drawn = true;
-  body.innerHTML = list.map((x, i) => {
+  const card = (x, i, pick) => {
     const [cls, label] = RB[x.verdict] || ["n", "—"];
     const ratio = r.allow && x.price != null && !odd ? x.price / r.allow : null;
-    return `<div class="card ${cls}${first ? " in" : ""}${changed ? " flash" : ""}" style="${first ? `animation-delay:${0.15 + i * 0.1}s` : ""}" title="${esc([x.company, (x.notes || []).join(" · "), x.priceHow, ai ? "" : `규칙 ${x.score}/${x.max}점`].filter(Boolean).join("\n"))}">
-      <div class="im">${x.img ? `<img src="${esc(x.img)}" alt="">` : ""}<b class="no">${i + 1}</b><b class="sg ${cls}">${ai ? `AI ${i + 1}·` : ""}${label}</b></div>
+    return `<div class="card ${pick ? (r.compare?.best === x.offerId ? "g" : "n") + " pk" : cls}${first ? " in" : ""}${changed ? " flash" : ""}" style="${first ? `animation-delay:${0.15 + i * 0.1}s` : ""}" title="${esc([x.company, (x.notes || []).join(" · "), x.priceHow, (ai && !pick) ? "" : `규칙 ${x.score}/${x.max}점`].filter(Boolean).join("\n"))}">
+      <div class="im">${x.img ? `<img src="${esc(x.img)}" alt="">` : ""}<b class="no">${i + 1}</b><b class="sg ${cls}">${pick ? (r.compare?.best === x.offerId ? "담음 · 1순위" : "담음") : `${ai ? `AI ${i + 1}·` : ""}${label}`}</b></div>
       <div class="bd">
         <div class="ttl">${esc(x.title || "")}${x.same_product ? `<span class="same ${x.same_product}">${{ yes: "같은 상품", likely: "거의 같음", no: "다른 상품" }[x.same_product] || ""}</span>` : ""}</div>
         <div class="pr"><b>${x.price != null ? "¥" + x.price : "-"}</b><span class="${x.real && x.sure ? "ok" : "est"}" title="${esc(x.priceHow || "")}">${x.real ? (x.sure ? "진짜 옵션가" : "옵션 애매 · 상품 열어 확인") : "목록 최저가 · 확인 전"}</span></div>
         ${ratio != null ? `<div class="bar ${ratio <= 1 ? "ok" : "over"}"><i style="width:${Math.min(100, ratio * 100)}%"></i><span>허용 ¥${r.allow.toFixed(1)}의 ${Math.round(ratio * 100)}%</span></div>` : ""}
         <div class="chips">${x.rank ? `<span title="1688이 사진과 닮았다고 본 순서">사진 유사 <b>${x.rank}위</b></span>` : ""}${x.vis ? `<span style="color:${x.vis.same === "yes" ? "#3ddc84" : x.vis.same === "no" ? "#ff6b6b" : "#9fb3c8"}" title="AI가 쿠팡 사진과 이 상품 사진을 직접 비교한 결과">👁 ${x.vis.same === "yes" ? "같은 상품" : x.vis.same === "no" ? "다른 상품" : "판단 어려움"}${x.vis.why ? " · " + esc(x.vis.why) : ""}</span>` : ""}${(x.featHit || []).length ? `<span style="color:#3ddc84" title="쿠팡 상품명의 특징이 이 상품 제목에도 있음">✓ ${esc(x.featHit.join("·"))}</span>` : ""}${(x.featClash || []).length ? `<span style="color:#ffb454" title="쿠팡 상품과 다른 특징">≠ ${esc(x.featClash.join("·"))}</span>` : ""}<span>월 판매 <b>${fmt(x.sales)}</b></span><span>재구매 <b>${x.repeat != null ? x.repeat + "%" : "-"}</b></span><span>업력 <b>${x.years != null ? x.years + "년" : "-"}</b></span>${x.moq ? `<span>최소 <b>${x.moq}</b></span>` : ""}${!ai && x.score != null ? `<span>점수 <b>${x.score}</b></span>` : ""}</div>
-        ${ai && x.optionLabel ? `<div class="opt">옵션: ${esc(x.optionLabel)}</div>` : ""}
-        ${x.reason ? `<div class="rs${ai ? " big" : ""}">${esc(x.reason)}</div>` : ""}${x.risk ? `<div class="rk">⚠ ${esc(x.risk)}</div>` : ""}
-        ${!x.real ? `<button type="button" class="open probe1" data-id="${x.offerId}" title="이 상품만 진짜 옵션가 확인(1초 안팎)" style="margin-right:6px">옵션가 확인</button>` : ""}<button type="button" class="open" data-id="${x.offerId}">상품 열기 ›</button>
+        ${ai && !pick && x.optionLabel ? `<div class="opt">옵션: ${esc(x.optionLabel)}</div>` : ""}
+        ${x.reason ? `<div class="rs${ai && !pick ? " big" : ""}">${esc(x.reason)}</div>` : ""}${x.risk ? `<div class="rk">⚠ ${esc(x.risk)}</div>` : ""}
+        ${!x.real ? `<button type="button" class="open probe1" data-id="${x.offerId}" title="이 상품만 진짜 옵션가 확인(1초 안팎)" style="margin-right:6px">옵션가 확인</button>` : ""}<button type="button" class="open" data-id="${x.offerId}">상품 열기 ›</button>${pick ? `<button type="button" class="open unpick" data-id="${x.offerId}" title="담은 목록에서 빼기" style="margin-left:6px">✕ 빼기</button>` : `<button type="button" class="open addpick" data-id="${x.offerId}" title="같은 상품이면 담아서 비교" style="margin-left:6px">＋ 담기</button>`}
       </div></div>`;
-  }).join("") || `<div class="empty">후보 없음</div>`;
+  };
+  const mk = (x) => ({ ...x, price: x.realPrice ?? x.price, real: x.realPrice != null, sure: x.realPrice != null && !!x.priceSure, reason: x.realPrice != null ? (x.option?.ko || x.option?.label || "") : "" });
+  const picks = (r.picks || []).map(mk); picks.forEach((x) => { if (!x.img) x.img = panel.__img.get(x.offerId) || ""; });
+  panel.__picked = new Set(picks.map((x) => x.offerId));
+  const refList = list.filter((x) => !panel.__picked.has(x.offerId));
+  body.innerHTML = (picks.length
+      ? `<div class="pkhd">🧺 담은 상품 ${picks.length}개</div>${r.compare ? `<div class="cmp">${esc(r.compare.text)}</div>` : ""}${picks.map((x, i) => card(x, i, true)).join("")}`
+      : `<div class="guide"><b>같은 상품을 직접 골라 주세요</b>왼쪽 결과에서 내 상품과 같은 것의 <i>＋ 담기</i>를 2~5개 누르면<br>진짜 옵션가·재구매율·판매량을 바로 비교해 드려요</div>`)
+    + `<details class="ref"${panel.__refOpen ? " open" : ""}><summary>앱이 고른 참고 후보 ${refList.length}개 <small>사진 유사·판매자 점수 기준 · 같은 상품인지는 직접 확인</small></summary>${refList.map((x, i) => card(x, i, false)).join("") || `<div class="empty">후보 없음</div>`}</details>`;
+  const ref = body.querySelector("details.ref"), foot = panel.querySelector(".foot");
+  if (foot) foot.hidden = !panel.__refOpen; // 딸깍 추천(참고 후보용)은 참고 후보를 펼쳤을 때만
+  ref.addEventListener("toggle", () => { panel.__refOpen = ref.open; if (foot) foot.hidden = !ref.open; });
+  body.querySelectorAll("button.addpick, button.unpick").forEach((b) => b.addEventListener("click", async (e) => {
+    e.stopImmediatePropagation(); b.disabled = true;
+    const x = await ipcRenderer.invoke("cn:pickToggle", { offerId: b.dataset.id, on: b.classList.contains("addpick") }).catch((err) => ({ error: /No handler/.test(String(err)) ? "앱을 다시 켜야 합니다" : String(err) }));
+    if (x?.error) { b.disabled = false; b.textContent = "✕ " + String(x.error).slice(0, 22); }
+  }, true));
   body.querySelectorAll("button.probe1").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopImmediatePropagation(); b.disabled = true; b.textContent = "⏳ 확인 중…";
     const r = await ipcRenderer.invoke("cn:probeOne", b.dataset.id).catch((err) => ({ error: /No handler/.test(String(err)) ? "앱을 다시 켜야 합니다" : String(err) }));
     if (r?.error) { b.disabled = false; b.textContent = "✕ " + String(r.error).slice(0, 24); }
   }, true));
-  body.querySelectorAll("button.open:not(.probe1)").forEach((b) => b.addEventListener("click", () => {
+  body.querySelectorAll("button.open:not(.probe1):not(.addpick):not(.unpick)").forEach((b) => b.addEventListener("click", () => {
     const id = b.dataset.id, href = cardHref.get(id);
     const url = /^\d{9,14}$/.test(id) ? `https://detail.1688.com/offer/${id}.html` : href || "";
     ipcRenderer.send("cn:log", `상품 열기 · 번호 ${id || "없음"} → ${url.slice(0, 120) || "주소 없음"}`);
@@ -654,6 +670,16 @@ async function rankPanel() {
   #sg-rank button.open{margin-top:7px;border:1px solid #1d4a33;border-radius:7px;padding:5px 10px;background:transparent;color:#bfe8cf;cursor:pointer;font-size:12px}
   #sg-rank button.open:hover{border-color:var(--n);color:#fff}
   #sg-rank .empty{color:#7a9a88;padding:30px 0;text-align:center}
+  #sg-rank .pkhd{font-weight:800;font-size:14px;color:#eafff2;margin:2px 0 8px}
+  #sg-rank .cmp{border:1px solid #1f6a45;background:#0b1f15;color:#d6ffe6;border-radius:10px;padding:9px 11px;font-size:13px;line-height:1.5;margin-bottom:10px}
+  #sg-rank .guide{border:1px dashed #2c5a43;border-radius:12px;padding:16px 14px;color:#a9c8b6;font-size:13px;line-height:1.6;margin-bottom:12px;text-align:center}
+  #sg-rank .guide b{display:block;color:#eafff2;font-size:15px;margin-bottom:6px} #sg-rank .guide i{font-style:normal;color:#3ddc84;font-weight:800}
+  #sg-rank .card.pk{border-color:#2c5a43} #sg-rank .card.pk.g{border-color:#3ddc84;box-shadow:0 0 0 1px #3ddc84 inset}
+  #sg-rank details.ref{margin-top:12px;border-top:1px solid #14261c;padding-top:10px}
+  #sg-rank details.ref summary{cursor:pointer;color:#9fb3c8;font-size:13px;font-weight:700;list-style:none;padding:6px 0}
+  #sg-rank details.ref summary::before{content:"▸ "} #sg-rank details.ref[open] summary::before{content:"▾ "}
+  #sg-rank details.ref summary small{display:block;font-weight:400;font-size:11.5px;color:#6f8a7b;margin-top:2px}
+  #sg-rank details.ref .card{margin-top:8px;opacity:.92}
   #sg-rank .st{margin:0 18px 6px;font-size:12px;color:#9fc3ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
   #sg-rank .foot{padding:12px 18px 16px;border-top:1px solid #10221a;background:rgba(4,7,10,.92)}
   #sg-rank button.go{width:100%;border:0;border-radius:11px;padding:13px;background:var(--n);color:#04210f;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 0 24px rgba(61,220,132,.35)}
@@ -686,6 +712,32 @@ async function rankPanel() {
     <div class="foot"><button type="button" class="go" disabled>▶ 딸깍 추천</button></div>`;
   (document.body || document.documentElement).appendChild(panel);
   panel.querySelector(".hd").style.cursor = "move"; makeDraggable(panel, "cn-rank", { handle: ".hd", fixSize: true }); // 머리줄을 잡고 옮긴다
+  // 🧺 결과 화면의 상품마다 "＋ 담기" 버튼(사진 왼쪽 위). 1688이 카드를 다시 그리면 지워지므로 1.2초마다 다시 붙이고, 담은 상태를 맞춘다
+  const pickBtnCss = "position:absolute;left:8px;top:8px;z-index:9;border:0;border-radius:8px;padding:6px 10px;font:800 12.5px -apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)";
+  let lastRead = 0;
+  setInterval(() => {
+    if (Date.now() - lastRead > 4000) { lastRead = Date.now(); try { readCards(); } catch {} } // 아래로 내려 더 나온 카드도
+    const picked = panel.__picked || new Set();
+    for (const [id, el] of cardEl) {
+      if (!el.isConnected) continue;
+      let b = el.querySelector(":scope > .sg-pick-btn");
+      if (!b) {
+        if (getComputedStyle(el).position === "static") el.style.position = "relative";
+        b = document.createElement("button"); b.type = "button"; b.className = "sg-pick-btn"; b.dataset.id = id;
+        const stop = (e) => { e.stopPropagation(); };
+        ["pointerdown", "mousedown", "mouseup"].forEach((t) => b.addEventListener(t, stop, true));
+        b.addEventListener("click", async (e) => {
+          e.preventDefault(); e.stopPropagation(); b.disabled = true;
+          const x = await ipcRenderer.invoke("cn:pickToggle", { offerId: id }).catch((err) => ({ error: /No handler/.test(String(err)) ? "앱을 다시 켜야 해요" : "오류" }));
+          b.disabled = false; if (x?.error) { b.textContent = "✕ " + String(x.error).slice(0, 16); b.dataset.err = "1"; setTimeout(() => { delete b.dataset.err; }, 2500); }
+        }, true);
+        el.appendChild(b);
+      }
+      if (b.dataset.err) continue;
+      const on = picked.has(id), want = on ? "✓ 담김" : "＋ 담기";
+      if (b.textContent !== want) { b.textContent = want; b.style.cssText = pickBtnCss + (on ? ";background:#3ddc84;color:#06240f" : ";background:rgba(11,15,20,.88);color:#fff"); b.title = on ? "담은 목록에서 빼기" : "내 상품과 같으면 담아서 비교"; }
+    }
+  }, 1200);
   setInterval(() => { if (!panel.__t0) return; const s = `${((Date.now() - panel.__t0) / 1000).toFixed(1)}s`; panel.querySelectorAll(".bt").forEach((t) => (t.textContent = s)); }, 100); // 진행 중 경과 시간
   // ✕ = 숨기기(지우지 않음): 보드가 ✕ 자리의 "🎯 추천 보기" 버튼으로 줄어든다. 버튼은 끌어서 옮길 수 있고 마지막 자리를 기억한다.
   // 숨겨 둔 동안에도 옵션가·AI 결과는 계속 갱신된다
