@@ -93,6 +93,13 @@ function chatDom(kind, arg) {
   // 🌐 1688 사이트(검색 결과·상품 페이지) 번역: 화면에 보이는, 글이 직접 든 가장 안쪽 요소만
   if (kind === "trsite") {
     if (document.documentElement.hasAttribute("data-sg-tr-hold")) return []; // 자동 조작 중(사진 올리고 검색 누르는 동안)에는 번역을 쉰다
+    // 보안 인증(슬라이더) 화면은 절대 번역하지 않는다 — 글자를 덮어쓰면 슬라이더가 반응하지 않을 수 있다(2026-11-24). 이미 입힌 번역도 걷어 낸다
+    if (/punish|_____tmd_____|captcha|x5sec/i.test(location.href) || document.querySelector('[id^="nc_"], .nc-container, [class*="baxia" i], [class*="captcha" i]')) {
+      document.documentElement.setAttribute("data-sg-tr-hold", "captcha");
+      const st0 = document.getElementById("sg-tr-style"); if (st0) st0.disabled = true;
+      for (const e of document.querySelectorAll("[data-sg-ko]")) { e.removeAttribute("data-sg-ko"); e.removeAttribute("data-sg-src"); e.removeAttribute("data-sg-site"); e.removeAttribute("data-sg-1l"); if (e.title && /[\u4e00-\u9fff]/.test(e.title)) e.removeAttribute("title"); }
+      return [];
+    }
     const NO_TR = '[class*="search-input" i], [class*="searchbar" i], [class*="search-bar" i], [class*="searchbox" i], [class*="image-search" i], [class*="imagesearch" i], [class*="copy-image" i], [class*="picsearch" i], [class*="upload" i], [class*="captcha" i], [class*="nc_" i], [class*="login" i], form, #sg-scan, #sg-rank, #sg-wave';
     const zh = /[\u4e00-\u9fff]/;
     window.__sgTrN = window.__sgTrN || 0;
