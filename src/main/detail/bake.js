@@ -8,16 +8,14 @@ import { resolveProvider, getVertexToken, vertexUrl } from "./scene.js";
 import { googleAuth } from "./google-conn.js";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { codexBin, codexSpawnPlan } from "./codex-bin.js";
+export { codexBin };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mimeOf = (f) => (/\.png$/i.test(f) ? "image/png" : /\.webp$/i.test(f) ? "image/webp" : "image/jpeg");
 export const BAKE_USD = 0.134; // 장당 추정(출력 1,120토큰 × $120/100만) — 구글 요금표로 확정 전
 
-// 🧪 내부용: 이 컴퓨터의 ChatGPT 앱에 든 명령줄(codex)로 그린다 — ChatGPT 로그인(구독)을 쓰므로 키가 필요 없다. 수강생 배포용 아님(맥·ChatGPT 앱 설치·로그인 필요)
-export function codexBin() {
-  const c = [process.env.SEEDHACK_CODEX_BIN, "/Applications/ChatGPT.app/Contents/Resources/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex", path.join(os.homedir(), ".local/bin/codex")].filter(Boolean);
-  return c.find((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } }) || null;
-}
+// 🧪 내부용: 이 컴퓨터의 ChatGPT 앱에 든 명령줄(codex)로 그린다 — ChatGPT 로그인(구독)을 쓰므로 키가 필요 없다. 맥은 ChatGPT 앱, 윈도우는 codex 설치·로그인 필요(codex-bin.js)
 const CODEX_TAIL = `
 
 [작업 방법]
@@ -29,8 +27,10 @@ function callCodex(auth, file, prompt, { timeoutMs = 420000 } = {}) {
     let dir; try { dir = fs.mkdtempSync(path.join(os.tmpdir(), "seedhack-cx-")); fs.copyFileSync(file, path.join(dir, "in.jpg")); } catch (e) { return resolve({ error: `임시 폴더 실패 ${String(e?.message || e).slice(0, 60)}` }); }
     const done = (v) => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} resolve(v); };
     let buf = "", err = "", fin = false;
-    const ch = spawn(auth.bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "workspace-write", "-C", dir, "-i", path.join(dir, "in.jpg"), "--json", prompt + CODEX_TAIL], { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
-    const tm = setTimeout(() => { if (fin) return; fin = true; try { ch.kill("SIGKILL"); } catch {} done({ error: "시간 초과" }); }, timeoutMs);
+    const pl = codexSpawnPlan(auth.bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "workspace-write", "-C", dir, "-i", path.join(dir, "in.jpg"), "--json", "-"]);
+    let ch; try { ch = spawn(pl.cmd, pl.args, { cwd: dir, stdio: ["pipe", "pipe", "pipe"], ...pl.opts }); } catch (e) { return done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); }
+    ch.stdin.on("error", () => {}); ch.stdin.end(prompt + CODEX_TAIL, "utf8");
+    const tm = setTimeout(() => { if (fin) return; fin = true; try { if (process.platform === "win32" && ch.pid) spawn("taskkill", ["/pid", String(ch.pid), "/T", "/F"], { windowsHide: true }); else ch.kill("SIGKILL"); } catch {} done({ error: "시간 초과" }); }, timeoutMs);
     ch.stdout.on("data", (d) => { if (buf.length < 4e6) buf += d; }); ch.stderr.on("data", (d) => { if (err.length < 4000) err += d; });
     ch.on("error", (e) => { if (fin) return; fin = true; clearTimeout(tm); done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); });
     ch.on("close", (code) => {

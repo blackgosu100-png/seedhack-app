@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { offerUrl } from "./extract-core.js"; // 📄 주소 칸 입력 → 1688 상품 주소(순수 함수, extract-core.test.js)
 import { routeProductUrl, cnWall, CN_WALL_PROBE_JS, SITE_NAME, isKoSite, buildKoRaw, koWallMessage } from "./site-core.js"; // ▶ 주소로 만들기: 1688·타오바오/티몰·쿠팡·네이버·오늘의집 주소 가려내기(site-core.test.js)
+import { codexBin } from "./codex-bin.js"; // 🧪 GPT 명령줄 그리기(있을 때만 선택 칸이 보인다)
 import { newClock, clockKey, clockTick, clockStop, clockResume, clockSummary, fmtDur } from "./clock-core.js"; // ⏱ 버튼 누른 순간~완성까지 단계별 실제 시간(clock-core.test.js)
 import { addUsage, summarize as summarizeUsage } from "./usage-core.js"; // 🎨 이미지 생성 사용량(usage-core.test.js)
 import { createStore as createTemplateStore, themeAsTemplate, overrideChips, sourceKey as templateSourceKey, defaultName as templateDefaultName, newId as templateNewId } from "./templates.js"; // 🧲 내 템플릿 보관함(2단계, templates.test.js)
@@ -2001,7 +2002,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       store.set("settings", next);
     }
     const st = store.get("settings") || {};
-    const codexReady = [process.env.SEEDHACK_CODEX_BIN, "/Applications/ChatGPT.app/Contents/Resources/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"].some((f) => { try { return !!f && fs.statSync(f).isFile(); } catch { return false; } }); // bake.js codexBin 과 같은 자리
+    const codexReady = !!codexBin();
     let imageGen = { provider: "", connected: false, project: "" };
     try { const pv = mods0.scene?.resolveProvider ? mods0.scene.resolveProvider({ settings: sceneSettingsNow() }) : null; if (pv) imageGen = { provider: pv.provider, connected: !!pv.key, project: pv.project || "", model: pv.model || "" }; } catch {}
     return { imageGen, detailReview: st.detailReview === true, detailPresentAuto: st.detailPresentAuto !== false, detailTemplate: st.detailTemplate || "clean", bakeEngine: st.detailBakeEngine === "codex" && codexReady ? "codex" : "", codexReady, hasOpenaiKey: !!st.openaiKey, openaiKeyHint: st.openaiKey ? `…${String(st.openaiKey).slice(-4)}` : "", hasGeminiKey: !!(st.geminiKey || process.env.GEMINI_API_KEY), geminiKeyHint: st.geminiKey ? `…${String(st.geminiKey).slice(-4)}` : "", geminiImageModel: st.geminiImageModel || "gemini-2.5-flash-image" };
