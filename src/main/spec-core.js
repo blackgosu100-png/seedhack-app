@@ -56,6 +56,34 @@ function pickByOption(list, optionLabel) {
 }
 
 // text: 상세 설명 글자, attrText: 속성표 글자("重量(g) 1385 箱装数量 16 …"), optionLabel: 고른 옵션명
+// 옵션별 규격표 읽기. 머리줄에 长·宽·高 가 있고, 아래 줄이 "옵션이름 숫자 숫자 숫자 …" 꼴
+function sizeTable(t, optionLabel) {
+  const lines = t.split("\n").map((x) => x.trim()).filter(Boolean);
+  const hi = lines.findIndex((l) => /长/.test(l) && /宽/.test(l) && /高/.test(l) && l.length < 120);
+  if (hi < 0) return null;
+  const head = lines[hi].split(/\s+/), col = (re) => head.findIndex((h) => re.test(h));
+  const cL = col(/长/), cW = col(/宽/), cH = col(/高/), cG = col(/重量|净重|克重/);
+  if (cL < 0 || cW < 0 || cH < 0) return null;
+  const unit = /mm|毫米/i.test(lines[hi]) ? "mm" : /(?<![c厘])m\b/.test(lines[hi]) && !/cm/i.test(lines[hi]) ? "m" : "cm";
+  const gUnit = cG >= 0 && /kg|公斤|千克/i.test(head[cG]) ? 1000 : 1;
+  const firstNum = Math.min(cL, cW, cH), rows = [];
+  for (const l of lines.slice(hi + 1, hi + 40)) {
+    const tk = l.split(/\s+/), nums = []; let i = tk.length;
+    while (i > 0 && /^\d+(?:\.\d+)?$/.test(tk[i - 1])) nums.unshift(Number(tk[--i]));
+    if (nums.length < 3) { if (rows.length) break; continue; }
+    const label = tk.slice(0, i).join(""), off = head.length - nums.length - (i ? 0 : 0); // 머리줄 칸 수와 숫자 칸 수의 차 = 이름 칸 수
+    const at = (c) => nums[c - (head.length - nums.length)];
+    const L = at(cL), W = at(cW), H = at(cH); if (![L, W, H].every((v) => v > 0)) continue;
+    rows.push({ label, mm: [L, W, H].map((v) => Math.round(unit === "mm" ? v : unit === "m" ? v * 1000 : v * 10)), raw: `${L}*${W}*${H}${unit}`, g: cG >= 0 && at(cG) > 0 ? Math.round(at(cG) * gUnit) : null });
+  }
+  if (!rows.length) return null;
+  const norm = (x) => String(x || "").replace(/\s+/g, "").replace(/[›>]/g, "");
+  const opt = norm(optionLabel);
+  const hit = opt ? rows.find((r) => norm(r.label) === opt) || rows.find((r) => r.label && (opt.includes(norm(r.label)) || norm(r.label).includes(opt))) : null;
+  const same = rows.every((r) => r.raw === rows[0].raw && r.g === rows[0].g);
+  const pick = hit || rows[0];
+  return { ...pick, matched: !!hit || same, rows: rows.length };
+}
 export function parseSpecs({ text = "", attrText = "", optionLabel = "" } = {}) {
   const t = normKoSpecs(String(text).replace(/\r/g, "").replace(/[ \t]+/g, " ")); // 1688 한국어판 라벨(포장 크기·무게 등)도 같은 규칙으로
   const a = normKoSpecs(String(attrText).replace(/\s+/g, " "));
@@ -66,8 +94,16 @@ export function parseSpecs({ text = "", attrText = "", optionLabel = "" } = {}) 
     const list = dimsWithTags(segment(t, label));
     if (list.length && !out[key]) { const p = pickByOption(list, optionLabel); out[key] = p.mm; out.source.push(`${label} ${p.raw}${p.tag ? ` (${p.tag})` : ""}`); if (!p.matched && list.length > 1) out.ambiguous = true; }
   }
+  // 1-1) 옵션별 규격표: "颜色 长(cm) 宽(cm) 高(cm) 体积 重量(g)" 머리줄 아래 "蓝色包+6个蓝色衣架 17 17 7 2023 245" 같은 줄 → 고른 옵션의 줄을 쓴다
+  const tb = sizeTable(t, optionLabel);
+  if (tb && !out.pkgMm && !out.productMm) { out.productMm = tb.mm; out.source.push(`규격표 ${tb.raw}${tb.label ? ` (${tb.label})` : ""}`); if (tb.g != null) { out.g = tb.g; out.source.push(`규격표 무게 ${tb.g}g`); } if (!tb.matched && tb.rows > 1) out.ambiguous = true; }
+  // 1-2) 外箱·外大箱·整箱·纸箱 尺寸 은 "여러 개가 든 큰 박스" 크기다 — 제품 크기로 쓰면 입출고비가 몇 배로 잡힌다(2026-11-24: 外大箱尺寸 69*45*30cm 를 제품 크기로 읽음)
+  const CARTON = /(?:外大箱|外箱|大箱|整箱|纸箱|箱子|箱规|装箱|外包装箱)\s*(?:的)?\s*(?:尺寸|规格|大小)\s*[:：]?\s*/;
+  const cm = t.match(new RegExp(CARTON.source + "([^\\n]{0,40})"));
+  if (cm) { const l = dimsWithTags(cm[1]); if (l.length) { out.cartonMm = l[0].mm; out.source.push(`외박스 ${l[0].raw}`); } }
+  const tNoCarton = t.replace(new RegExp(CARTON.source + "[^\\n]{0,40}", "g"), " ");
   if (!out.pkgMm && !out.productMm) { // 라벨 없이 "尺寸"만 있거나 속성표에 있는 경우
-    const list = dimsWithTags(segment(t, "尺寸") || segment(a, "尺寸"));
+    const list = dimsWithTags(segment(tNoCarton, "尺寸") || segment(a, "尺寸"));
     if (list.length) { const p = pickByOption(list, optionLabel); out.productMm = p.mm; out.source.push(`尺寸 ${p.raw}`); if (!p.matched && list.length > 1) out.ambiguous = true; }
   }
   // 2) 무게: 개당 무게 우선, 整箱毛重(박스 총중량)은 제외
@@ -80,8 +116,10 @@ export function parseSpecs({ text = "", attrText = "", optionLabel = "" } = {}) 
     const m = a.match(/重量\s*\(?\s*(g|kg|克|公斤)?\s*\)?\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(g|kg|克|公斤)?/i);
     if (m) { const unit = m[3] || m[1] || "g"; out.g = Math.round(toG(Number(m[2]), unit)); out.source.push(`속성 重量 ${m[2]}${unit}`); }
   }
-  // 3) 박스당 수량
-  for (const label of ["装箱数量", "箱装数量", "每箱"]) {
+  // 3) 박스당 수량 — "装箱数：带夹子款60套/箱，不带夹子款90套/箱"처럼 "N套/箱" 꼴을 먼저(여러 개면 적은 쪽 + 확인 표시)
+  { const per = [...t.matchAll(/(\d{1,4})\s*(?:个|套|件|只|pcs|PCS|双|条|包)\s*[\/／每]\s*箱/g)].map((m) => Number(m[1])).filter((n) => n > 0);
+    if (per.length) { out.cartonQty = Math.min(...per); out.source.push(`装箱 ${per.join("·")}/箱`); if (new Set(per).size > 1) out.ambiguous = true; } }
+  if (out.cartonQty == null) for (const label of ["装箱数量", "箱装数量", "装箱数", "每箱"]) {
     const seg = segment(t, label) || segment(a, label);
     const list = [...seg.matchAll(/([^\s:：,，/]{0,6}?)\s*(\d{1,4})\s*(?:个|套|件|只|pcs|PCS)?\s*\/?\s*箱?/g)].map((m) => ({ tag: m[1] || "", n: Number(m[2]) })).filter((x) => x.n > 0 && x.n < 10000);
     if (list.length) { const p = pickByOption(list, optionLabel); out.cartonQty = p.n; out.source.push(`${label} ${p.n}/箱${p.tag ? ` (${p.tag})` : ""}`); break; }
