@@ -541,6 +541,7 @@ function renderRank(panel, r) {
   }));
 }
 async function rankPanel() {
+  if (isCaptcha()) return; // 보안 인증 화면에서는 아무것도 띄우지 않는다(진행 화면의 투명 덮개가 슬라이더를 가려 못 밀었음, 2026-11-24)
   if (!isResults() || document.getElementById("sg-rank")) return;
   const target = await ipcRenderer.invoke("cn:target");
   if (!target) return;
@@ -790,7 +791,11 @@ async function rankPanel() {
 }
 
 function captchaNotice() {
-  if (!isCaptcha() || document.getElementById("sg-captcha")) return;
+  if (!isCaptcha()) return;
+  // 인증 화면 위에 남은 앱 덮개(진행 화면·추천 보드)를 걷어 낸다 — 늦게 뜨는 것도 10초 동안 지켜본다
+  const sweep = () => document.querySelectorAll("#sg-scan, #sg-rank, #sg-rank-open").forEach((e) => e.remove());
+  sweep(); if (!captchaNotice.t) { let k = 0; captchaNotice.t = setInterval(() => { sweep(); if (++k > 20) clearInterval(captchaNotice.t); }, 500); }
+  if (document.getElementById("sg-captcha")) return;
   ipcRenderer.invoke("cn:probeMode").then((probe) => { if (probe) return; ipcRenderer.send("cn:captcha"); });
   const el = document.createElement("div");
   el.id = "sg-captcha";
@@ -1725,12 +1730,14 @@ function sgScan({ name, photo, stage = 0, wait = "" }) {
     close() {
       if (S.closed) return;
       S.closed = true; cancelAnimationFrame(raf); clearInterval(hexTick); removeEventListener("keydown", onKey, true);
+      host.style.pointerEvents = "none"; // 사라지는 동안에도 아래 화면을 누를 수 있게
       q(".sc").classList.add("out"); setTimeout(() => host.remove(), 380);
     },
   };
   return api;
 }
 async function sgScanStart(stage, wait) {
+  if (isCaptcha()) return null;
   if (!(await sgPresent())) return null;
   const [t, pend] = await Promise.all([ipcRenderer.invoke("cn:target").catch(() => null), ipcRenderer.invoke("cn:pending").catch(() => null)]);
   const photo = pend?.b64 ? `data:${pend.type || "image/jpeg"};base64,${pend.b64}` : "";
