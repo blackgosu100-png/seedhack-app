@@ -39,7 +39,7 @@ export async function checkReadiness({ needOcr = true, needText = true, needImag
   const o = pickProvider(), t = cli.aiProvider(), im = scene.resolveProvider({ settings });
   const prov = {
     ocr: o === "vision" ? "local" : o === "google" ? "google" : o === "server" ? "server" : o === "tesseract" ? "tesseract" : null,
-    text: t === "claude" ? "local" : t === "gemini" ? "google" : t === "server" ? "server" : null,
+    text: t === "claude" || t === "codex" ? "local" : t === "gemini" ? "google" : t === "server" ? "server" : null,
     image: im.provider === "google" ? "google" : im.provider === "server" ? "server" : im.key ? "local" : null,
   };
   const need = { ocr: !!needOcr, text: !!needText, image: !!needImage };

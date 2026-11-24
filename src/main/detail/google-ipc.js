@@ -94,7 +94,7 @@ export function initGoogleIpc({ ipcMain, app, store, log = () => {}, send = () =
   // 📄 탭 열 때·만들기 누를 때: AI 를 쓸 준비가 됐는지(구글 연결 · 맥 로컬 도구 · 준비된 서버 중 하나) — 안 됐으면 화면이 연결 마법사를 띄운다
   ipcMain.handle("detail:ready", async () => {
     const { checkReadiness } = await import("./preflight.js");
-    const pf = await checkReadiness({ needOcr: true, needText: true, needImage: true, settings: store.get("settings") || {} }).catch((e) => ({ ok: false, fix: "google", problems: [{ what: "?", msg: String(e?.message || e) }] }));
+    const pf = await checkReadiness({ needOcr: true, needText: true, needImage: true, settings: { ...(store.get("settings") || {}), bakeEngine: (store.get("settings") || {}).detailBakeEngine || "" } }).catch((e) => ({ ok: false, fix: "google", problems: [{ what: "?", msg: String(e?.message || e) }] }));
     const g = (store.get("settings") || {}).google || {};
     return { ok: !!pf.ok, fix: pf.fix || null, headline: pf.headline || "", problems: pf.problems || [], oauthReady: oauthConfigured(), resumeStep: g.kind === "oauth" && !googleConn() ? g.lastStep || (g.refreshToken || g.rtEnc ? "billing" : null) : null };
   });
