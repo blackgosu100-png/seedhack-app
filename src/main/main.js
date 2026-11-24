@@ -67,6 +67,7 @@ const CH_PLATFORM = process.platform === "win32" ? '"Windows"' : process.platfor
 // Electron 기본 brands는 "Chromium"만 보내고 "Google Chrome"이 빠져 쿠팡 보안이 비표준 브라우저로 의심함 → 실제 크롬 Client Hints 형식으로 통일
 let chUa = `"Google Chrome";v="${CH_MAJ}", "Chromium";v="${CH_MAJ}", "Not-A.Brand";v="24"`;
 const ACCEPT_LANG = "ko-KR,ko,en-US,en";
+const CN_ACCEPT_LANG = "zh-CN,zh;q=0.9"; // 1688은 한국어·영어 헤더를 받으면 해외판(달러 표기)으로 전환 → 1688 요청만 중국어로 보냄(화면 번역은 앱 자체 번역기가 처리)
 function chromeLike(ses) {
   if (!ses || ses.__seedhackCh) return;
   ses.__seedhackCh = true;
@@ -74,13 +75,16 @@ function chromeLike(ses) {
   ses.webRequest.onBeforeSendHeaders((d, cb) => {
     const h = d.requestHeaders;
     if (/^https:/.test(d.url)) {
+      const is1688 = /^https:\/\/([^/]+\.)?1688\.com(\/|$)/i.test(d.url);
       for (const k of Object.keys(h)) {
         const lk = k.toLowerCase();
         if (lk === "sec-ch-ua" || lk === "sec-ch-ua-mobile" || lk === "sec-ch-ua-platform") delete h[k];
+        if (is1688 && lk === "accept-language") delete h[k];
       }
       h["sec-ch-ua"] = chUa;
       h["sec-ch-ua-mobile"] = "?0";
       h["sec-ch-ua-platform"] = CH_PLATFORM;
+      if (is1688) h["Accept-Language"] = CN_ACCEPT_LANG;
     }
     cb({ requestHeaders: h });
   });
@@ -966,8 +970,22 @@ function keepYuan() {
     hits.push(now); setTimeout(set, 50);
   });
 }
+let cnLangSet = false;
+function ensureCnLang() {
+  if (cnLangSet) return;
+  cnLangSet = true;
+  try { session.fromPartition("persist:1688").setUserAgent(app.userAgentFallback, CN_ACCEPT_LANG); } catch {}
+}
+const isCnHome = (u) => {
+  try {
+    const x = new URL(u);
+    return /^www\.1688\.com$/i.test(x.hostname) && !/offer|search|youyuan|login|punish|captcha/i.test(x.pathname + x.search) && !/notfound/i.test(x.search);
+  } catch { return false; }
+};
+let cnHomeDirty = false;
 function createCn(url = CN_HOME) {
-  // keepYuan(); — 끔(2026-11-18): 통화 쿠키를 앱이 고쳐 쓰면 1688이 계정 설정값으로 되돌리며 첫 화면을 거듭 새로 열었다. 통화는 1688 화면 오른쪽 위에서 직접 CNY로 바꾸게 안내한다(cn.cjs)
+  ensureCnLang();
+  // keepYuan(); — 끔(2026-11-18): 통화 쿠키를 앱이 고쳐 쓰면 1688이 계정 설정값으로 되돌리며 첫 화면을 거듭 새로 열었다. 대신 1688 세션 언어를 중국어(zh-CN)로 분리해 해외판(달러) 전환을 막는다
   if (!cnView) {
     cnView = new WebContentsView({ webPreferences: { partition: "persist:1688", contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/cn.cjs") } });
     win.contentView.addChildView(cnView);
@@ -986,7 +1004,10 @@ function createCn(url = CN_HOME) {
     };
     cnView.webContents.on("did-create-window", tbWin);
     // 판매자 연락 버튼이 같은 화면에서 채팅으로 넘어간 경우: 채팅은 💬 화면으로 옮기고 상품 화면은 되돌린다
-    cnView.webContents.on("did-navigate", (_e, url) => { if (chat.isImUrl(url)) { chat.opened(url); cnView.webContents.navigationHistory.goBack(); } });
+    cnView.webContents.on("did-navigate", (_e, url) => {
+      if (isCnHome(url)) cnHomeDirty = false;
+      if (chat.isImUrl(url)) { chat.opened(url); cnView.webContents.navigationHistory.goBack(); }
+    });
     ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => cnView.webContents.on(ev, sendCnTabs));
   }
   cnView.webContents.loadURL(url);
@@ -1038,7 +1059,19 @@ async function cnSearch({ rowId, name, keyword, img, allow, price, auto = false 
   cnRank = null; probeStop();
   const src = !img ? "" : /^https?:/.test(img) ? img : IMG_CDN + String(img).replace(/^\//, "");
   // 1688 이미지 검색은 "사진 주소"로는 결과가 안 나온다 → 1688 첫 화면의 이미지 검색 칸에 사진 파일을 올려 주는 방식(cn.cjs).
-  // 사진은 클립보드에도 넣어 둔다(자동 업로드가 안 되면 1688 검색창 카메라 아이콘에서 Ctrl+V)
+  // 미리 열어 둔 깨끗한 첫 화면이 있으면 새로고침 없이 바로 쓰고, 다른 화면이면 사진 내려받기와 동시에 첫 화면을 연다
+  const targetUrl = SELFTEST && !process.env.SELFTEST_1688 ? "about:blank" : CN_HOME;
+  const curUrl = cnView && !cnView.webContents.isDestroyed() ? cnView.webContents.getURL() : "";
+  const reuseHome = !!cnView && targetUrl === CN_HOME && isCnHome(curUrl) && !cnHomeDirty;
+  let navCommitted = false;
+  if (reuseHome) {
+    cnCur = cnView; active = "cn"; layout(); sendCnTabs();
+  } else {
+    createCn(targetUrl);
+    if (cnView && !cnView.webContents.isDestroyed()) cnView.webContents.once("did-navigate", () => { navCommitted = true; });
+    active = "cn"; layout();
+  }
+  send("nav", { tab: "cn", url: "1688 이미지 검색" });
   let copied = false, clip = false, why = "";
   cnPending = null;
   if (src) {
@@ -1062,9 +1095,9 @@ async function cnSearch({ rowId, name, keyword, img, allow, price, auto = false 
       } catch (e) { why = e?.message || String(e); }
     }
   } else why = "사진 주소 없음";
-  createCn(SELFTEST && !process.env.SELFTEST_1688 ? "about:blank" : CN_HOME); // 자체 점검은 1688에 접속하지 않음(SELFTEST_1688=1일 때만 실제 시험)
-  active = "cn"; layout();
-  send("nav", { tab: "cn", url: "1688 이미지 검색" });
+  if (copied && (reuseHome || navCommitted) && cnView && !cnView.webContents.isDestroyed()) {
+    cnView.webContents.send("cn:autoSearch");
+  }
   log("sys", `▶ 1688 이미지 검색 · ${cnTarget.name}${copied ? " — 사진을 1688 화면에 자동으로 올립니다" : ""}${clip ? " (클립보드에도 복사됨)" : ""}`);
   if (!copied) log("stop", `✕ 상품 사진을 받지 못해 자동 이미지 검색을 못 합니다 (${why}) — 1688 첫 화면의 '以图搜款'에 사진을 직접 올려 주세요 · ${src.slice(0, 120)}`);
   if (!copied && auto) autoFail("상품 사진을 받지 못함");
@@ -1416,6 +1449,7 @@ ipcMain.on("cn:probeResult", (e, r) => {
 });
 ipcMain.handle("cn:pending", (e) => {
   if (!isCnWc(e.sender) || !cnPending || Date.now() - cnPending.ts > 10 * 60 * 1000) return null; // 로그인·인증을 거쳐 돌아와도 이어지게 10분
+  if (cnView && e.sender === cnView.webContents && isCnHome(cnView.webContents.getURL())) cnHomeDirty = true;
   return cnPending; // 업로드가 끝났다고 알려 올 때까지 유지(페이지가 한 번 다시 열려도 이어서)
 });
 ipcMain.handle("cn:pendingDone", (e) => { if (isCnWc(e.sender)) cnPending = null; });
@@ -1423,8 +1457,8 @@ ipcMain.handle("cn:pendingDone", (e) => { if (isCnWc(e.sender)) cnPending = null
 // 1688 '이미지 검색' 버튼은 코드로 누른 클릭(가짜 클릭)을 무시할 때가 있다 → 크롬에 진짜 마우스 입력을 보내 누른다
 ipcMain.handle("cn:realClick", async (e, r) => {
   if (!cnView || e.sender !== cnView.webContents) return false;
-  const rect = { x: Number(r?.x), y: Number(r?.y), width: Number(r?.width), height: Number(r?.height) };
-  if (![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width < 4 || rect.height < 4) return false;
+  const rect = { x: Number(r?.x), y: Number(r?.y), w: Number(r?.width), h: Number(r?.height) };
+  if (![rect.x, rect.y, rect.w, rect.h].every(Number.isFinite) || rect.w < 4 || rect.h < 4) return false;
   try { await human.click(cnView.webContents, rect); return true; } catch { return false; }
 });
 ipcMain.handle("cn:cancel", (e) => {

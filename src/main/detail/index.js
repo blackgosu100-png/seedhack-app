@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { offerUrl } from "./extract-core.js"; // 📄 주소 칸 입력 → 1688 상품 주소(순수 함수, extract-core.test.js)
 import { routeProductUrl, cnWall, CN_WALL_PROBE_JS, SITE_NAME, isKoSite, buildKoRaw, koWallMessage } from "./site-core.js"; // ▶ 주소로 만들기: 1688·타오바오/티몰·쿠팡·네이버·오늘의집 주소 가려내기(site-core.test.js)
-import { codexBin } from "./codex-bin.js";
+import { codexBin, codexLimit, clearCodexLimit, codexPing } from "./codex-bin.js";
 import { setTextEngine } from "./cli.js"; // 🧪 GPT 명령줄 그리기(있을 때만 선택 칸이 보인다)
 import { newClock, clockKey, clockTick, clockStop, clockResume, clockSummary, fmtDur } from "./clock-core.js"; // ⏱ 버튼 누른 순간~완성까지 단계별 실제 시간(clock-core.test.js)
 import { addUsage, summarize as summarizeUsage } from "./usage-core.js"; // 🎨 이미지 생성 사용량(usage-core.test.js)
@@ -143,7 +143,8 @@ export function initDetail({ ipcMain, app, getWin, store, log, translate, getCnS
     send("detail:progress", ev);
   }
   const clockSnap = (job) => (job.clock ? clockSummary(clockStop(JSON.parse(JSON.stringify(job.clock)), Date.now())) : null);
-  const check = (job) => { if (job.cancelled) throw Object.assign(new Error("취소됨"), { cancelled: true }); };
+  const check = (job) => { if (job.cancelled) throw Object.assign(new Error("취소됨"), { cancelled: true });
+    if (job.gpt) { const lm = codexLimit(); if (lm && lm.at >= (job.gptT0 || 0)) throw Object.assign(new Error(`${lm.msg}. 그때 다시 만들거나, 아래 '만드는 AI'를 구글로 바꿔 주세요`), { gptLimit: true }); } }; // 🚦 GPT 한도: 조용히 예전 방식으로 넘어가지 않고 멈춘다
 
   // ---------- AI 자가 검수: 완성 슬라이스를 Claude CLI(Read)가 보고 점수·결함을 돌려준다 (vision.js 와 같은 방식) ----------
   const QA_SYSTEM = `당신은 쿠팡 상세페이지 최종 검수자입니다. 완성된 상세페이지 이미지(out/01.jpg…)를 Read 도구로 한 장씩 직접 열어 보고, 셀러가 손대지 않고 그대로 올릴 수 있는지 판정합니다.
@@ -813,6 +814,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       const pf = await (await import("./preflight.js")).checkReadiness({ needOcr: srcLang !== "ko" && !hasOcr, needText: true, needImage: job.phase === "prepare" || ["localize", "both", "scene"].includes(job.mode), settings: { ...(store.get("settings") || {}), ...sceneSettingsNow() } });
       job.ocrUse = pf.ocrUse || null;
       if (!pf.ok) { const e = new Error(`${pf.headline} — ${pf.problems.map((x) => x.msg).join(" · ")}`); e.preflight = { headline: pf.headline, problems: pf.problems, fix: pf.fix, tesseractOk: pf.tesseractOk }; throw e; }
+      job.gpt = (store.get("settings") || {}).detailBakeEngine === "codex" && !!codexBin(); job.gptT0 = Date.now();
+      if (job.gpt) { clearCodexLimit(); const pg = await codexPing(codexBin()); if (!pg.ok) throw new Error(`GPT 로 만들 수 없어요 — ${pg.why}. 그때 다시 만들거나, 아래 '만드는 AI'를 구글로 바꿔 주세요`); log("dim", "  🧪 만드는 AI: GPT(이 컴퓨터의 ChatGPT 로그인)"); }
       if (job.ocrUse === "tesseract") log("warn", "△ 📄 글자 읽기는 낮은 품질 OCR(tesseract)로 진행해요 — 중국어·세로쓰기를 놓칠 수 있어요");
     }
     { const st0 = store.get("settings") || {}; try { job.sceneOn = !!(mods.scene?.resolveProvider && mods.scene.resolveProvider({ settings: { geminiKey: st0.geminiKey || "", openaiKey: st0.openaiKey || "", geminiImageModel: st0.geminiImageModel || "" } })?.key); } catch { job.sceneOn = false; } }
@@ -1442,7 +1445,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
               const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id); let tlL = edited.get(sec.id) || lyOf(sec.id);
               const out = path.join(dir, "localize", `${sec.id}-bake.png`);
               const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id, free: gptCopy, brief: brief || null }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
-              usd += r.usd || 0; done++; if (r.ok && r.layers?.length) tlL = r.layers; // GPT 가 쓴 문구표(고치기·다시 그리기에 쓴다)
+              usd += r.usd || 0; done++; check(job); if (r.ok && r.layers?.length) tlL = r.layers; // GPT 가 쓴 문구표(고치기·다시 그리기에 쓴다)
               if (r.ok) { okN++; sec.overlay = { image: sec.image, layers: sec.layers, iw: sec.iw, ih: sec.ih }; sec.image = path.relative(dir, out).split(path.sep).join("/"); sec.layers = []; sec.baked = { tries: r.tries, ...(r.verdict || {}) }; sec.bake = { layers: tlL.map((l) => ({ zh: String(l.zh || ""), ko: String(l.ko || ""), drop: !!l.drop || !String(l.ko || "").trim(), role: l.role || "", ...(l.block ? { block: l.block } : {}), ...(l.head ? { head: true } : {}) })) }; if (edited.has(sec.id)) sec.bakeCopy = tlL.filter((l) => l.block).map((l) => ({ idxs: l.block, ko: l.ko, head: !!l.head })); if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; } }
               else { failed.push(`${sec.id}(${r.why})`); sec.bakeFail = r.why; }
               emit(job, job.step, `🖼 한글화 그리기 ${done}/${secs.length}${r.ok ? "" : ` · ${sec.id} 검수 탈락 → 예전 방식`}`, { bg: "localize", clk: "bake" }, 0);
@@ -1452,7 +1455,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
             job.localizeBake = { total: secs.length, ok: okN, failed, usd: +usd.toFixed(2), ms: Date.now() - tb0 };
             log(okN === secs.length ? "go" : "info", `🖼 통째 한글화 ${okN}/${secs.length}장 · ${((Date.now() - tb0) / 1000).toFixed(0)}초 · 약 $${usd.toFixed(2)}${failed.length ? ` · 예전 방식으로: ${failed.join(", ")}` : ""}`);
           } else if (!auth) log("dim", "  🖼 통째 한글화 건너뜀(구글 이미지 AI 연결 없음) → 예전 방식");
-        } catch (e) { if (e?.cancelled) throw e; log("warn", `△ 🖼 통째 한글화 오류 → 예전 방식 (${String(e?.message || e).slice(0, 120)})`); }
+        } catch (e) { if (e?.cancelled || e?.gptLimit) throw e; log("warn", `△ 🖼 통째 한글화 오류 → 예전 방식 (${String(e?.message || e).slice(0, 120)})`); }
       }
       job.timings ||= {}; job.localizeMs = Date.now() - tl0;
       emit(job, job.step, `🈚 원본 한글화 구성 · 이미지 ${lplan.sections.filter((x) => x.image).length}장 · 제외 ${(lplan.excluded || []).length}장 · ${((Date.now() - tl0) / 1000).toFixed(0)}초`, { bg: "localize" }, 0);

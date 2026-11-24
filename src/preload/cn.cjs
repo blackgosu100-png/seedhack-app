@@ -270,12 +270,13 @@ async function start() {
 // ---- 1688 첫 화면: 리스트업에서 넘어온 사진을 이미지 검색 칸에 올리고 "이미지 검색"을 누른다 ----
 // (사람이 카메라 아이콘에 사진을 끌어다 놓는 것과 같은 동작. 슬라이드 인증 등은 사람이 직접)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(fn, ms = 12000) { for (let t = 0; t < ms; t += 300) { const v = fn(); if (v) return v; await sleep(300); } return null; }
+async function waitFor(fn, ms = 12000, step = 300) { for (let t = 0; t < ms; t += step) { const v = fn(); if (v) return v; await sleep(step); } return null; }
 const SEARCH_RE = /이미지\s*검색|图片搜索|以图搜|搜图|拍立淘|image\s*search/i;
 // 1688 첫 화면의 사진 검색 칸 (2026-10 기준 "以图搜款" 버튼 안의 input.image-file-reader-wrapper, accept=".jpg,.jpeg,…")
 const FILE_INPUT = SPECS.fileInput.css;
 // 사진을 넣으면 뜨는 "帮你找同款 / 已上传1张图片" 패널의 "搜索图片" 버튼 (구버전 image-search-panel 도 함께)
 const CONFIRM = SPECS.confirm.css;
+let autoRunningTs = 0;
 async function autoImageSearch() {
   if (/offer|search|youyuan/i.test(location.pathname)) return;
   if (!/(^|\.)1688\.com$/i.test(location.hostname)) {
@@ -284,20 +285,24 @@ async function autoImageSearch() {
     return;
   }
   const pend = await ipcRenderer.invoke("cn:pending");
-  if (!pend) return;
+  if (!pend || autoRunningTs === pend.ts) return;
+  autoRunningTs = pend.ts;
+  document.getElementById("sg-stuck")?.remove();
+  document.getElementById("sg-login")?.remove();
+  document.getElementById("sg-scan")?.remove();
   const scan = await sgScanStart(0, "1688 이미지 검색 칸 찾는 중"); // 🎤 발표 모드면 해커 화면
   const log = (t) => { ipcRenderer.send("cn:log", t); scan?.log(t); };
   log(`사진 받음 · 이미지 검색 칸 찾는 중 (${location.host}${location.pathname})`);
   document.documentElement.setAttribute("data-sg-tr-hold", ""); { const st = document.getElementById("sg-tr-style"); if (st) st.disabled = true; } setTimeout(() => document.documentElement.removeAttribute("data-sg-tr-hold"), 60000); // 사진 올리고 검색 누르는 동안 🌐 번역을 쉰다(번역이 칸을 찌그러뜨려 버튼이 안 눌리는 일 방지). 결과 화면으로 넘어가면 자동으로 풀린다
   // 로그아웃 상태면 1688이 사진 업로드를 조용히 거부한다(0건·썸네일 깨짐) → 올리지 않고 로그인 안내. 사진은 남겨 두어 로그인 뒤 첫 화면으로 돌아오면 자동으로 이어진다
   // (2026-10-09: 앱 이름이 씨드핵으로 바뀌며 데이터 폴더가 옮겨져 1688 로그인이 풀린 채 검색이 계속 실패했음)
-  await sleep(1200); // 머리글(로그인/닉네임)이 그려질 시간
-  const loggedOut = [...document.querySelectorAll("a, button, span, div")].some((e) => {
+  const isLoggedOut = () => [...document.querySelectorAll("a, button, span, div")].some((e) => {
     const t = (e.textContent || "").trim();
     if (!/^(로그인|登录|请登录|亲，请登录)$/.test(t)) return false;
     const r = e.getBoundingClientRect(); return r.width > 0 && r.top >= 0 && r.top < 200;
   });
-  if (loggedOut) {
+  const showLogin = () => {
+    autoRunningTs = 0;
     scan?.fail("1688 로그인 필요");
     log("1688에 로그인돼 있지 않습니다 — 이 화면 오른쪽 위 '로그인'으로 로그인하면 이미지 검색이 자동으로 이어집니다 (10분 안)");
     if (!document.getElementById("sg-login")) {
@@ -307,16 +312,19 @@ async function autoImageSearch() {
       el.textContent = "1688 로그인이 필요합니다 — 오른쪽 위 '로그인'을 눌러 로그인하면 이미지 검색이 자동으로 이어집니다";
       (document.body || document.documentElement).appendChild(el);
     }
-    return;
-  }
-  let input = await waitFor(() => findAdaptive("fileInput"), 15000);
+  };
+  // 이미 열려 있는 첫 화면은 기다리지 않고 바로 진행 · 새로 여는 중이면 검색 칸이나 로그인 표시가 뜰 때까지만 짧게 대기
+  const firstFound = await waitFor(() => (isLoggedOut() ? "out" : findAdaptive("fileInput")), 15000, 100);
+  if (firstFound === "out") { showLogin(); return; }
+  let input = firstFound;
+  if (document.readyState !== "complete") { await sleep(250); if (isLoggedOut()) { showLogin(); return; } }
   if (!input) {
     // 검색 칸이 바로 없는 화면이면 "이미지 검색/以图搜款" 버튼을 눌러 연 뒤 다시 찾는다
     const vis = (e) => e && e.getBoundingClientRect().width > 0;
     const opener = [...document.querySelectorAll("button, [role=button], span, div")].find((e) => vis(e) && e.children.length <= 2 && SEARCH_RE.test((e.textContent || "").trim()) && (e.textContent || "").trim().length < 12)
       || [...document.querySelectorAll('[class*="search-input__image"], [class*="camera" i]')].find(vis);
     opener?.click();
-    input = await waitFor(() => findAdaptive("fileInput"), 4000);
+    input = await waitFor(() => findAdaptive("fileInput"), 4000, 100);
   }
   if (!input) { scan?.fail("1688 이미지 검색 칸을 못 찾았습니다"); ipcRenderer.invoke("cn:pendingDone"); log("이미지 검색 칸을 못 찾았습니다 — 검색창 카메라 아이콘(以图搜款)에서 Ctrl+V로 붙여 넣어 주세요"); return; }
   log("검색 칸 찾음 · 사진 올리는 중"); scan?.step(0, "쿠팡 사진 올리는 중");
@@ -327,11 +335,11 @@ async function autoImageSearch() {
   dt.items.add(new File([bytes], "coupang.jpg", { type: pend.type || "image/jpeg" }));
   input.files = dt.files;
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  await sleep(1200); // 미리보기 패널 대기
+  await sleep(150); // 패널 반응 대기(버튼 활성화는 아래 루프에서 150ms 간격으로 즉시 감지)
   // ---- 검색 버튼 누르기 (2026-11-17 다시 씀) ----
   // 1688 첫 화면이 두 가지다: 예전(사진 넣으면 "帮你找同款" 상자 · .search-btn)과 새 디자인(home/2026 · 숨은 상자 .cgf-image-search-panel 의 __confirm-btn).
   // 예전 코드는 "비슷한 버튼 찾기"가 검색창의 일반 '搜索' 버튼을 잡을 수 있었고(눌러도 아무 일 없음), 숨은 상자는 못 찾았다.
-  // → 사진 상자 안의 버튼만 후보로 삼고, 업로드가 끝나(버튼이 켜질 때)까지 기다리며, 코드 클릭·진짜 클릭을 번갈아 25초 동안 시도한다.
+  // → 사진 상자 안의 버튼만 후보로 삼고, 업로드가 끝나(버튼이 켜질 때)까지 기다리며, 진짜 클릭·코드 클릭을 번갈아 25초 동안 시도한다.
   const PANEL = '[class*="copy-image"], [class*="image-search-panel"], [class*="image-search-popover"], [class*="imageSearchPanel"], [class*="img-search-panel"]';
   const BTN_TXT = /^(搜索图片|搜图|搜索|搜同款|找同款|以图搜款|确认|确定|이미지\s*검색|사진\s*검색|이미지로\s*검색|검색|찾기|찾다|확인|search)$/i;
   const shown = (e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; };
@@ -351,11 +359,15 @@ async function autoImageSearch() {
   // 꺼진 버튼을 감싼 칸·그 안 글자도 "꺼짐"으로 본다(업로드 중에 겉 칸을 눌러 봐야 소용없음)
   const off = (e) => { const b = e.closest("button") || e.querySelector?.("button") || e; return b.disabled || e.disabled || b.getAttribute("aria-disabled") === "true" || /disabled|loading/i.test(String(b.className) + " " + String(e.className)); };
   const realClick = async (el) => {
-    el.scrollIntoView({ block: "center", inline: "center" }); await sleep(200);
+    const r0 = el.getBoundingClientRect();
+    if (r0.top < 0 || r0.bottom > innerHeight || r0.left < 0 || r0.right > innerWidth) {
+      el.scrollIntoView({ block: "center", inline: "center" });
+      await sleep(120);
+    }
     const r = el.getBoundingClientRect(), cover = document.getElementById("sg-scan");
     if (cover) cover.style.pointerEvents = "none";
     const ok = await ipcRenderer.invoke("cn:realClick", { x: r.left, y: r.top, width: r.width, height: r.height }).catch(() => false);
-    await sleep(300); if (cover) cover.style.pointerEvents = "";
+    await sleep(120); if (cover) cover.style.pointerEvents = "";
     return ok;
   };
   const blocker = () => {
@@ -366,25 +378,27 @@ async function autoImageSearch() {
     return "";
   };
   let left = false; addEventListener("pagehide", () => { left = true; }, { once: true });
+  const isNavDone = () => left || isResults();
   scan?.step(1, "1688 이미지 검색 · 결과 화면 여는 중");
-  const tried = []; let lastDiag = "", lastNew = "";
-  for (let n = 0, t0 = Date.now(); Date.now() - t0 < 25000 && !left; n++) {
+  const tried = []; let lastDiag = "", lastNew = "", clicks = 0;
+  for (let t0 = Date.now(); Date.now() - t0 < 25000 && !isNavDone(); ) {
     if (!(await ipcRenderer.invoke("cn:target"))) { scan?.close?.(); return; } // 그사이 ✕ 검색 취소
     if (blocker()) break;
     let cs = candidates();
-    if (!cs.length && Date.now() - t0 > 6000) { const fb = findAdaptive("confirm"); if (fb && shown(fb) && !preShown.has(fb)) cs = [fb]; } // 예전 방식 — 단, 원래 있던 버튼(검색창의 일반 검색 버튼)은 누르지 않는다
+    if (!cs.length && Date.now() - t0 > 4000) { const fb = findAdaptive("confirm"); if (fb && shown(fb) && !preShown.has(fb)) cs = [fb]; } // 예전 방식 — 단, 원래 있던 버튼(검색창의 일반 검색 버튼)은 누르지 않는다
     if (!cs.length) lastNew = [...document.querySelectorAll('button, [role="button"], a, div, span')].filter((e) => !preShown.has(e) && shown(e) && !e.children.length && !e.closest("#sg-scan") && (e.textContent || "").trim().length > 0 && (e.textContent || "").trim().length < 14).slice(0, 8).map((e) => `"${(e.textContent || "").trim()}"·${String(e.className).split(/\s+/)[0].slice(0, 24)}`).join(" ");
     const ready = cs.filter((e) => !off(e));
     lastDiag = `후보 ${cs.length}개(켜진 것 ${ready.length}) ${cs.slice(0, 3).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).split(/\s+/).slice(-1)[0].slice(0, 30)}${shown(e) ? "" : "[숨음]"}${off(e) ? "[꺼짐]" : ""}`).join(", ")}`;
-    if (!ready.length) { await sleep(800); continue; } // 업로드가 끝나 버튼이 켜질 때까지
-    const el = ready[n % ready.length], how = shown(el) && n % 2 === 1 ? "진짜" : "코드";
+    if (!ready.length) { await sleep(150); continue; } // 업로드가 끝나 버튼이 켜질 때까지 빠르게 확인
+    const el = ready[clicks % ready.length], how = shown(el) && clicks % 2 === 0 ? "진짜" : "코드";
     if (how === "진짜") { if (!(await realClick(el))) el.click(); } else el.click();
     tried.push(how);
-    if (n === 0) log("사진으로 이미지 검색을 시작했습니다 — 결과 화면에서 상품을 열면 '리스트업에 넣기' 상자가 뜹니다");
+    if (clicks === 0) log("사진으로 이미지 검색을 시작했습니다 — 결과 화면에서 상품을 열면 '리스트업에 넣기' 상자가 뜹니다");
     else log(`결과 화면이 안 열려 검색 버튼을 다시 누릅니다 (${how} 클릭 · ${lastDiag})`);
-    if (await waitFor(() => left, 3000)) return;
+    clicks++;
+    if (await waitFor(isNavDone, 2000, 100)) return;
   }
-  if (left) return;
+  if (isNavDone()) return;
   document.documentElement.removeAttribute("data-sg-tr-hold");
   const why = blocker();
   const msg = why ? `1688 ${why}이 떠서 검색이 멈췄습니다 — 직접 처리한 뒤 이미지 검색 버튼을 눌러 주세요` : "1688 검색 결과 화면이 열리지 않았습니다 — 화면의 이미지 검색 버튼을 직접 눌러 주세요(사진은 올라가 있음)";
@@ -1066,6 +1080,7 @@ async function waveBoard() {
 }
 
 const safeStart = () => { waveBoard().catch((e) => ipcRenderer.send("cn:log", `🌊 보드 오류: ${e && e.message}`)); logResultsUrl(); taobaoAuto().catch((e) => ipcRenderer.send("tb:log", `자동 사진 검색 오류: ${e && e.message}`)); reviewPill().catch(() => {}); notFoundNotice(); captchaNotice(); askPill().catch(() => {}); start().catch(() => {}); rankPanel().catch((e) => ipcRenderer.send("cn:log", `추천 패널 오류: ${e && e.message}`)); autoImageSearch().catch((e) => ipcRenderer.send("cn:log", `자동 이미지 검색 오류: ${e && e.message}`)); };
+ipcRenderer.on("cn:autoSearch", () => { autoImageSearch().catch((e) => ipcRenderer.send("cn:log", `자동 이미지 검색 오류: ${e && e.message}`)); });
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", safeStart);
 else safeStart();
 

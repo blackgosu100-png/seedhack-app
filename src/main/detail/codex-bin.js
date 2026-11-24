@@ -21,6 +21,32 @@ export function codexSpawnPlan(bin, args, { platform = process.platform } = {}) 
   return { cmd: bin, args, opts: { windowsHide: true } };
 }
 
+// 🚦 ChatGPT 사용 한도: 한 번 걸리면 그 뒤 호출도 전부 실패한다 → 기억해 두고 작업을 멈추게 한다(조용히 예전 방식으로 넘어가지 않게)
+let limit = null;
+export const codexLimit = () => limit;
+export const clearCodexLimit = () => { limit = null; };
+const errMsgs = (buf) => [...String(buf || "").matchAll(/"type":"error","message":"((?:[^"\\\\]|\\\\.)*)"/g)].map((m) => m[1]).join(" ");
+export function codexFailWhy(text, code) { // codex 가 남긴 오류 글 → 쉬운 말. 한도면 limit 에 기억
+  const t = String(text || "");
+  if (/usage limit|rate limit|quota/i.test(t)) { const at = (t.match(/try again at ([^."\\]+)/i) || [])[1]; limit = { msg: `ChatGPT 사용 한도를 다 썼어요${at ? ` — ${at.trim()} 이후에 다시 돼요` : ""}`, at: Date.now() }; return limit.msg; }
+  if (/not logged in|login required|401|unauthorized/i.test(t)) return "ChatGPT 로그인이 필요해요";
+  return `GPT 가 결과를 주지 않았어요(종료 ${code})${t ? ` ${t.slice(0, 80)}` : ""}`;
+}
+// 만들기 전에 한 번: GPT 가 지금 답하는지(한도·로그인) — 5초쯤
+export function codexPing(bin, { timeoutMs = 60000 } = {}) {
+  return new Promise((resolve) => {
+    let dir; try { dir = fs.mkdtempSync(path.join(os.tmpdir(), "seedhack-cxp-")); } catch { return resolve({ ok: true }); }
+    const done = (v) => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} resolve(v); };
+    const pl = codexSpawnPlan(bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only", "-C", dir, "--json", "-"]);
+    let ch, buf = "", err = "", fin = false; try { ch = spawn(pl.cmd, pl.args, { cwd: dir, stdio: ["pipe", "pipe", "pipe"], ...pl.opts }); } catch (e) { return done({ ok: false, why: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); }
+    const tm = setTimeout(() => { if (fin) return; fin = true; try { ch.kill("SIGKILL"); } catch {} done({ ok: true, slow: true }); }, timeoutMs);
+    ch.stdout.on("data", (d) => { if (buf.length < 2e5) buf += d; }); ch.stderr.on("data", (d) => { if (err.length < 4000) err += d; });
+    ch.on("error", (e) => { if (fin) return; fin = true; clearTimeout(tm); done({ ok: false, why: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); });
+    ch.on("close", (code) => { if (fin) return; fin = true; clearTimeout(tm); const em = errMsgs(buf); if (code === 0 && !em) return done({ ok: true }); done({ ok: false, why: codexFailWhy(em || err, code) }); });
+    ch.stdin.on("error", () => {}); ch.stdin.end("OK 라고만 답하세요. 도구는 쓰지 않습니다.", "utf8");
+  });
+}
+
 // ── 그림 1장 만들기: 입력 그림(들) + 지시 → { b64, mime, texts? } | { error }. ChatGPT 로그인(구독)으로 그린다
 const CODEX_TAIL = `
 
@@ -49,7 +75,7 @@ export function codexImage({ bin, images = [], prompt = "", wantText = false, ta
         const tid = (buf.match(/"thread_id":"([0-9a-f-]+)"/) || [])[1], gd = tid && path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "generated_images", tid);
         try { const fs2 = fs.readdirSync(gd).filter((x) => /\.png$/i.test(x)).map((x) => path.join(gd, x)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); if (fs2[0]) f = fs2[0]; } catch {}
       }
-      if (!fs.existsSync(f)) return done({ error: /login|auth|401/i.test(err + buf) ? "ChatGPT 로그인이 필요해요(ChatGPT 앱에서 로그인)" : /limit|quota|429/i.test(err + buf) ? "ChatGPT 사용 한도에 걸렸어요" : `그림 없음(종료 ${code})` });
+      if (!fs.existsSync(f)) return done({ error: codexFailWhy(errMsgs(buf) || err, code) });
       let texts = null; if (wantText) { try { const a = JSON.parse(fs.readFileSync(path.join(dir, "text.json"), "utf8")); if (Array.isArray(a)) texts = a.filter((x) => x && typeof x.zh === "string").map((x) => ({ zh: String(x.zh).slice(0, 300), ko: String(x.ko || "").slice(0, 300), drop: !String(x.ko || "").trim(), role: "" })).slice(0, 80); } catch {} }
       try { done({ b64: fs.readFileSync(f).toString("base64"), mime: "image/png", tokens: 0, texts }); } catch (e) { done({ error: String(e?.message || e).slice(0, 80) }); }
     });
@@ -72,16 +98,16 @@ export function codexStructured({ bin, system, schema, text, timeoutMs = 240000,
     const done = (v) => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} resolve(v); };
     const last = path.join(dir, "last.txt");
     const prompt = `${system}\n\n[출력 형식]\n- 아래 JSON Schema 에 맞는 JSON 하나만 답하세요. 설명·코드블록 표시 없이 JSON 만 씁니다.\n- ${readFiles ? "입력에 적힌 파일 경로의 그림은 직접 열어 보고 판단하세요. 파일을 만들거나 고치지 않습니다." : "도구·셸 명령을 쓰지 말고 바로 답하세요."}\n${JSON.stringify(schema)}\n\n[입력]\n${String(text ?? "")}`;
-    const pl = codexSpawnPlan(bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only", "-C", dir, "-o", last, "-"]);
-    let ch, err = "", fin = false; try { ch = spawn(pl.cmd, pl.args, { cwd: dir, stdio: ["pipe", "ignore", "pipe"], ...pl.opts }); } catch (e) { return done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); }
+    const pl = codexSpawnPlan(bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only", "-C", dir, "-o", last, "--json", "-"]);
+    let ch, err = "", buf = "", fin = false; try { ch = spawn(pl.cmd, pl.args, { cwd: dir, stdio: ["pipe", "pipe", "pipe"], ...pl.opts }); } catch (e) { return done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); }
     const tm = setTimeout(() => { if (fin) return; fin = true; try { if (process.platform === "win32" && ch.pid) spawn("taskkill", ["/pid", String(ch.pid), "/T", "/F"], { windowsHide: true }); else ch.kill("SIGKILL"); } catch {} done({ error: `GPT 응답 시간 초과 (${timeoutMs / 1000}초)` }); }, timeoutMs);
-    ch.stderr.on("data", (d) => { if (err.length < 4000) err += d; });
+    ch.stderr.on("data", (d) => { if (err.length < 4000) err += d; }); ch.stdout.on("data", (d) => { if (buf.length < 2e6) buf += d; });
     ch.on("error", (e) => { if (fin) return; fin = true; clearTimeout(tm); done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); });
     ch.on("close", (code) => {
       if (fin) return; fin = true; clearTimeout(tm);
       let s = ""; try { s = fs.readFileSync(last, "utf8"); } catch {}
       let result = null; try { result = JSON.parse(s.trim().replace(/^```(?:json)?\s*|\s*```$/g, "")); } catch { const a = s.indexOf("{"), b = s.lastIndexOf("}"); if (a >= 0 && b > a) { try { result = JSON.parse(s.slice(a, b + 1)); } catch {} } }
-      if (!result || typeof result !== "object") return done({ error: /login|auth|401/i.test(err) ? "ChatGPT 로그인이 필요해요" : /limit|quota|429/i.test(err) ? "ChatGPT 사용 한도에 걸렸어요" : `GPT 답을 읽지 못했어요(종료 ${code})` });
+      if (!result || typeof result !== "object") return done({ error: codexFailWhy(errMsgs(buf) || err, code) });
       done({ ok: true, result, model: "codex", usage: null, costUsd: 0 });
     });
     ch.stdin.on("error", () => {}); ch.stdin.end(prompt, "utf8");
