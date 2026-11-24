@@ -22,14 +22,30 @@ const CODEX_TAIL = `
 - 첨부한 그림 in.jpg 가 원본입니다. 반드시 이미지 생성 도구로 위 지시대로 고친 그림 1장을 만드세요. 셸 명령·코드·글꼴로 직접 그리지 않습니다.
 - 그림의 가로세로 비율은 원본과 같게 합니다.
 - 만든 그림을 현재 폴더에 out.png 로 저장하고, 마지막에 DONE 이라고만 답하세요. 다른 파일은 만들거나 고치지 않습니다.`;
-function callCodex(auth, file, prompt, { timeoutMs = 420000 } = {}) {
+// ✍ GPT 에게 문구까지 맡기는 지시(2026-11-24 실측: 우리 문구표를 그리게만 할 때보다 제목이 짧고 자리에 맞는다). 쓴 문구는 text.json 으로 돌려받아 검수·고치기에 쓴다
+export function codexFreePrompt({ brief = null, retry = null } = {}) {
+  const name = String(brief?.product_name_ko || "").trim();
+  return [`첨부한 그림 in.jpg 는 중국 쇼핑몰 상품 상세페이지의 한 장입니다.${name ? ` 상품은 "${name}" 입니다.` : ""} 한국 쇼핑몰에 올릴 한국어 상세페이지 그림으로 바꿔 주세요.`, "",
+    "[문구]",
+    "- 중국어를 그대로 옮기지 말고, 한국 쇼핑몰 상세페이지에서 실제로 쓰는 자연스러운 말로 직접 다시 쓰세요. 제목은 짧고 힘 있게, 설명은 읽기 쉽게 줄을 나눕니다.",
+    "- 원문에 없는 기능·효과·숫자는 지어내지 않습니다. 숫자와 단위는 원문 그대로 둡니다.",
+    "- 판매자 홍보, 가격·할인·배송·환불 약속, 후기, 다른 상품 추천 글은 빼고 그 자리는 배경으로 자연스럽게 메웁니다.",
+    "- 영문 상표·모델명은 그대로 둡니다. 한자는 한 글자도 남기지 않습니다.", "",
+    "[그림]",
+    "- 제품·사진·배경·도형·배치는 원본 그대로 둡니다. 글자만 바꿉니다.",
+    "- 글자 색·굵기·크기·정렬은 원본 그 자리 글과 같게 합니다. 글은 원본 글이 있던 자리 안에 넣고, 사진이나 도형을 덮지 않게 합니다.",
+    ...(retry ? ["", `앞선 결과에서 고칠 점: ${retry}`] : [])].join("\n");
+}
+const CODEX_TEXT_TAIL = `
+- 그림에 쓴 문구를 현재 폴더 text.json 에 [{"zh":"원문","ko":"그림에 쓴 한국어(줄바꿈은 \\n)"}] 모양으로 저장하세요. 뺀 글은 "ko":"" 로 적습니다. 이 파일은 만들어도 됩니다.`;
+function callCodex(auth, file, prompt, { timeoutMs = 420000, wantText = false } = {}) {
   return new Promise((resolve) => {
     let dir; try { dir = fs.mkdtempSync(path.join(os.tmpdir(), "seedhack-cx-")); fs.copyFileSync(file, path.join(dir, "in.jpg")); } catch (e) { return resolve({ error: `임시 폴더 실패 ${String(e?.message || e).slice(0, 60)}` }); }
     const done = (v) => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} resolve(v); };
     let buf = "", err = "", fin = false;
     const pl = codexSpawnPlan(auth.bin, ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "workspace-write", "-C", dir, "-i", path.join(dir, "in.jpg"), "--json", "-"]);
     let ch; try { ch = spawn(pl.cmd, pl.args, { cwd: dir, stdio: ["pipe", "pipe", "pipe"], ...pl.opts }); } catch (e) { return done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); }
-    ch.stdin.on("error", () => {}); ch.stdin.end(prompt + CODEX_TAIL, "utf8");
+    ch.stdin.on("error", () => {}); ch.stdin.end(prompt + CODEX_TAIL + (wantText ? CODEX_TEXT_TAIL : ""), "utf8");
     const tm = setTimeout(() => { if (fin) return; fin = true; try { if (process.platform === "win32" && ch.pid) spawn("taskkill", ["/pid", String(ch.pid), "/T", "/F"], { windowsHide: true }); else ch.kill("SIGKILL"); } catch {} done({ error: "시간 초과" }); }, timeoutMs);
     ch.stdout.on("data", (d) => { if (buf.length < 4e6) buf += d; }); ch.stderr.on("data", (d) => { if (err.length < 4000) err += d; });
     ch.on("error", (e) => { if (fin) return; fin = true; clearTimeout(tm); done({ error: `GPT 명령줄 실행 실패 ${String(e?.message || e).slice(0, 80)}` }); });
@@ -41,7 +57,8 @@ function callCodex(auth, file, prompt, { timeoutMs = 420000 } = {}) {
         try { const fs2 = fs.readdirSync(gd).filter((x) => /\.png$/i.test(x)).map((x) => path.join(gd, x)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); if (fs2[0]) f = fs2[0]; } catch {}
       }
       if (!fs.existsSync(f)) return done({ error: /login|auth|401/i.test(err + buf) ? "ChatGPT 로그인이 필요해요(ChatGPT 앱에서 로그인)" : /limit|quota|429/i.test(err + buf) ? "ChatGPT 사용 한도에 걸렸어요" : `그림 없음(종료 ${code})` });
-      try { done({ b64: fs.readFileSync(f).toString("base64"), mime: "image/png", tokens: 0 }); } catch (e) { done({ error: String(e?.message || e).slice(0, 80) }); }
+      let texts = null; if (wantText) { try { const a = JSON.parse(fs.readFileSync(path.join(dir, "text.json"), "utf8")); if (Array.isArray(a)) texts = a.filter((x) => x && typeof x.zh === "string").map((x) => ({ zh: String(x.zh).slice(0, 300), ko: String(x.ko || "").slice(0, 300), drop: !String(x.ko || "").trim(), role: "" })).slice(0, 80); } catch {} }
+      try { done({ b64: fs.readFileSync(f).toString("base64"), mime: "image/png", tokens: 0, texts }); } catch (e) { done({ error: String(e?.message || e).slice(0, 80) }); }
     });
   });
 }
@@ -55,8 +72,8 @@ export async function bakeAuth({ settings = {}, fetchImpl = globalThis.fetch } =
   return null;
 }
 
-async function callOnce(auth, file, prompt, { fetchImpl = globalThis.fetch, timeoutMs = 180000 } = {}) {
-  if (auth.engine === "codex") return callCodex(auth, file, prompt);
+async function callOnce(auth, file, prompt, { fetchImpl = globalThis.fetch, timeoutMs = 180000, wantText = false } = {}) {
+  if (auth.engine === "codex") return callCodex(auth, file, prompt, { wantText });
   const body = JSON.stringify({ contents: [{ role: "user", parts: [{ inlineData: { mimeType: mimeOf(file), data: fs.readFileSync(file).toString("base64") } }, { text: prompt }] }], generationConfig: { responseModalities: ["IMAGE"], imageConfig: { imageSize: "2K" }, maxOutputTokens: 32768 } });
   for (let k = 0; k < 7; k++) {
     const ac = new AbortController(), tm = setTimeout(() => ac.abort(), timeoutMs);
@@ -90,11 +107,13 @@ async function driftOf(file0, file1, boxes = [], w0 = 0, h0 = 0) {
 }
 
 // 한 장: 그리기 → (ocr 가 있으면) 다시 읽어 검수 → 떨어지면 고칠 점을 붙여 한 번 더. → { ok, out, tries, verdict, usd } | { ok:false, why }
-export async function bakeImage({ file, layers = [], boxes = [], w = 0, h = 0, out, auth, ocr = null, log = () => {}, fetchImpl, id = "" } = {}) {
+export async function bakeImage({ file, layers = [], boxes = [], w = 0, h = 0, out, auth, ocr = null, log = () => {}, fetchImpl, id = "", free = false, brief = null } = {}) {
   if (!auth) return { ok: false, why: "이미지 AI 연결 없음", tries: 0, usd: 0 };
   let retry = null, last = null, usd = 0;
+  const fr = !!free && auth.engine === "codex"; // ✍ 문구까지 GPT 가 쓴다(처음 만들 때만 — 사람이 문구를 고쳐 다시 그릴 때는 고친 문구표대로)
   for (let t = 1; t <= 2; t++) {
-    const r = await callOnce(auth, file, bakePrompt(layers, { retry }), { fetchImpl });
+    const r = await callOnce(auth, file, fr ? codexFreePrompt({ brief, retry }) : bakePrompt(layers, { retry }), { fetchImpl, wantText: fr });
+    if (fr && !r.error) { if (r.texts?.length) layers = r.texts; else { last = { ok: false, why: "문구표 없음" }; retry = "text.json 을 저장하지 않았습니다. 반드시 저장하세요."; continue; } }
     if (r.error) { last = { ok: false, why: r.error }; if (r.status && r.status < 500 && r.status !== 429) break; continue; }
     usd += auth.engine === "codex" ? 0 : BAKE_USD; // GPT 명령줄은 ChatGPT 구독으로 그린다(장당 과금 없음)
     const tmp = out.replace(/\.png$/i, `.try${t}.png`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(tmp, Buffer.from(r.b64, "base64"));
@@ -105,7 +124,7 @@ export async function bakeImage({ file, layers = [], boxes = [], w = 0, h = 0, o
     const v = seenText == null ? { ok: true, unverified: true, drift } : verifyBake({ layers, seenText, ratio0: w && h ? w / h : 1, ratio1: size ? size.width / size.height : (w && h ? w / h : 1), drift });
     if (seenText == null && drift != null && drift > 18) { v.ok = false; v.fails = [{ k: "drift", why: "제품·사진·배경이 원본과 달라졌습니다. 글자 외에는 원본 그대로 두세요." }]; }
     last = { ok: v.ok, verdict: v, tries: t, size };
-    if (v.ok) { fs.renameSync(tmp, out); return { ok: true, out, tries: t, verdict: v, usd, size }; }
+    if (v.ok) { fs.renameSync(tmp, out); return { ok: true, out, tries: t, verdict: v, usd, size, ...(fr ? { layers } : {}) }; }
     retry = (v.fails || []).map((f) => f.why).join(" "); last.why = (v.fails || []).map((f) => f.k).join("·");
     try { fs.rmSync(tmp, { force: true }); } catch {}
   }

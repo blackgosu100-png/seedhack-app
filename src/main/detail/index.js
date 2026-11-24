@@ -1429,18 +1429,19 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
             // ✍ 장 단위 편집: 줄마다 옮긴 문구를 그림 한 장 단위로 묶어 다시 쓴다(문단 → 제목 + 3줄, 제목 다시 짓기). 설정 detailBakeEdit=false 로 끈다
             const lyOf = (id) => ((tl.images || []).find((x) => x.id === id)?.layers || []).filter((l) => String(l.zh || "").trim());
             let edited = new Map();
-            if (mods.copy?.editForBake && (store.get("settings") || {}).detailBakeEdit !== false) {
+            const gptCopy = auth.engine === "codex"; // ✍ GPT 명령줄: 문구까지 GPT 가 쓴다 → 우리 쪽 장 단위 다듬기는 건너뛴다
+            if (!gptCopy && mods.copy?.editForBake && (store.get("settings") || {}).detailBakeEdit !== false) {
               emit(job, job.step, `✍ 장마다 문구를 다듬는 중 · ${secs.length}장`, { bg: "localize", clk: "copy" }, 0);
               const ed = await mods.copy.editForBake({ images: secs.map((sec) => { const im = targets.find((x) => x.id === sec.id); return { id: sec.id, w: im?.w, h: im?.h, layers: lyOf(sec.id) }; }), brief: brief || null, log }).catch((e) => { log("dim", `  ✍ 장 단위 편집 실패 → 줄 단위 문구 그대로 (${String(e?.message || e).slice(0, 80)})`); return null; });
               if (ed?.byId) edited = ed.byId; if (ed?.costUsd) { job.costs.localize = (job.costs.localize || 0) + ed.costUsd; job.costUsd = (job.costUsd || 0) + ed.costUsd; }
               job.localizeEdit = { images: edited.size, blocks: ed?.used || 0, rejected: (ed?.rejected || []).length };
             }
-            emit(job, job.step, `🖼 이미지 AI 로 한글화 그리는 중 · ${secs.length}장 (장당 30초 안팎)`, { bg: "localize", clk: "bake" }, 0);
+            emit(job, job.step, `🖼 이미지 AI 로 한글화 그리는 중 · ${secs.length}장 (${gptCopy ? "GPT · 장당 1분 안팎" : "장당 30초 안팎"})`, { bg: "localize", clk: "bake" }, 0);
             const worker = async () => { for (;;) { const sec = secs[nx++]; if (!sec) return; check(job);
-              const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id), tlL = edited.get(sec.id) || lyOf(sec.id);
+              const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id); let tlL = edited.get(sec.id) || lyOf(sec.id);
               const out = path.join(dir, "localize", `${sec.id}-bake.png`);
-              const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
-              usd += r.usd || 0; done++;
+              const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id, free: gptCopy, brief: brief || null }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
+              usd += r.usd || 0; done++; if (r.ok && r.layers?.length) tlL = r.layers; // GPT 가 쓴 문구표(고치기·다시 그리기에 쓴다)
               if (r.ok) { okN++; sec.overlay = { image: sec.image, layers: sec.layers, iw: sec.iw, ih: sec.ih }; sec.image = path.relative(dir, out).split(path.sep).join("/"); sec.layers = []; sec.baked = { tries: r.tries, ...(r.verdict || {}) }; sec.bake = { layers: tlL.map((l) => ({ zh: String(l.zh || ""), ko: String(l.ko || ""), drop: !!l.drop || !String(l.ko || "").trim(), role: l.role || "", ...(l.block ? { block: l.block } : {}), ...(l.head ? { head: true } : {}) })) }; if (edited.has(sec.id)) sec.bakeCopy = tlL.filter((l) => l.block).map((l) => ({ idxs: l.block, ko: l.ko, head: !!l.head })); if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; } }
               else { failed.push(`${sec.id}(${r.why})`); sec.bakeFail = r.why; }
               emit(job, job.step, `🖼 한글화 그리기 ${done}/${secs.length}${r.ok ? "" : ` · ${sec.id} 검수 탈락 → 예전 방식`}`, { bg: "localize", clk: "bake" }, 0);
