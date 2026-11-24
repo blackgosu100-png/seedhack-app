@@ -1033,7 +1033,18 @@ export async function guardCopySimilarity(copy, reference, { input = {}, brief =
 }
 
 // ─────────────────────────────── v6: 원본 한글화 — 이미지 레이어 번역(Claude 1회) ───────────────────────────────
-import { LOCALIZE_SYSTEM, LOCALIZE_SCHEMA, renderLocalizeInput, EMPH_KINDS } from "./copy-prompt.js";
+import { LOCALIZE_SYSTEM, LOCALIZE_SCHEMA, renderLocalizeInput, EMPH_KINDS, koBudget, koOver, twoLineOk, visLen } from "./copy-prompt.js";
+// 숫자 문구 지킴이: 용량·속도·무게·시간 숫자가 든 줄이 비면(AI 가 비웠거나 정화에서 빠짐) 단위만 바꾼 짧은 말로 살린다 — 핵심 소구 숫자가 빈 알약으로 남던 것(다이싱 머신 "600斤/1小时" 2026-11-23)
+const NUMU_ZH = /\d\s*(斤|公斤|千克|kg|KG|克|g\b|小时|分钟|秒|升|L\b|毫升|ml|ML|cm|CM|mm|MM|米|W\b|瓦|转|层|档|人份|寸)/, PRICE_ZH2 = /[¥￥]|元|折|价|包邮|优惠|券|满减|起批/;
+export function numericKo(zh) {
+  let t = S(zh); if (!NUMU_ZH.test(t) || PRICE_ZH2.test(t)) return "";
+  const per = /[\/每]\s*1?\s*(小时|分钟)/.exec(t);
+  if (per) t = t.replace(per[0], "");
+  t = t.replace(/(\d+(?:\.\d+)?)\s*斤/g, (_m, n) => `${+(Number(n) * 0.5).toFixed(1)}kg`).replace(/公斤|千克/g, "kg").replace(/毫升/g, "ml").replace(/升/g, "L").replace(/小时/g, "시간").replace(/分钟/g, "분").replace(/秒/g, "초").replace(/克/g, "g").replace(/米/g, "m").replace(/瓦/g, "W").replace(/层/g, "단").replace(/档/g, "단").replace(/人份/g, "인분").replace(/寸/g, "인치").replace(/转/g, "회전").replace(/约/g, "약 ");
+  if (/[\u4e00-\u9fff]/.test(t)) return ""; // 한자가 남으면 섣불리 만들지 않는다
+  t = t.replace(/\s+/g, " ").trim();
+  return per ? `${per[1] === "小时" ? "시간당" : "분당"} ${t}` : t;
+}
 import { classifyLocalizeImage, fixLiteral, glossaryPrompt, heroNameFrom } from "./localize-core.js"; // v12: 넣지 말 이미지 판정 · 용어집 · 직역체 고치기 · 히어로 상품명
 // 다시 써도 되는 자리인가: 단색·보간으로 지운 자리(solid·interp), 띠(pill) 위 글자 = true / 사진 위(complex·ai 로 지움)·도면 라벨 = false
 export function rewriteOk(ly = {}) {
@@ -1154,6 +1165,7 @@ export async function translateLayers({ images = [], brief = null, attrs = [], c
       let s = sanitizeLayer({ ...ly, rewrite_ok: rw }, aiKo != null ? aiKo : ly.mt, brands, cr);
       if (aiL && aiL.natural === false && !s.drop) { const mt = /[가-힣]/.test(S(ly.mt)) ? sanitizeLayer(ly, ly.mt, brands, cr) : null; fixes.push(`${im.id}#${i} 어색 자가판정 → ${mt && !mt.drop ? "기계번역 기본 문구" : "그대로(대체 없음)"}`); if (mt && !mt.drop) s = mt; }
       if (!s.drop) { const fl = fixLiteral(ly.zh, s.ko, { mt: ly.mt }); if (fl.changed) { fixes.push(`${im.id}#${i} 직역 "${s.ko}" → ${fl.drop ? "삭제" : `"${fl.ko}"`}`); s = fl.drop ? { ko: "", drop: true, why: "직역(고칠 말 없음)" } : { ...s, ko: fl.ko }; } if (!s.drop && fl.literal) s = { ...s, literal: true }; } // v12 용어집·직역체
+      if ((s.drop || !S(s.ko)) && !/가격|할인|배송|반품|보증|도매|맞춤|브랜드|로고|연락|홍보|정책/.test(S(s.why))) { const nk = numericKo(ly.zh); if (nk) { fixes.push(`${im.id}#${i} 숫자 문구 살림 "${S(ly.zh).slice(0, 14)}" → "${nk}"`); s = { ko: nk, drop: false }; } }
       if (s.drop || s.warn) fixes.push(`${im.id}#${i} ${S(ly.zh).slice(0, 12)}: ${s.why}`);
       const emph = s.drop ? [] : cleanEmph(aiL?.emph, s.ko);
       return { ...ly, rewrite_ok: rw, ko: s.ko, drop: s.drop, emph, ...(aiL && "natural" in aiL ? { natural: !!aiL.natural } : {}), ...(s.why ? { why: s.why } : {}), ...(aiKo != null ? { ko_ai: S(aiKo), emph_ai: aiL?.emph || [] } : {}) }; // ko_ai: AI 원문(재정화 때 이걸로 다시)
@@ -1168,6 +1180,18 @@ export async function translateLayers({ images = [], brief = null, attrs = [], c
         text: lit.map((x, n) => `${n}. 원문 ${S(x.ly.zh)} → 지금 "${x.ly.ko}"`).join("\n") + glossaryPrompt(), model, timeoutMs: 120000 }, aiCache);
       for (const it of r2?.ok ? r2.result?.items || [] : []) { const x = lit[it.n]; if (!x || !S(it.ko)) continue; const sv = sanitizeLayer(x.ly, it.ko, brands, cr); if (!sv.drop) { fixes.push(`${x.im.id}#${x.i} 직역 다시 쓰기 "${x.ly.ko}" → "${sv.ko}"`); x.im.layers[x.i] = { ...x.ly, ko: sv.ko, literal: false, ko_literal: x.ly.ko }; } }
     } catch (e) { log("dim", `  🈚 직역 다시 쓰기 실패 (${String(e?.message || e).slice(0, 80)})`); }
+  }
+  // 글자 수 맞춤 다시 쓰기: 자리(max)를 넘는 줄만 모아 한 번 더 — 카피라이터에게 "이 글자 수로 가장 힘 있는 말"을 다시 받는다. 실패하면 그대로(렌더가 줄이거나 줄바꿈)
+  const longs = []; out.forEach((im) => { if (!im.promo) im.layers.forEach((ly, i) => { if (!ly.drop && S(ly.ko) && koOver(ly, ly.ko)) longs.push({ im, i, ly }); }); });
+  if (longs.length && wantCli) {
+    try {
+      const r3 = await runStructuredCached({ purpose: "localize-fit", system: "당신은 쿠팡 상세페이지 카피라이터입니다. 아래 문구들은 원본 이미지의 글자 자리에 얹기에는 너무 깁니다. 줄마다 주어진 최대 글자 수(공백 제외, 한 줄 기준) 안에서 **뜻과 숫자·단위는 지키면서** 가장 힘 있고 자연스러운 한국 쇼핑몰 문구로 새로 짓습니다. 조사·군말을 덜고 명사형이나 짧은 구어체로. 문장을 중간에 끊지 않고 완결된 말로. '2줄 가능'이면 \\n 으로 2줄(줄마다 한도 안). 직역·한자어 나열 금지. JSON 만.",
+        schema: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "ko"], properties: { n: { type: "integer" }, ko: { type: "string" } } } } } },
+        text: (brief ? `[상품] ${brief.product_name_ko || ""} · ${String(brief.key_appeal || "").slice(0, 120)}\n` : "") + longs.map((x, n) => `${n}. 최대 ${koBudget(x.ly)}자${twoLineOk(x.ly) ? "(2줄 가능)" : ""} · 원문 ${S(x.ly.zh)} → 지금 "${x.ly.ko}" (${Math.ceil(visLen(x.ly.ko))}자)`).join("\n") + glossaryPrompt(), model, timeoutMs: 120000 }, aiCache);
+      let n3 = 0;
+      for (const it of r3?.ok ? r3.result?.items || [] : []) { const x = longs[it.n]; if (!x || !S(it.ko) || koOver(x.ly, it.ko)) continue; const sv = sanitizeLayer(x.ly, it.ko, brands, cr); if (sv.drop || !S(sv.ko)) continue; fixes.push(`${x.im.id}#${x.i} 글자 수 맞춤 "${x.ly.ko}" → "${sv.ko}"`); x.im.layers[x.i] = { ...x.im.layers[x.i], ko: sv.ko, ko_long: x.ly.ko, emph: cleanEmph(x.ly.emph, sv.ko) }; n3++; }
+      log("dim", `  🈚 글자 수 맞춤: 긴 문구 ${longs.length}줄 중 ${n3}줄 다시 씀`);
+    } catch (e) { log("dim", `  🈚 글자 수 맞춤 실패 (${String(e?.message || e).slice(0, 80)})`); }
   }
   const h = ai?.ok ? ai.result.hero || {} : {};
   const noun = productNoun({ coupangName: brief?.product_name_ko, title_ko: brief?.product_type || "" });
@@ -1197,4 +1221,18 @@ export function resanitizeLocalized(localized = {}, { brief = null, attrs = [] }
   const hero = Object.fromEntries(Object.entries(localized.hero || {}).filter(([k]) => k !== "name_emph").map(([k, v]) => { const sf = softenAll(v); const bad = sf.awkward || AWKWARD_RE.test(sf.text) || /[가-힣](?:물기에 강한|먼지·습기)/.test(sf.text); if (bad) fixes.push(`hero.${k} "${S(v)}" → 기본 라벨`); return [k, bad ? heroFb[k] || S(v) : sf.text]; }));
   hero.name_emph = cleanEmph(localized.hero?.name_emph, hero.name || "").slice(0, 1);
   return { ...localized, images, hero, fixes };
+}
+
+// ✍ 장 단위 편집(통째 한글화용): 줄 단위 문구(translateLayers 결과)를 그림 한 장 단위로 묶어 다시 쓴다 → Map(id → 그리기용 레이어). 실패·규칙 위반은 줄 단위 그대로.
+export async function editForBake({ images = [], brief = null, log = () => {}, model = process.env.SIGNAL_AI_MODEL || "sonnet", useCli, timeoutMs = 240000, aiCache = null } = {}) {
+  const { EDIT_SYSTEM, EDIT_SCHEMA, renderEditInput, applyEdit } = await import("./bake-core.js");
+  const t0 = Date.now(), out = new Map(), list = images.filter((im) => (im.layers || []).filter((l) => !l.drop && S(l.ko)).length);
+  if (!list.length || !(useCli === true || (useCli == null && cliAvailable()))) return { byId: out, used: 0, how: "skip" };
+  const chunks = []; for (let i = 0; i < list.length; i += 8) chunks.push(list.slice(i, i + 8));
+  const rs = await Promise.all(chunks.map((ch) => runStructuredCached({ purpose: "localize-edit", system: EDIT_SYSTEM, schema: EDIT_SCHEMA, text: renderEditInput(ch, brief) + glossaryPrompt(), model, timeoutMs }, aiCache).catch((e) => ({ error: String(e?.message || e) }))));
+  let used = 0, cost = 0; const rejected = [];
+  rs.forEach((r, k) => { if (!r?.ok) { log("dim", `  ✍ 장 단위 편집 묶음 ${k + 1} 실패 → 줄 단위 문구 그대로 (${String(r?.error || "").slice(0, 60)})`); return; } cost += Number(r.costUsd) || 0;
+    for (const x of r.result?.images || []) { const im = chunks[k].find((y) => y.id === S(x.id)); if (!im) continue; const a = applyEdit(im.layers, x.blocks, { banned: (t) => [...bannedIn(t), ...(policyKind(t) ? ["정책 문구"] : [])] }); if (a.used) { out.set(im.id, a.layers); used += a.used; } a.rejected.forEach((w) => rejected.push(`${im.id}${w}`)); } });
+  log(used ? "go" : "dim", `${used ? "■" : " "} ✍ 장 단위 편집 · ${out.size}/${list.length}장 · 묶음 ${used}개 다시 씀${rejected.length ? ` · 버림 ${rejected.length}개(${rejected.slice(0, 3).join(" / ")})` : ""} · ${((Date.now() - t0) / 1000).toFixed(0)}초`);
+  return { byId: out, used, rejected, costUsd: cost, how: "cli", elapsedMs: Date.now() - t0 };
 }

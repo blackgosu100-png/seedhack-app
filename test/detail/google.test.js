@@ -23,7 +23,7 @@ test("openApiSchema: additionalProperties 빼고 null 허용은 nullable", () =>
 
 test("모델 고르기·가격", () => {
   assert.equal(geminiModel("sonnet"), "gemini-3.1-pro-preview");
-  assert.equal(geminiModel("haiku"), "gemini-2.5-flash");
+  assert.equal(geminiModel("haiku"), "gemini-3.8-flash");
   assert.equal(geminiModel("gemini-3.5-flash"), "gemini-3.5-flash");
   assert.ok(Math.abs(geminiCost("gemini-3.1-pro-preview", 1e6, 1e5) - 3.2) < 1e-9);
 });

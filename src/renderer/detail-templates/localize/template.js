@@ -268,6 +268,53 @@
       cl.forEach((b) => { b.style.fontSize = f.toFixed(1) + "px"; b.style.fontWeight = String(w); });
     }
   }
+  // 표(격자) 맞춤: 글 상자들이 행·열로 줄지어 있으면(3행 이상 × 2열 이상) 표로 보고 — 본문 칸은 한 크기·한 굵기, 머리 행도 한 크기, 열마다 가운데(또는 왼쪽) 기준선 하나.
+  //   줄마다 따로 넓히고 줄이다 보니 같은 표 안에서 크기·굵기·위치가 제각각이던 것(다이싱 머신 비교표 2026-11-23). 일반 규칙: 어떤 표든 "오와 열".
+  function gridUnify(els, wrap, sc) {
+    const vis = els.filter((e) => !e._l.shape && e.style.display !== "none" && !Number(e._l.style?.rotate) && !e._l.style?.vertical);
+    if (vis.length < 6) return 0;
+    const cy = (e) => e._l.y + e._l.h / 2, cx = (e) => e._l.x + e._l.w / 2, med = (a) => { const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; };
+    const W0 = wrap._w || (wrap.querySelector("img")?.naturalWidth || 780);
+    // 행: 세로 가운데가 줄 높이의 60% 안
+    const rows = []; [...vis].sort((a, b) => cy(a) - cy(b)).forEach((e) => { const r = rows.at(-1); if (r && Math.abs(cy(e) - r.cy) <= Math.max(e._l.h, r.h) * 0.6) { r.cells.push(e); r.cy = r.cells.reduce((t, x) => t + cy(x), 0) / r.cells.length; r.h = Math.max(r.h, e._l.h); } else rows.push({ cy: cy(e), h: e._l.h, cells: [e] }); });
+    const multi = rows.filter((r) => r.cells.length >= 2);
+    if (multi.length < 3) return 0;
+    // 열: 가로 가운데가 이미지 폭의 6% 안. 서로 다른 행 3칸 이상이 모여야 열
+    const cols = []; multi.forEach((r, ri) => r.cells.forEach((e) => { const c = cols.find((k) => Math.abs(k.cx - cx(e)) <= W0 * 0.06); if (c) { c.cells.push(e); c.rows.add(ri); c.cx = med(c.cells.map(cx)); } else cols.push({ cx: cx(e), cells: [e], rows: new Set([ri]) }); }));
+    const good = cols.filter((c) => c.rows.size >= 3);
+    if (good.length < 2) return 0;
+    const inCol = new Set(good.flatMap((c) => c.cells));
+    const trows = multi.filter((r) => r.cells.filter((e) => inCol.has(e)).length >= 2);
+    if (trows.length < 3) return 0;
+    // 표는 한 덩어리여야 한다: 행 간격이 고르게 이어지는 가장 긴 구간만(떨어진 다른 글 줄이 섞이지 않게)
+    const gaps = trows.slice(1).map((r, i) => r.cy - trows[i].cy), g0 = med(gaps); let best = [trows[0]], run = [trows[0]];
+    for (let i = 1; i < trows.length; i++) { if (gaps[i - 1] <= g0 * 1.8) run.push(trows[i]); else run = [trows[i]]; if (run.length > best.length) best = [...run]; }
+    if (best.length < 3) return 0;
+    const cells = best.flatMap((r) => r.cells.filter((e) => inCol.has(e)));
+    const osz = (e) => Number(e._l.style?.size) || e._l.h * 0.78, fz = (e) => parseFloat(e.style.fontSize);
+    // 머리 행: 맨 윗줄의 원래 크기·굵기가 본문과 다르면(12% 이상 또는 굵기 다름) 따로
+    const body0 = best.slice(1).flatMap((r) => r.cells.filter((e) => inCol.has(e))), head0 = best[0].cells.filter((e) => inCol.has(e));
+    const wOf = (e) => Number(e.style.fontWeight) || 400, mode = (a) => { const m = {}; a.forEach((x) => (m[x] = (m[x] || 0) + 1)); return Number(Object.entries(m).sort((x, y) => y[1] - x[1])[0][0]); };
+    const headIsHead = Math.abs(med(head0.map(osz)) - med(body0.map(osz))) > med(body0.map(osz)) * 0.12 || mode(head0.map(wOf)) !== mode(body0.map(wOf));
+    const setAll = (g) => {
+      if (g.length < 2) return;
+      const fs = g.map(fz), m = med(fs); let f = Math.min(...fs);
+      if (f < m * 0.78) f = m * 0.78; // 한 칸의 긴 글 때문에 표 전체가 깨알이 되지 않게 — 그 칸만 두 줄로
+      const w = mode(g.map(wOf));
+      g.forEach((e) => { if (fz(e) < f - 0.2) { e.style.whiteSpace = "normal"; e.style.lineHeight = "1.15"; } e.style.fontSize = f.toFixed(1) + "px"; e.style.fontWeight = String(w); });
+    };
+    if (headIsHead) { setAll(head0); setAll(body0); } else setAll(cells);
+    // 열 기준선: 가운데들이 왼쪽 끝들보다 더 가지런하면 가운데 정렬, 아니면 왼쪽 정렬
+    const sd = (a) => { const m = a.reduce((t, x) => t + x, 0) / a.length; return Math.sqrt(a.reduce((t, x) => t + (x - m) ** 2, 0) / a.length); };
+    const inTable = new Set(cells);
+    for (const c of good) {
+      const g = c.cells.filter((e) => inTable.has(e)); if (g.length < 2) continue;
+      if (sd(g.map(cx)) <= sd(g.map((e) => e._l.x)) + 2) { const x0 = med(g.map(cx)) * sc; g.forEach((e) => { const w = parseFloat(e.style.width) || e.offsetWidth; e.style.left = (x0 - w / 2).toFixed(1) + "px"; e.style.justifyContent = "center"; e.style.textAlign = "center"; }); }
+      else { const x0 = med(g.map((e) => e._l.x)) * sc; g.forEach((e) => { e.style.left = x0.toFixed(1) + "px"; e.style.justifyContent = "flex-start"; e.style.textAlign = "left"; }); }
+    }
+    cells.forEach((e) => { e.dataset.grid = "1"; });
+    return cells.length;
+  }
   // 페이지 크기 체계: 제목급(title)·부제(sub) 글 크기를 장을 넘어 3단계 안으로 — 12% 안의 크기들은 그 묶음의 가장 작은 값으로(줄이기만 하므로 넘침·겹침이 생기지 않는다)
   function pageScale(root) {
     const out = {};
@@ -449,11 +496,12 @@
         for (const g of ss) if (g.length > 1) { const x = Math.min(...g.map((el) => parseFloat(el.style.left))); g.forEach((el) => { const d = parseFloat(el.style.left) - x; if (d > 0) { el.style.left = x + "px"; el.style.width = (parseFloat(el.style.width) + d) + "px"; } }); }
       }
       roleUnify(els); // v12.1 같은 장 같은 역할·비슷한 원래 크기(±25%) 줄은 같은 크기·굵기(작은 쪽으로)
+      gridUnify(els, wrap, sc); // 표(격자)는 칸 크기·굵기·열 기준선을 하나로
       stackFit(els, wrap, sc);
       const sf = shapeFit(els, wrap, sc); report.shapeOverflow += sf.overflow; report.shapeGroups += sf.groups; // v12.1 칸 안 세로 묶음(고민 4칸 등): 원래 묶음 영역 안에 위→아래로, 넘치면 함께 줄이고 그래도 넘치면 아래 줄부터 생략
       (wrap._blocks || []).forEach((ls, k) => typeBlock(ls, k, sc, wrap));
       const fixed = (wrap._fixed || []).map((f) => ({ l: f.x * sc, t: f.y * sc, r: (f.x + f.w) * sc, b: (f.y + f.h) * sc }));
-      const us = unitsOf(wrap), before = countOverlaps(us, fixed), st = resolveOverlaps(wrap, us, fixed); roleUnify(els); /* 겹침 정리로 한 줄만 줄었으면 같은 역할 줄도 같이(줄이기만 — 새 겹침 없음) */ const afterN = countOverlaps(us, fixed);
+      const us = unitsOf(wrap), before = countOverlaps(us, fixed), st = resolveOverlaps(wrap, us, fixed); roleUnify(els); gridUnify(els, wrap, sc); /* 겹침 정리로 한 줄만 줄었으면 같은 역할 줄도 같이(줄이기만 — 새 겹침 없음) */ const afterN = countOverlaps(us, fixed);
       let low = 0, changed = 0;
       for (const el of [...els, ...wrap.querySelectorAll(":scope > .loc-block .lb-title, :scope > .loc-block .lb-sub")]) { const cs0 = getComputedStyle(el), fz = parseFloat(cs0.fontSize), wt = Number(cs0.fontWeight) || 400; const p = inkUnder(el, wrap, sc, fz >= 24 || (fz >= 19 && wt >= 700)); if (p?.changed) changed++; if (p && p.con != null && p.con < (fz >= 24 || (fz >= 19 && wt >= 700) ? 3 : 4.5)) low++; } // v12: 타이포 블록 줄도 실제 바탕으로 색 점검
       Object.assign(wrap.dataset, { overlap0: before, overlap: afterN, moved: st.moved, shrunk: st.shrunk, inkChanged: changed, lowInk: low });

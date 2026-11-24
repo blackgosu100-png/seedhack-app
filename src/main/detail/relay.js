@@ -27,10 +27,14 @@ export function userMessage({ status, code, error } = {}) {
   if (code === "pages" || code === "daily" || code === "global") return error || "오늘 쓸 수 있는 AI 사용량을 다 썼어요. 내일 다시 해 주세요.";
   if (code === "wing") return "Wing 에 로그인해야 AI 를 쓸 수 있어요. ① Wing 탭에서 로그인해 주세요.";
   if (code === "net") return "인터넷 연결이 불안정해 AI 를 부르지 못했어요. 연결을 확인하고 다시 해 주세요.";
+  if (code === "unsupported") return "씨드핵 서버가 아직 이 기능을 준비하지 못했어요. 🔗 내 구글 클라우드를 연결하면 바로 쓸 수 있어요.";
   if (code === "setup" || status === 503) return "AI 서버가 잠시 준비 중이에요. 잠시 뒤 다시 해 주세요.";
   return "AI 처리 중 문제가 생겼어요. 잠시 뒤 다시 해 주세요.";
 }
-const STICKY = new Set(["login", "approval", "wing", "pages", "daily", "global"]);
+const STICKY = new Set(["login", "approval", "wing", "pages", "daily", "global", "unsupported"]);
+// 서버에 그 작업이 아직 없음(배포 전 옛 서버: 400 "지원하지 않는 작업입니다", 주소 없음: 404) — 다시 해도 안 되므로 바로 멈춘다
+export const isUnsupported = (status, error = "") => status === 404 || (status === 400 && /지원하지 않는 작업/.test(String(error)));
+export const relayBlocked = () => blocked?.code || null;
 
 async function ident() {
   const el = await import("electron").catch(() => null);
@@ -59,7 +63,7 @@ export async function callRelay(task, input, { timeoutMs = 300000, log = noop, r
     catch (e) { last = { error: e?.name === "AbortError" ? `서버 응답 시간 초과(${Math.round(timeoutMs / 1000)}초)` : `서버 연결 실패: ${String(e?.message || e).slice(0, 80)}`, code: "net" }; continue; }
     finally { clearTimeout(t); }
     if (r.ok && j?.ok) return { ok: true, result: j.result, model: j.model || "server", usage: j.usage || null, costUsd: j.costUsd ?? null, quota: j.quota || null };
-    last = { error: j?.error || `서버 응답 ${r.status}`, code: j?.code || null, status: r.status };
+    last = { error: j?.error || `서버 응답 ${r.status}`, code: j?.code || (isUnsupported(r.status, j?.error) ? "unsupported" : null), status: r.status };
     if (STICKY.has(last.code) || [400, 401, 403, 413, 429].includes(r.status)) break;
   }
   last.userMessage = userMessage(last);
@@ -132,4 +136,20 @@ export async function relayStructured({ system, schema, text, model = "sonnet", 
   const r = await callRelay("claude", { purpose, system: wantRead ? system + READ_NOTE : system, schema, text: String(text ?? ""), images, model, effort: "medium" }, { timeoutMs, log });
   if (!r.ok) return { error: r.userMessage ? `${r.userMessage} (${r.error})` : r.error, relay: true, code: r.code };
   return { ok: true, result: r.result, model: `server:${r.model}`, usage: r.usage, costUsd: Number(r.costUsd) || 0, elapsedMs: Date.now() - t0, relay: true };
+}
+
+// 서버가 어떤 작업을 할 수 있는지(task:"ping") — 사전 점검용, 10분 기억. → { ok, tasks:{claude,image,ocr}, unsupported?, net?, error? }
+let caps = null, capsAt = 0;
+export async function relayCaps({ force = false } = {}) {
+  if (!force && caps && Date.now() - capsAt < 600000) return caps;
+  try {
+    const { url, vendorId, doFetch } = await ident();
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 15000);
+    const r = await doFetch(`${url}/api/signal/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_id: vendorId || "ping", task: "ping" }), signal: ac.signal }).finally(() => clearTimeout(t));
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j?.ok) caps = { ok: true, tasks: { claude: !!j.ready?.claude, image: !!j.ready?.image, ocr: !!j.ready?.ocr } };
+    else caps = { ok: false, unsupported: isUnsupported(r.status, j?.error), error: j?.error || `서버 응답 ${r.status}`, tasks: { claude: false, image: false, ocr: false } };
+  } catch (e) { caps = { ok: false, net: true, error: String(e?.message || e).slice(0, 80), tasks: { claude: false, image: false, ocr: false } }; }
+  capsAt = Date.now();
+  return caps;
 }

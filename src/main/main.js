@@ -36,6 +36,7 @@ import { initWave } from "./wave.js"; // 🌊 파도타기
 import { visionCheck } from "./cn-vision.js"; // 👁 추천 후보 사진 확인
 import { initDetail } from "./detail/index.js"; // 📄 상세페이지 자동 생성(1688 상세 이미지 → 한글 상세페이지)
 import { handleExtAction } from "./dash-ext.js"; // 📊 마진 대시보드의 확장 요청(Wing 정산 받기)을 앱이 대신
+import { parseProxyLine, normalizeProxySettings, pruneBanned, selectNextProxy, buildProxySummary } from "./proxy-core.js"; // 🌐 쿠팡 클린/숨은 세션용 프록시
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WING_TREND = "https://wing.coupang.com/tenants/rfm-ss/coupang-trends/popularity-search";
@@ -63,7 +64,8 @@ app.userAgentFallback = app.userAgentFallback
 //  힌트 값은 화면 안 navigator.userAgentData 와 똑같아야 해서, 첫 화면에서 실제 값을 읽어 쓴다(그 전에는 크롬 방식으로 만든 값)
 const CH_MAJ = String(process.versions.chrome || "").split(".")[0];
 const CH_PLATFORM = process.platform === "win32" ? '"Windows"' : process.platform === "darwin" ? '"macOS"' : '"Linux"';
-let chUa = `"Not?A_Brand";v="24", "Chromium";v="${CH_MAJ}"`;
+// Electron 기본 brands는 "Chromium"만 보내고 "Google Chrome"이 빠져 쿠팡 보안이 비표준 브라우저로 의심함 → 실제 크롬 Client Hints 형식으로 통일
+let chUa = `"Google Chrome";v="${CH_MAJ}", "Chromium";v="${CH_MAJ}", "Not-A.Brand";v="24"`;
 const ACCEPT_LANG = "ko-KR,ko,en-US,en";
 function chromeLike(ses) {
   if (!ses || ses.__seedhackCh) return;
@@ -71,13 +73,22 @@ function chromeLike(ses) {
   try { ses.setUserAgent(app.userAgentFallback, ACCEPT_LANG); } catch {}
   ses.webRequest.onBeforeSendHeaders((d, cb) => {
     const h = d.requestHeaders;
-    if (/^https:/.test(d.url) && !Object.keys(h).some((k) => k.toLowerCase() === "sec-ch-ua")) { h["sec-ch-ua"] = chUa; h["sec-ch-ua-mobile"] = "?0"; h["sec-ch-ua-platform"] = CH_PLATFORM; }
+    if (/^https:/.test(d.url)) {
+      for (const k of Object.keys(h)) {
+        const lk = k.toLowerCase();
+        if (lk === "sec-ch-ua" || lk === "sec-ch-ua-mobile" || lk === "sec-ch-ua-platform") delete h[k];
+      }
+      h["sec-ch-ua"] = chUa;
+      h["sec-ch-ua-mobile"] = "?0";
+      h["sec-ch-ua-platform"] = CH_PLATFORM;
+    }
     cb({ requestHeaders: h });
   });
 }
 app.on("session-created", chromeLike);
 const readBrands = (wc) => wc.executeJavaScript(`JSON.stringify(navigator.userAgentData?.brands || [])`).then((j) => {
-  const b = JSON.parse(j); if (b.length) chUa = b.map((x) => `"${x.brand}";v="${x.version}"`).join(", ");
+  const b = JSON.parse(j);
+  if (b.length && b.some((x) => /Google Chrome/i.test(x.brand))) chUa = b.map((x) => `"${x.brand}";v="${x.version}"`).join(", ");
 }).catch(() => {});
 
 let win, wingView, cleanView = null, active = "wing", current = null;
@@ -87,6 +98,208 @@ let cleanTabs = [], cleanPart = null, tabSeq = 0;
 //  같은 쿠키를 쓰면 자동 조회가 쿠팡에 "기계"로 찍힐 때 대표님이 누른 상품 링크까지 쿠팡 오류 화면이 떴다
 let bgPart = null;
 const bgPartition = () => (bgPart ||= `cpbg-${Date.now()}`);
+
+// ========== 🌐 쿠팡 클린·숨은 세션용 프록시 (고정 IP · 다수 IP 로테이션 · ID:PW 인증 지원) ==========
+const partProxyMap = new Map(); // partition -> { proxy, mode, reason, waitMs, ready: Promise }
+const wcPartMap = new Map(); // webContents.id -> partition
+const proxyAuthAttempts = new Map(); // `${wcId}:${proxyId}` -> { count, ts }
+let activeTestProxy = null; // 연결 테스트 중인 임시 프록시 (미저장 상태 인증 매칭용)
+let proxyPauseLogAt = 0;
+
+function getProxyCfg() {
+  return normalizeProxySettings(store.get("settings") || {});
+}
+
+function getPrunedBans() {
+  const raw = store.get("proxyBanned") || {};
+  const pruned = pruneBanned(raw);
+  if (Object.keys(pruned).length !== Object.keys(raw).length) store.set("proxyBanned", pruned);
+  return pruned;
+}
+
+function getProxySummary() {
+  const cfg = getProxyCfg();
+  const activeProxy = cleanPart ? (partProxyMap.get(cleanPart)?.proxy || null) : null;
+  return buildProxySummary(cfg, getPrunedBans(), activeProxy);
+}
+
+function pushProxyState() {
+  send("proxy:state", getProxySummary());
+}
+
+function registerWcPart(wc, part) {
+  if (!wc || !part) return;
+  const id = wc.id;
+  wcPartMap.set(id, part);
+  wc.once("destroyed", () => wcPartMap.delete(id));
+}
+
+function banProxy(proxy, why = "") {
+  if (!proxy?.id) return { single: false, banned: false, remainAvailable: 0 };
+  const cfg = getProxyCfg();
+  if (cfg.proxies.length <= 1) {
+    // 단일 고정 프록시는 45분 제외 시 사용할 프록시가 아예 사라지므로 직결 폴백 대신 유지 안내
+    return { single: true, banned: false, remainAvailable: cfg.proxies.length };
+  }
+  const banned = getPrunedBans();
+  banned[proxy.id] = Date.now() + cfg.cooldownMs;
+  store.set("proxyBanned", banned);
+  const remainAvailable = cfg.proxies.filter((p) => !banned[p.id]).length;
+  log("warn", `△ 프록시 일시 제외 (${cfg.cooldownMin}분)${why ? ` · ${why}` : ""} · ${proxy.label} (남은 사용 가능 ${remainAvailable}/${cfg.proxies.length}개)`);
+  pushProxyState();
+  return { single: false, banned: true, remainAvailable };
+}
+
+function trimPartProxyMap() {
+  while (partProxyMap.size > 60) {
+    const oldestKey = partProxyMap.keys().next().value;
+    partProxyMap.delete(oldestKey);
+  }
+}
+
+// 파티션당 최초 1회만 프록시를 바인딩한다 (같은 세션에서 탭을 여러 개 열어도 프록시가 중간에 덮어씌워지지 않음)
+function ensurePartitionProxy(partition, { kind = "clean", forceDirect = false } = {}) {
+  const existing = partProxyMap.get(partition);
+  if (existing) return existing.ready;
+
+  const entry = { proxy: null, mode: "direct", reason: "init", waitMs: 0, ready: null };
+  entry.ready = (async () => {
+    const ses = session.fromPartition(partition);
+    const cfg = getProxyCfg();
+    const shouldUse = !forceDirect && !SELFTEST && cfg.enabled && (kind !== "bg" || cfg.applyBg);
+
+    if (!shouldUse) {
+      entry.mode = "direct";
+      entry.reason = "disabled";
+      try { await ses.setProxy({ mode: "direct" }); } catch {}
+      if (kind === "clean") pushProxyState();
+      return { ok: true, mode: "direct", proxy: null, reason: entry.reason };
+    }
+
+    const sel = selectNextProxy(cfg, getPrunedBans(), store.get("proxyIndex") || 0);
+    entry.mode = sel.mode;
+    entry.reason = sel.reason;
+    entry.waitMs = sel.waitMs || 0;
+
+    if (sel.mode === "proxy" && sel.proxy) {
+      entry.proxy = sel.proxy;
+      store.set("proxyIndex", sel.nextCursor);
+      try {
+        await ses.setProxy({
+          mode: "fixed_servers",
+          proxyRules: sel.proxy.proxyRules,
+          proxyBypassRules: "<local>",
+        });
+        log("dim", `  🌐 프록시 적용 (${kind === "bg" ? "숨은 조회" : "클린 세션"}) · ${sel.proxy.label}${sel.totalCount > 1 ? ` (${sel.availableCount}/${sel.totalCount})` : ""}`);
+        if (sel.proxy.socksAuthWarn) {
+          log("warn", `△ SOCKS 프록시의 ID/PW 인증은 크롬 엔진에서 제한될 수 있어요 · IP 화이트리스트 또는 HTTP 프록시를 권장합니다 (${sel.proxy.label})`);
+        }
+        if (kind === "clean") pushProxyState();
+        return { ok: true, mode: "proxy", proxy: sel.proxy, reason: "ok" };
+      } catch (e) {
+        log("warn", `△ 프록시 설정 실패 · ${sel.proxy.label} · ${e?.message || e}`);
+        if (cfg.noDirectFallback) {
+          entry.mode = "blocked";
+          entry.reason = "set_proxy_error";
+          if (kind === "clean") pushProxyState();
+          return { ok: false, mode: "blocked", proxy: null, reason: "set_proxy_error", error: e?.message || String(e) };
+        }
+        entry.proxy = null;
+        entry.mode = "direct";
+        try { await ses.setProxy({ mode: "direct" }); } catch {}
+        if (kind === "clean") pushProxyState();
+        return { ok: true, mode: "direct", proxy: null, reason: "error_fallback" };
+      }
+    }
+
+    if (sel.mode === "blocked") {
+      if (Date.now() - proxyPauseLogAt > 5000) {
+        proxyPauseLogAt = Date.now();
+        if (sel.reason === "empty") {
+          log("warn", "△ 프록시 사용이 켜져 있지만 등록된 유효 프록시가 없습니다 — 내 IP 보호를 위해 쿠팡 접속을 보류했어요. 🌐 프록시 설정을 확인해 주세요.");
+        } else {
+          const mins = Math.max(1, Math.ceil((sel.waitMs || 60000) / 60000));
+          log("warn", `△ 사용 가능한 프록시가 모두 일시 제외 상태입니다 (가장 빠른 해제까지 약 ${mins}분) — 내 IP 보호를 위해 쿠팡 접속을 보류했어요. 🌐 프록시 설정에서 차단을 초기화하거나 잠시 후 다시 시도하세요.`);
+        }
+      }
+      if (kind === "clean") pushProxyState();
+      return { ok: false, mode: "blocked", proxy: null, reason: sel.reason, waitMs: sel.waitMs || 0 };
+    }
+
+    // noDirectFallback이 꺼져 있는 경우에만 직결 폴백 허용
+    try { await ses.setProxy({ mode: "direct" }); } catch {}
+    if (Date.now() - proxyPauseLogAt > 5000) {
+      proxyPauseLogAt = Date.now();
+      log("warn", "△ 사용 가능한 프록시가 없어 직결(내 IP)로 접속합니다.");
+    }
+    if (kind === "clean") pushProxyState();
+    return { ok: true, mode: "direct", proxy: null, reason: sel.reason };
+  })();
+
+  partProxyMap.set(partition, entry);
+  trimPartProxyMap();
+  return entry.ready;
+}
+
+function proxyPausedDataUrl(pr) {
+  const isEmpty = pr.reason === "empty";
+  const mins = Math.max(1, Math.ceil((pr.waitMs || 60000) / 60000));
+  const title = isEmpty ? "등록된 프록시가 없습니다" : pr.reason === "set_proxy_error" ? "프록시 설정 적용에 실패했습니다" : "모든 프록시가 일시 제외 상태입니다";
+  const desc = isEmpty
+    ? "프록시 사용이 켜져 있고 직결 전환 금지가 활성화되어 있어 내 IP 보호를 위해 쿠팡 접속을 멈췄습니다.<br>위쪽 <b>🌐 프록시</b> 버튼에서 고정/로테이션 프록시를 입력해 주세요."
+    : pr.reason === "set_proxy_error"
+      ? `프록시 주소를 적용하지 못했습니다 (${String(pr.error || "").replace(/[<>&]/g, "")}).<br>위쪽 <b>🌐 프록시</b> 버튼에서 형식을 확인해 주세요.`
+      : `모든 프록시가 쿠팡에서 일시 제한되어 쿨다운 중입니다 (가장 빠른 해제까지 약 <b>${mins}분</b>).<br>내 IP로 자동 전환되지 않도록 보호 중입니다. 위쪽 <b>🌐 프록시</b> 버튼에서 <b>차단 초기화</b>를 누르거나 잠시 후 <b>🕶 새 클린 세션</b>을 열어 주세요.`;
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>프록시 대기 중</title><style>body{margin:0;height:100vh;display:grid;place-items:center;background:#f5f6f8;color:#344054;font:14px/1.6 -apple-system,BlinkMacSystemFont,sans-serif}.box{max-width:460px;background:#fff;border:1px solid #e4e7ec;border-radius:12px;padding:24px 28px;box-shadow:0 4px 16px rgba(16,24,40,.06)}h2{margin:0 0 8px;font-size:16px;color:#101418}p{margin:0;color:#667085;font-size:13px}b{color:#101418}</style></head><body><div class="box"><h2>🌐 ${title}</h2><p>${desc}</p></div></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+// 🔐 프록시 ID/PW 인증 처리 (Electron은 proxyRules 안의 user:pass를 직접 처리하지 않고 app 'login' 이벤트로 자격 증명을 받는다)
+app.on("login", (event, webContents, _details, authInfo, callback) => {
+  if (!authInfo?.isProxy) return;
+  const host = String(authInfo.host || "").toLowerCase();
+  const port = Number(authInfo.port) || 0;
+
+  let proxy = null;
+  // 1) 연결 테스트 중인 프록시 우선 매칭
+  if (activeTestProxy?.hasAuth && activeTestProxy.host.toLowerCase() === host && (!port || activeTestProxy.port === port)) {
+    proxy = activeTestProxy;
+  }
+  // 2) 해당 webContents가 속한 파티션에 바인딩된 프록시 매칭
+  if (!proxy && webContents) {
+    const part = wcPartMap.get(webContents.id);
+    const bound = part ? partProxyMap.get(part)?.proxy : null;
+    if (bound?.hasAuth && (!host || bound.host.toLowerCase() === host) && (!port || bound.port === port)) {
+      proxy = bound;
+    }
+  }
+  // 3) 현재 바인딩된 파티션 맵 또는 저장된 설정 목록에서 host:port 매칭
+  if (!proxy) {
+    for (const entry of partProxyMap.values()) {
+      const p = entry?.proxy;
+      if (p?.hasAuth && p.host.toLowerCase() === host && (!port || p.port === port)) { proxy = p; break; }
+    }
+  }
+  if (!proxy) {
+    proxy = getProxyCfg().proxies.find((p) => p.hasAuth && p.host.toLowerCase() === host && (!port || p.port === port)) || null;
+  }
+  if (!proxy) return;
+
+  const key = `${webContents?.id ?? "net"}:${proxy.id}`;
+  const now = Date.now();
+  const prev = proxyAuthAttempts.get(key);
+  const count = prev && now - prev.ts < 10000 ? prev.count + 1 : 1;
+  proxyAuthAttempts.set(key, { count, ts: now });
+  if (proxyAuthAttempts.size > 100) proxyAuthAttempts.clear();
+
+  event.preventDefault();
+  if (count > 2) {
+    log("stop", `✕ 프록시 인증(아이디/비밀번호)에 실패했어요 · ${proxy.label} — 🌐 프록시 설정에서 계정 정보를 확인해 주세요`);
+    callback(); // 무한 407 루프 방지
+    return;
+  }
+  callback(proxy.username, proxy.password);
+});
 // 📦 1688 탭: 로그인 유지(persist:1688). 리스트업 행에서 🔍1688 → 이미지 검색 → 상품 페이지에서 "리스트업에 넣기"
 let cnView = null, cnTarget = null, cnPending = null; // cnPending: 1688 첫 화면에서 올릴 사진(한 번 쓰고 비움)
 // 🗂 1688 탭(2026-10-13): 첫 탭 = cnView(🔍 검색 · 고정 — 이미지 검색·판매자 점수·자동 조사가 쓰는 화면), 검색 결과에서 상품을 열면 새 탭(cnTabs)
@@ -139,11 +352,12 @@ function buildPayload(snap) {
 
 // 🔰 첫 실행 안내(renderer/onboard.js): "login" = 앱 로그인만 창 전체(사이트 화면 숨김) · "wing" = Wing 화면 둘레에 빛나는 테두리 자리(ONB_PAD)를 비움
 let onbPhase = null;
+let modalOpen = false; // 🌐 프록시 설정 등 모달이 열렸을 때 WebContentsView가 모달을 가리지 않게 숨김
 let bandH = 0; // 🔔 위쪽 업데이트 안내 띠 높이(renderer 가 ui:band 로 알림) — 그만큼 사이트 화면을 내린다
 const ONB_PAD = 10;
 function layout() {
   if (!win) return;
-  if (onbPhase === "login") { [wingView, dashView, chat.view(), cnView, ...cnTabs.map((t) => t.view), ...cleanTabs.map((t) => t.view)].forEach((v) => v?.setVisible(false)); return; }
+  if (onbPhase === "login" || modalOpen) { [wingView, dashView, chat.view(), cnView, ...cnTabs.map((t) => t.view), ...cleanTabs.map((t) => t.view)].forEach((v) => v?.setVisible(false)); return; }
   const [w, h] = win.getContentSize();
   const sw = Math.round(sideW * ZOOM), bh = Math.round((BAR_H + bandH) * ZOOM), st = Math.round(stripW * ZOOM);
   const b = { x: sw, y: bh, width: Math.max(200, w - sw), height: Math.max(200, h - bh) };
@@ -170,9 +384,11 @@ const isClean = (wc) => cleanTabs.some((t) => t.view.webContents === wc) || Obje
 const cpBgs = {};
 function coupangBgView(slot = "search") {
   const o = cpBgs[slot];
-  if (o?.view && !o.view.webContents.isDestroyed() && o.part === bgPartition()) return o.view;
+  const part = bgPartition();
+  if (o?.view && !o.view.webContents.isDestroyed() && o.part === part) return o.view;
   if (o?.view) { try { win.contentView.removeChildView(o.view); o.view.webContents.close(); } catch {} }
-  const cpBg = new WebContentsView({ webPreferences: { partition: bgPartition(), contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  const cpBg = new WebContentsView({ webPreferences: { partition: part, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } });
+  registerWcPart(cpBg.webContents, part);
   win.contentView.addChildView(cpBg);
   const [w, h] = win.getContentSize();
   cpBg.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) }); // 크기를 준 뒤 숨김(크기 0이면 카드가 안 그려질 수 있음)
@@ -180,8 +396,18 @@ function coupangBgView(slot = "search") {
   cpBg.webContents.setAudioMuted(true);
   cpBg.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   cpBg.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다(쿠폰가 읽기): ${err?.message || err}`));
-  cpBgs[slot] = { view: cpBg, part: bgPartition() };
-  cpBg.webContents.on("did-finish-load", () => cpBlocked(cpBg.webContents).then((b) => { if (b && bgPart === cpBgs[slot]?.part) { log("dim", "  쿠팡이 자동 조회를 잠시 막았어요 — 숨은 화면 세션을 새로 만들어 다음 키워드부터 이어 가요"); bgPart = null; } }));
+  cpBgs[slot] = { view: cpBg, part };
+  cpBg.webContents.on("did-finish-load", () => {
+    Promise.all([cpBlocked(cpBg.webContents), cpDenied(cpBg.webContents)]).then(([b, d]) => {
+      if ((!b && !d) || bgPart !== part) return;
+      if (d) {
+        const bound = partProxyMap.get(part)?.proxy || null;
+        if (bound) banProxy(bound, "숨은 조회 제한");
+      }
+      log("dim", "  쿠팡이 자동 조회를 잠시 막았어요 — 숨은 화면 세션을 새로 만들어 다음 키워드부터 이어 가요");
+      bgPart = null;
+    });
+  });
   return cpBg;
 }
 // 옵션이 다른 상품: 그 옵션(vendorItemId)의 상품 페이지를 숨은 화면에서 열어 판매가를 읽는다(2026-10-13, 한누네 팬트리 8개 Wing 116,000 → 실제 35,200)
@@ -200,7 +426,11 @@ const DETAIL_PRICE_JS = `(() => {
   return { price: best ? best.v : null, vid: new URL(location.href).searchParams.get("vendorItemId") || "" };
 })()`;
 async function readDetailPrice(pid, vid) {
-  const wc = coupangBgView("detail").webContents;
+  const view = coupangBgView("detail");
+  const part = cpBgs.detail?.part || bgPartition();
+  const pr = await ensurePartitionProxy(part, { kind: "bg" });
+  if (!pr.ok || view.webContents.isDestroyed()) return null;
+  const wc = view.webContents;
   const url = `https://www.coupang.com/vp/products/${encodeURIComponent(pid)}?vendorItemId=${encodeURIComponent(vid)}`;
   try { await wc.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); } catch { /* 쿠팡이 뒤에서 주소를 바꿔도 화면은 뜬다 — 아래에서 읽어 봄 */ }
   for (let i = 0; i < 12; i++) { // 최대 약 6초
@@ -218,45 +448,90 @@ function sendTabs() {
 }
 // 쿠팡 오류·차단 화면인지(제목·첫 글자들로만 판단)
 const CP_BLOCK = /서버에서 오류가 발생|Access Denied|요청하신 페이지를 처리하는 중|잠시 후 다시 시도/;
+const CP_ACCESS_DENIED = /Access Denied/i;
 const cpBlocked = (wc) => wc.executeJavaScript(`(document.title + " " + (document.body?.innerText || "").slice(0, 400))`).then((t) => CP_BLOCK.test(t) && !cpNormal(t)).catch(() => false);
-// 🚫 쿠팡이 접속 자체를 제한한 화면("사용권한이 제한된 페이지" · Ref: …_IP) — 새 세션으로 다시 열어도 같은 결과라 다시 시도하지 않고 안내만 한다(2026-11-20)
+const cpAccessDenied = (wc) => wc.executeJavaScript(`(document.title + " " + (document.body?.innerText || "").slice(0, 400))`).then((t) => CP_ACCESS_DENIED.test(t) && !cpNormal(t)).catch(() => false);
+// 🚫 쿠팡이 접속 자체를 제한한 화면("사용권한이 제한된 페이지" · Ref: …_IP) — 프록시 다수 설정 시 차단 프록시를 제외하고 다음 프록시로 자동 전환
 const CP_DENIED = /사용권한이 제한된 페이지/;
 const cpDenied = (wc) => wc.executeJavaScript(`(document.body?.innerText || "").slice(0, 400)`).then((t) => CP_DENIED.test(t)).catch(() => false);
 let deniedAt = 0;
 const cpNormal = (t) => /장바구니|바로구매|로켓배송/.test(t); // 정상 쿠팡 화면이면 이런 말이 보인다
 function openCleanTab(url = COUPANG_HOME, activate = true, retried = false) {
-  if (!cleanPart) cleanPart = `clean-${Date.now()}`;
+  if (!cleanPart) cleanPart = "persist:clean"; // 비로그인 쿠팡 전용 세션 유지 (매번 빈 쿠키로 시작하면 쿠팡 검색에서 즉시 권한 제한이 뜰 수 있음 · '새 클린 세션' 클릭 시에만 완전 초기화)
+  const part = cleanPart;
   // 너무 많으면 가장 오래된(지금 보는 탭이 아닌) 탭부터 닫는다
   while (cleanTabs.length >= MAX_TABS) { const old = cleanTabs.find((t) => t.view !== cleanView); if (!old) break; closeCleanTab(old.id, true); }
-  const view = new WebContentsView({ webPreferences: { partition: cleanPart, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } }); // 숨겨도 멈추지 않게 — 탭 전환 즉시 표시(2026-10-13)
-  const t = { id: ++tabSeq, view };
+  const view = new WebContentsView({ webPreferences: { partition: part, contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "../preload/coupang.cjs") } }); // 숨겨도 멈추지 않게 — 탭 전환 즉시 표시(2026-10-13)
+  registerWcPart(view.webContents, part);
+  const t = { id: ++tabSeq, view, part };
   cleanTabs.push(t);
   win.contentView.addChildView(view);
   hookView(view, "clean");
   view.webContents.on("preload-error", (_e, _p, err) => log("stop", `✕ 쿠팡 지표 스크립트를 불러오지 못했습니다: ${err?.message || err}`));
   ["page-title-updated", "did-start-loading", "did-stop-loading", "did-navigate"].forEach((ev) => view.webContents.on(ev, sendTabs));
-  // 🛡 쿠팡 오류 화면이 뜨면: 이 탭만 닫고 새 세션(쿠키 없음)으로 같은 주소를 한 번 다시 연다
-  if (!retried) view.webContents.once("did-finish-load", () => cpBlocked(view.webContents).then((b) => {
+  // 🛡 쿠팡 오류 화면이 뜨면: 이 탭만 닫고 새 세션(쿠키 없음 · 프록시 로테이션)으로 같은 주소를 한 번 다시 연다
+  if (!retried) view.webContents.once("did-finish-load", () => Promise.all([cpBlocked(view.webContents), cpAccessDenied(view.webContents)]).then(([b, ad]) => {
     if (!b || !cleanTabs.includes(t)) return;
     const u = view.webContents.getURL() || url, was = cleanView === view;
-    log("sys", "▶ 쿠팡이 오류 화면을 보냈어요 — 새 클린 세션으로 다시 열어요");
+    const bound = partProxyMap.get(part)?.proxy || null;
+    if (ad && bound) banProxy(bound, "Access Denied");
+    log("sys", bound ? "▶ 쿠팡이 오류 화면을 보냈어요 — 새 클린 세션(프록시 재연결)으로 다시 열어요" : "▶ 쿠팡이 오류 화면을 보냈어요 — 새 클린 세션으로 다시 열어요");
     cleanPart = `clean-${Date.now()}`;
     closeCleanTab(t.id, true);
     openCleanTab(u, was || activate, true);
   }));
   // 🏠 홈 먼저: 이 세션에서 쿠팡 화면이 아직 한 번도 정상으로 뜨지 않았는데 상품·검색 주소로 바로 가면 쿠팡이 막는다
   //  → 브라우저처럼 홈을 먼저 열고, 홈이 다 뜬 뒤 잠깐 있다가 원래 주소로 간다(앱 시작 때는 warmCoupang 이 홈을 미리 열어 둠, 2026-11-18)
-  const part = cleanPart;
   view.webContents.on("did-finish-load", () => { if (/^https:\/\/(www|m)\.coupang\.com\//.test(view.webContents.getURL())) Promise.all([cpBlocked(view.webContents), cpDenied(view.webContents)]).then(([b, d]) => {
-    if (d) { if (cleanWarm === part) cleanWarm = null; if (Date.now() - deniedAt > 60000) { deniedAt = Date.now(); log("stop", "✕ 쿠팡이 지금 이 인터넷(IP)의 접속을 잠시 제한했어요 — 프로그램 문제가 아니에요. 10~30분 쉬었다가 ⌂ 홈부터 다시 열어 주세요. 그동안 Wing·1688·수집함은 그대로 쓸 수 있어요"); } return; }
+    if (d) {
+      if (cleanWarm === part) cleanWarm = null;
+      const bound = partProxyMap.get(part)?.proxy || null;
+      if (bound) {
+        const banRes = banProxy(bound, "사용권한 제한");
+        if (!banRes.single) {
+          if (Date.now() - deniedAt > 15000) {
+            deniedAt = Date.now();
+            if (banRes.remainAvailable > 0) {
+              log("stop", "✕ 쿠팡이 접속을 제한했어요 — 차단된 프록시를 제외하고 다음 프록시로 새 클린 세션을 엽니다.");
+              setTimeout(() => createClean(), 800);
+            } else {
+              log("stop", "✕ 모든 프록시가 쿠팡에 일시 제한되었어요 — 내 IP 보호를 위해 대기합니다. 🌐 프록시 설정을 확인하거나 잠시 후 다시 시도해 주세요.");
+            }
+          }
+        } else if (Date.now() - deniedAt > 60000) {
+          deniedAt = Date.now();
+          log("stop", `✕ 고정 프록시(${bound.label})가 쿠팡에 일시 제한되었어요 — 내 IP 직결로 전환하지 않고 유지합니다. 10~30분 쉬었다가 다시 시도하거나 🌐 프록시에 다른 IP를 추가해 주세요.`);
+        }
+      } else if (Date.now() - deniedAt > 60000) {
+        deniedAt = Date.now();
+        log("stop", "✕ 쿠팡이 지금 이 인터넷(IP)의 접속을 잠시 제한했어요 — 10~30분 쉬었다가 ⌂ 홈부터 다시 열거나, 위쪽 🌐 프록시 설정에서 고정/로테이션 프록시를 연결해 보세요. 그동안 Wing·1688·수집함은 그대로 쓸 수 있어요");
+      }
+      return;
+    }
     if (!b && cleanPart === part) cleanWarm = part;
   }); });
-  const homeFirst = cleanWarm !== cleanPart && url !== COUPANG_HOME && /^https:\/\/(www|m)\.coupang\.com\//.test(url);
-  if (homeFirst) {
-    log("dim", "  🏠 쿠팡 홈을 먼저 열고 이어서 이동해요 (바로 들어가면 쿠팡이 막아요)");
-    view.webContents.once("did-finish-load", () => setTimeout(() => { if (cleanTabs.includes(t) && !view.webContents.isDestroyed() && view.webContents.getURL().replace(/[?#].*$/, "") === COUPANG_HOME) view.webContents.loadURL(url, { httpReferrer: COUPANG_HOME }); }, 2500));
-    view.webContents.loadURL(COUPANG_HOME);
-  } else view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
+
+  // 🌐 프록시 적용 완료 후 loadURL 실행 (첫 요청이 로컬 IP로 먼저 나가는 직결 누수 방지)
+  const isHttp = /^https?:\/\//i.test(String(url || ""));
+  if (!isHttp) {
+    view.webContents.loadURL(url);
+  } else {
+    ensurePartitionProxy(part, { kind: "clean" }).then((pr) => {
+      if (!cleanTabs.includes(t) || view.webContents.isDestroyed()) return;
+      if (!pr.ok) {
+        view.webContents.loadURL(proxyPausedDataUrl(pr));
+        return;
+      }
+      const homeFirst = cleanWarm !== part && url !== COUPANG_HOME && /^https:\/\/(www|m)\.coupang\.com\//.test(url);
+      if (homeFirst) {
+        log("dim", "  🏠 쿠팡 홈을 먼저 열고 이어서 이동해요 (바로 들어가면 쿠팡이 막아요)");
+        view.webContents.once("did-finish-load", () => setTimeout(() => { if (cleanTabs.includes(t) && !view.webContents.isDestroyed() && view.webContents.getURL().replace(/[?#].*$/, "") === COUPANG_HOME) view.webContents.loadURL(url, { httpReferrer: COUPANG_HOME }); }, 2500));
+        view.webContents.loadURL(COUPANG_HOME);
+      } else {
+        view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" });
+      }
+    });
+  }
   if (activate || !cleanView) cleanView = view;
   if (activate) active = "clean"; // 뒤에서 열기(키워드 분석의 쿠폰가 읽기 등)는 지금 화면을 그대로 둔다
   layout(); sendTabs();
@@ -407,12 +682,13 @@ function createWindow() {
   if (!SELFTEST) wingView.webContents.loadURL(WING_HOME);
   // 🏠 1688 첫 화면도 미리 열어 둔다(뒤에서, 화면 전환 없음) — 🔍1688을 누를 때 첫 화면이 이미 떠 있어 사진 올리기가 바로 시작된다(2026-11-18)
   if (!SELFTEST) setTimeout(() => { if (!win) return; if (!cnView) { createCn(CN_HOME); layout(); } else if (/^about:blank/.test(cnView.webContents.getURL() || "about:blank")) cnView.webContents.loadURL(CN_HOME); }, 800); // 켜자마자(0.8초 뒤) — 5초 뒤에 열면 탭을 먼저 눌렀을 때 로딩을 보게 된다
-  if (!SELFTEST) setTimeout(warmCoupang, 3000); // Wing 첫 화면이 뜬 뒤 쿠팡 홈을 뒤에서 미리
+  // 주의: 앱 시작 시 숨겨진 화면(setVisible(false))에서 쿠팡 홈을 미리 열면 사용자 조작 없는 백그라운드 세션으로 판단돼 검색 시 바로 "사용권한이 제한된 페이지"가 뜰 수 있어 자동 프리워밍을 하지 않는다
 
   win.on("resize", layout);
   win.webContents.on("did-finish-load", () => {
     layout();
     send("nav", { tab: "wing", url: wingView.webContents.getURL() || WING_HOME });
+    pushProxyState();
     log("sys", "▶ 시작 · ① Wing 로그인 → ② 쿠팡 검색 탭에서 검색 → 화면 오른쪽 📊 버튼 → ③ 수집함에서 고르기 → ④ 리스트업에 위안 입력");
     if (SELFTEST) selftest();
     else { startAuth(); startUpdater(); hot.markGood(); hot.startHot({ log, onReady: (r) => send("hot", r) }); if (hot.hotReady()) send("hot", hot.hotReady()); }
@@ -508,7 +784,7 @@ ipcMain.handle("nav:tab", (_e, tab) => {
   if (dash) tab = "dash";
   active = tab;
   if (dash) openDash(dash);
-  if (tab === "clean" && !cleanTabs.length) createClean();
+  if (tab === "clean" && !cleanTabs.length) openCleanTab(COUPANG_HOME, true);
   if (tab === "cn" && !cnView) createCn();
   if (tab === "chat") chat.show(true); // ⑥ 💬 문의 탭: 채팅 화면(처음이면 마지막 문의 대화를 연다)
   layout(); sendTabs(); if (tab === "cn") sendCnTabs(); // 리스트업(list)이면 사이트 화면을 모두 숨기고 패널 왼쪽에 표를 보여 준다
@@ -532,6 +808,11 @@ ipcMain.handle("ui:frame", (_e, { side, strip } = {}) => {
   sideW = Math.min(320, Math.max(0, Math.round(+side) || 0));
   stripW = Math.min(600, Math.max(0, Math.round(+strip) || 0));
   layout();
+});
+ipcMain.handle("ui:modal", (_e, open) => {
+  modalOpen = Boolean(open);
+  layout();
+  return modalOpen;
 });
 // 📊 대시보드 자동 로그인: 앱 토큰으로 본인 확인 → 1회용 token_hash → /auth/embed 가 세션을 만들고 /dashboard 로 돌아온다. 30초에 한 번만 시도(실패 반복 방지)
 let dashLoginAt = 0;
@@ -644,7 +925,12 @@ function openCoupangSearch(kw) {
   if (SELFTEST && process.env.SELFTEST_SITES !== "1") return false; // 자체 점검은 실제 쿠팡에 접속하지 않는다
   const url = `https://www.coupang.com/np/search?q=${encodeURIComponent(q)}`;
   if (!win) return false;
-  coupangBgView("search").webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); // 숨은 화면에서 — 사람이 보는 쿠팡 탭은 그대로
+  const view = coupangBgView("search");
+  const part = cpBgs.search?.part || bgPartition();
+  ensurePartitionProxy(part, { kind: "bg" }).then((pr) => {
+    if (!pr.ok || view.webContents.isDestroyed()) return;
+    view.webContents.loadURL(url, { httpReferrer: "https://www.coupang.com/" }); // 숨은 화면에서 — 사람이 보는 쿠팡 탭은 그대로
+  });
   return true; // 화면이 가격을 기다려도 된다
 }
 // 쿠팡 화면이 이 검색어의 카드 가격을 수집함에 넣을 때까지 기다린다(coupang.cjs가 화면을 연 뒤 약 3초에 읽음) — 못 오면 있는 그대로
@@ -1498,8 +1784,131 @@ ipcMain.handle("cat:openSaved", (_e, key) => {
 
 ipcMain.handle("settings:get", () => store.get("settings") || {});
 ipcMain.handle("settings:set", (_e, patch) => {
-  store.set("settings", { ...(store.get("settings") || {}), ...patch });
+  const next = { ...(store.get("settings") || {}), ...patch };
+  store.set("settings", next);
+  if (patch && Object.keys(patch).some((k) => k.startsWith("proxy"))) {
+    bgPart = null;
+    pushProxyState();
+  }
   return current ? buildPayload(current) : null;
+});
+
+// 🌐 프록시 설정 조회 · 저장 · 차단 초기화 · 연결 테스트
+ipcMain.handle("proxy:get", () => {
+  const st = store.get("settings") || {};
+  return {
+    settings: {
+      proxyEnabled: Boolean(st.proxyEnabled),
+      proxyList: String(st.proxyList || ""),
+      proxyApplyBg: st.proxyApplyBg !== false,
+      proxyNoDirectFallback: st.proxyNoDirectFallback !== false,
+      proxyCooldownMin: Math.max(1, Math.min(1440, Math.round(Number(st.proxyCooldownMin) || 45))),
+    },
+    summary: getProxySummary(),
+  };
+});
+
+ipcMain.handle("proxy:save", (_e, payload = {}) => {
+  const prev = store.get("settings") || {};
+  const next = {
+    ...prev,
+    proxyEnabled: Boolean(payload.proxyEnabled),
+    proxyList: String(payload.proxyList ?? prev.proxyList ?? ""),
+    proxyApplyBg: payload.proxyApplyBg !== false,
+    proxyNoDirectFallback: payload.proxyNoDirectFallback !== false,
+    proxyCooldownMin: Math.max(1, Math.min(1440, Math.round(Number(payload.proxyCooldownMin) || 45))),
+  };
+  store.set("settings", next);
+  bgPart = null; // 숨은 자동 조회 세션은 다음 요청부터 새 프록시 설정 반영
+  if (payload.applyNow && (cleanTabs.length > 0 || active === "clean")) {
+    createClean();
+  } else {
+    pushProxyState();
+  }
+  return {
+    settings: {
+      proxyEnabled: next.proxyEnabled,
+      proxyList: next.proxyList,
+      proxyApplyBg: next.proxyApplyBg,
+      proxyNoDirectFallback: next.proxyNoDirectFallback,
+      proxyCooldownMin: next.proxyCooldownMin,
+    },
+    summary: getProxySummary(),
+  };
+});
+
+ipcMain.handle("proxy:clearBans", () => {
+  store.set("proxyBanned", {});
+  log("sys", "▶ 프록시 일시 제외 목록을 초기화했어요");
+  pushProxyState();
+  return getProxySummary();
+});
+
+ipcMain.handle("proxy:test", async (_e, { line = "", proxyList = "" } = {}) => {
+  const candidate = line
+    ? parseProxyLine(line)
+    : normalizeProxySettings({ proxyList: proxyList || (store.get("settings") || {}).proxyList || "" }).proxies[0];
+  if (!candidate) {
+    return { ok: false, error: "테스트할 유효한 프록시가 없습니다. 예) 1.2.3.4:8080 또는 1.2.3.4:8080:아이디:비밀번호" };
+  }
+  const testPart = `proxy-test-${Date.now()}`;
+  const ses = session.fromPartition(testPart);
+  const t0 = Date.now();
+  activeTestProxy = candidate;
+  try {
+    await ses.setProxy({ mode: "fixed_servers", proxyRules: candidate.proxyRules, proxyBypassRules: "<local>" });
+    const fetchWithTimeout = async (url, opt = {}, ms = 9000) => {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), ms);
+      try {
+        return await ses.fetch(url, { ...opt, signal: ac.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    let ip = "";
+    try {
+      const r = await fetchWithTimeout("https://api.ipify.org?format=json");
+      if (r.ok) {
+        const j = await r.json().catch(() => null);
+        ip = String(j?.ip || "").trim();
+      }
+    } catch {}
+    if (!ip) {
+      const r2 = await fetchWithTimeout("https://ifconfig.me/ip");
+      if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+      ip = (await r2.text()).trim().slice(0, 64);
+    }
+    const ms = Date.now() - t0;
+
+    // 쿠팡 홈 접속 가능 여부도 함께 확인
+    let coupangStatus = null, coupangOk = false, coupangNote = "";
+    try {
+      const rc = await fetchWithTimeout(COUPANG_HOME, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": ACCEPT_LANG,
+        },
+      }, 9000);
+      coupangStatus = rc.status;
+      const body = (await rc.text()).slice(0, 3000);
+      const denied = CP_DENIED.test(body) || CP_ACCESS_DENIED.test(body);
+      coupangOk = rc.ok && !denied;
+      coupangNote = denied ? "쿠팡 접속 제한 감지됨" : rc.ok ? "쿠팡 응답 정상" : `쿠팡 HTTP ${rc.status}`;
+    } catch (ce) {
+      coupangNote = `쿠팡 확인 실패 (${ce?.name === "AbortError" ? "시간 초과" : ce?.message || "오류"})`;
+    }
+
+    return { ok: true, ip, ms, label: candidate.label, coupangStatus, coupangOk, coupangNote, socksAuthWarn: candidate.socksAuthWarn };
+  } catch (e) {
+    const ms = Date.now() - t0;
+    const msg = e?.name === "AbortError" ? "응답 시간 초과 (9초) — IP/포트 또는 방화벽을 확인해 주세요" : (e?.message || String(e));
+    return { ok: false, error: msg, ms, label: candidate.label, socksAuthWarn: candidate.socksAuthWarn };
+  } finally {
+    if (activeTestProxy === candidate) activeTestProxy = null;
+    try { await ses.setProxy({ mode: "direct" }); } catch {}
+  }
 });
 
 // ⚡ 카테고리 진단: 상품마다 하나씩 묻기 전에 카테고리 이름으로 Wing 키워드 검색 1번 → 응답에 있는 상품은 판매량을 바로 채운다(2026-10-13)
@@ -1641,6 +2050,7 @@ function cpWordsView() {
   if (cpwView) { try { win.contentView.removeChildView(cpwView); cpwView.webContents.close(); } catch {} }
   cpwPart = bgPartition();
   cpwView = new WebContentsView({ webPreferences: { partition: cpwPart, contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  registerWcPart(cpwView.webContents, cpwPart);
   win.contentView.addChildView(cpwView);
   const [w, h] = win.getContentSize();
   cpwView.setBounds({ x: 0, y: 0, width: Math.max(800, w), height: Math.max(600, h) });
@@ -1654,6 +2064,8 @@ async function cpWordsFetch(kw) {
   const run = (async () => {
     if (!win) return { error: "창이 없어요" };
     const wc = cpWordsView().webContents;
+    const pr = await ensurePartitionProxy(cpwPart, { kind: "bg" });
+    if (!pr.ok) return { error: "사용 가능한 프록시가 없어요 · 🌐 프록시 설정을 확인해 주세요" };
     log("sys", `↗ 쿠팡 자동완성·연관검색어 읽기 '${kw.replace(/[<&]/g, "")}' (숨은 쿠팡 화면 · 연관검색어 2단계까지 최대 4번)`);
     // 쿠팡 검색 화면 1장 열고 "연관검색어:" 줄 읽기 — 연관검색어가 없는 검색이면 [] , 화면을 못 읽으면 null
     let blocked = false;
@@ -1668,7 +2080,12 @@ async function cpWordsFetch(kw) {
         if (got != null) return got;
       }
       const why = await wc.executeJavaScript(`(document.body?.innerText || "").replace(/\\s+/g, " ").slice(0, 80)`).catch(() => "");
-      if (/사용권한|Access Denied/i.test(why)) blocked = true; // 쿠팡 보안이 잠시 막음(짧은 시간에 여러 번 열었을 때)
+      if (/사용권한|Access Denied/i.test(why)) {
+        blocked = true; // 쿠팡 보안이 잠시 막음(짧은 시간에 여러 번 열었을 때)
+        const bound = partProxyMap.get(cpwPart)?.proxy || null;
+        if (bound) banProxy(bound, "연관검색어 조회 제한");
+        if (bgPart === cpwPart) bgPart = null;
+      }
       log("warn", `△ 쿠팡 화면 읽기 실패 · ${blocked ? "쿠팡이 잠시 접속을 막았어요" : why.slice(0, 60)}`);
       return null;
     };

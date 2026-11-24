@@ -23,6 +23,8 @@ const sizeOf = (l) => Math.round(Number(l?.style?.size ?? l?.style?.fontSizePx) 
 export function sectionView(plan, id, H = { stack: {}, removed: [] }) {
   const sec = (plan.sections || []).find((x) => x.id === id);
   if (!sec) return null;
+  if (sec.type === "image" && sec.bake?.layers?.length) return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, baked: true, canUndo: !!(H.stack[id] || []).length, removed: H.removed || [],
+    layers: sec.bake.layers.map((l, i) => ({ i, ko: String(l.ko || ""), role: l.role || "", baked: true, drop: !!l.drop, head: !!l.head })).filter((l) => l.ko.trim()) };
   const layers = sec.type === "image" ? (sec.layers || []).map((l, i) => ({ i, ko: String(l.ko || ""), role: l.role || "", size: sizeOf(l), weight: Number(l.style?.weight ?? l.style?.fontWeight) || (l.role === "title" ? 700 : 400), align: l.style?.align || "", drop: !!l.drop, plain: !!l.qaPlain, shape: l.shape ? (l.shape.circle ? "원" : l.shape.round || l.shape.pill ? "알약" : "칸") : "" }))
     .filter((l) => l.ko.trim() && !["number", "dims", "price", "logo"].includes(l.role)) : [];
   return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, layers, canUndo: !!(H.stack[id] || []).length, removed: H.removed || [] };
@@ -81,7 +83,17 @@ export async function locEdit(ctx) {
     (H.removed ||= []).push({ id, name: payload.name || id });
     note = "이 장을 뺐어요"; recheck = false;
   } else {
-    push({ kind: action, sec: JSON.stringify(sec), img: ["plain", "autofix", "request"].includes(action) ? keepImg() : null, prevAi: prevAi[id] ?? null });
+    const baked = !!sec.bake?.layers?.length;
+    if (baked && !["text"].includes(action)) throw new Error("이 장은 이미지 AI 가 통째로 그린 장이에요 — 아래 '글 고치기'에서 문구를 고치면 이 장만 다시 그려요");
+    push({ kind: action, sec: JSON.stringify(sec), img: baked || ["plain", "autofix", "request"].includes(action) ? keepImg() : null, prevAi: prevAi[id] ?? null });
+    if (baked) { // 문구(·빼기)만 고친다 → 그 장만 다시 그리기. 실패하면 문구표를 되돌린다
+      let n = 0; for (const p of payload.layers || []) { const l = sec.bake.layers[p.i]; if (!l) continue; if (typeof p.ko === "string") { const ko = p.ko.replace(/[ \t]+$/gm, "").trim().slice(0, 200); if (ko && ko !== l.ko) { l.ko = ko; l.edited = true; n++; } } if (typeof p.drop === "boolean" && p.drop !== !!l.drop) { l.drop = p.drop; n++; } }
+      if (!n) { (H.stack[id] || []).pop(); throw new Error("바뀐 줄이 없어요"); }
+      if (!ctx.rebake) throw new Error("다시 그리기를 쓸 수 없어요");
+      try { const rb = await ctx.rebake(sec, say); cost += rb?.costUsd || 0; }
+      catch (e) { const h = (H.stack[id] || []).pop(); if (h) { plan.sections[idx()] = JSON.parse(h.sec); if (h.img) try { fs.rmSync(path.join(hd, h.img), { force: true }); } catch {} } throw e; }
+      note = `${n}줄 고쳐 이 장을 다시 그렸어요`; keepImageAi();
+    } else
     if (action === "plain") { // 한글 빼고 그림만: 글을 모두 빼고, 글이 들어 있던 알약·원은 바탕으로 메운다(빈 장식이 남지 않게)
       const shapes = [];
       for (const l of sec.layers || []) if (!l.drop && String(l.ko || "").trim()) { l.drop = true; l.qaPlain = true; if (l.shape) shapes.push(l.shape); }

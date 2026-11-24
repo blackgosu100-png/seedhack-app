@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 let conn = null; // { kind, apiKey?, credFile?, project, connectedAt? }
-export function setGoogleConn(c) { conn = c && (c.apiKey || c.credFile) ? { ...c } : null; }
+export function setGoogleConn(c) { conn = c && (c.apiKey || c.credFile || c.refreshToken) ? { ...c } : null; }
 export function googleConn() {
   if (conn) return conn;
   if (process.env.SEEDHACK_GOOGLE === "adc") {
@@ -28,8 +28,10 @@ export function connFromSettings(g = {}) {
   if (!g || typeof g !== "object") return null;
   if (g.kind === "apikey" && g.apiKey) return { kind: "apikey", apiKey: String(g.apiKey), project: String(g.project || ""), connectedAt: g.connectedAt || null };
   if (g.kind === "sa" && g.credFile && fs.existsSync(g.credFile)) return { kind: "sa", credFile: g.credFile, project: String(g.project || ""), connectedAt: g.connectedAt || null };
+  if (g.kind === "oauth" && g.refreshToken && g.projectId && g.enabled) return { kind: "oauth", refreshToken: g.refreshToken, project: g.projectId, email: g.email || "", connectedAt: g.connectedAt || null };
   return null;
 }
+let oauthCache = null; // { token, exp, rt }
 
 // 인증 머리글·주소. → { headers, url(model, loc, method) }
 export async function googleAuth({ fetchImpl = globalThis.fetch } = {}) {
@@ -42,6 +44,15 @@ export async function googleAuth({ fetchImpl = globalThis.fetch } = {}) {
       vertexUrl: (model, loc = "global", method = "generateContent") => c.project ? vertexPath(c.project, loc, model, method) : `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(model)}:${method}`,
       visionUrl: "https://vision.googleapis.com/v1/images:annotate",
     };
+  }
+  if (c.kind === "oauth") { // "구글로 연결"(google-oauth.js): 사용자 토큰 + 그 프로젝트로 청구(x-goog-user-project)
+    const go = await import("./google-oauth.js");
+    if (!oauthCache || oauthCache.rt !== c.refreshToken || oauthCache.exp - 60000 < Date.now()) {
+      const r = await go.refreshAccess(c.refreshToken, { fetchImpl: process.env.SEEDHACK_GOOGLE_MOCK ? go.createMock(process.env.SEEDHACK_GOOGLE_MOCK) : fetchImpl });
+      oauthCache = { token: r.accessToken, exp: r.expiresAt, rt: c.refreshToken };
+    }
+    return { project: c.project, kind: "oauth", headers: { "Content-Type": "application/json", Authorization: `Bearer ${oauthCache.token}`, "x-goog-user-project": c.project },
+      vertexUrl: (model, loc = "global", method = "generateContent") => vertexPath(c.project, loc, model, method), visionUrl: "https://vision.googleapis.com/v1/images:annotate" };
   }
   const { getVertexToken } = await import("./scene.js");
   const t = await getVertexToken(c.credFile, { fetchImpl });

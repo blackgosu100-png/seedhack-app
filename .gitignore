@@ -9,3 +9,6 @@ test/detail/img/out/
 
 # Claude Code 개인 설정
 .claude/settings.local.json
+
+# 구글 연결 정보(공개 저장소에 올리지 않는다)
+src/main/detail/google-oauth-local.json

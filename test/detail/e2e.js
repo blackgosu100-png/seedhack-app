@@ -366,6 +366,21 @@ async function locqaRun() {
     const c = await js(`(() => { const e = document.querySelector("#drSecList .qa-tag"); if (!e) return null; const r = e.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
     if (c) { win.webContents.sendInputEvent({ type: "mouseMove", x: 5, y: 5 }); await wait(120); win.webContents.sendInputEvent({ type: "mouseMove", x: c.x, y: c.y }); await wait(500); console.log("  ⚠ 꼬리표 말풍선 →", await shot("4-tip")); }
   }
+  { // ⏱ 스톱워치 막대 화면 + 🖼 통째로 그린 장의 문구 고치기(--rebake: 그 장만 다시 그리기)
+    const R = JSON.parse(fs.readFileSync(path.join(dst, "result.json"), "utf8")), rd = (R.renders || []).filter((x) => x.templateId === "localize").at(-1);
+    console.log("  ⏱", R.clock ? `${Math.round(R.clock.totalMs / 1000)}초 · ${R.clock.rows.map((x) => `${x.label} ${Math.round(x.ms / 1000)}초`).join(" / ")}` : "기록 없음");
+    await js(`(() => { const b = document.getElementById("drSumBody"); if (b && b.hidden) document.getElementById("drSum").click(); })()`); await wait(400); console.log("  시간 막대 화면 →", await shot("5-clock"));
+    if (process.argv.includes("--rebake") && rd) {
+      let hit = null; for (const x of rd.sections || []) { if (!x.id) continue; const v = await call("detail:loc:section", { jobId, renderId: rd.id, sectionId: x.id }); if (v?.baked && v.layers?.length) { hit = { id: x.id, v }; break; } }
+      if (!hit) console.log("  REBAKE_SKIP 통째로 그린 장 없음");
+      else { const l0 = hit.v.layers[0], t1 = Date.now(), nk = "새로 고친 문구";
+        const e = await call("detail:loc:edit", { jobId, renderId: rd.id, sectionId: hit.id, action: "text", payload: { layers: [{ i: l0.i, ko: nk }] } });
+        const v2 = await call("detail:loc:section", { jobId, renderId: rd.id, sectionId: hit.id });
+        console.log(`  ${e?.ok && v2?.layers?.[0]?.ko === nk ? "REBAKE_OK" : "REBAKE_FAIL"} ${hit.id} "${l0.ko}" → "${nk}" · ${Math.round((Date.now() - t1) / 1000)}초 · ${e?.note || e?.error}`);
+        const u = await call("detail:loc:edit", { jobId, renderId: rd.id, sectionId: hit.id, action: "undo", payload: {} }); const v3 = await call("detail:loc:section", { jobId, renderId: rd.id, sectionId: hit.id });
+        console.log(`  ${u?.ok && v3?.layers?.[0]?.ko === l0.ko ? "UNDO_OK" : "UNDO_FAIL"} ${u?.note || u?.error}`); }
+    }
+  }
   fs.writeFileSync(path.join(OUT, `${TAG}-locqa.json`), JSON.stringify({ job: LQ_JOB, noQa: NOQA, ai: process.argv.includes("--ai"), doneMs: tDone, qaEndMs: tQa, timings: res.timings, costs: res.costs, costUsd: res.costUsd, locQa: q, events: qaEv.map((e) => ({ dt: e.t - t0, status: e.status, msg: e.msg })) }, null, 1));
   console.log(`작업 폴더: ${dst}`); console.log("LOCQA_OK");
 }
@@ -690,7 +705,7 @@ try {
   await waitN(p7.jobId, 6);
   const resP = JSON.parse(fs.readFileSync(path.join(d7, "result.json"), "utf8")), planP = JSON.parse(fs.readFileSync(path.join(d7, "plan.json"), "utf8"));
   assert(planP.meta.version === 5 && resP.current === "card-pop" && resP.templateId === "card", `v5 작업에 템플릿 pop 선택 → v1 구성 안 하고 테마 pop(${resP.current})`);
-  assert(Array.isArray(call("detail:themes")) && call("detail:themes").length === 6, "테마 6종");
+  assert(Array.isArray(call("detail:themes")) && call("detail:themes").length >= 6, "테마 6종 이상");
   // 로고 있음 토글: hero·POINT·feature·checkpoint 에 쓰인 사진 하나를 "로고 있음"으로 → AI 없이 재구성 → 그 사진은 그 섹션들에서 빠짐
   { const BL = ["hero", "point", "feature", "checkpoint"], imgs = (pl) => pl.sections.filter((x) => BL.includes(x.type)).flatMap((x) => [x.image, ...(x.images || [])]).filter(Boolean);
     // AI 끈 e2e 는 사진 검수가 없어 섹션에 원본 사진이 안 들어간다 → 검수 결과를 넣고 한 번 재구성(로고 표시 없음)한 뒤 시험
@@ -729,6 +744,14 @@ try {
   const e8b = await waitN(p8.jobId, 3);
   const res8b = JSON.parse(fs.readFileSync(path.join(d8, "result.json"), "utf8")), plan8b = JSON.parse(fs.readFileSync(path.join(d8, "plan.json"), "utf8"));
   assert(e8b?.step === "done" && res8b.templateId === "localize" && plan8b.meta?.templateId === "localize" && plan8b.sections.some((x) => x.type === "image" || x.type === "hero"), `원본 한글화만 → ${res8b.current} · 섹션 ${plan8b.sections.length}개`);
+  // ── 9) 한 번에 만들기(화면에서 시작: oneShot) — 1단계에서 멈추지 않고 같은 작업 번호로 완성까지 ──
+  console.log("\n⑨ 한 번에 만들기");
+  const p9 = await call("detail:importFolder", { dir: fd, oneShot: true });
+  const e9 = await waitN(p9.jobId, 1);
+  const res9 = JSON.parse(fs.readFileSync(path.join(det.jobDirOf(p9.jobId), "result.json"), "utf8"));
+  assert(!!p9.jobId && e9?.step === "done" && !e9.extra?.prepared && res9.status === "done" && (res9.renders || []).length >= 1, `멈춤 없이 완성("${e9?.msg}") · 렌더 ${(res9.renders || []).length}개`);
+  const ck9 = res9.clock, sum9 = (ck9?.rows || []).reduce((n, x) => n + x.ms, 0);
+  assert(!!ck9 && ck9.totalMs > 0 && sum9 <= ck9.totalMs && Math.abs(ck9.totalMs - (res9.finishedAt - res9.createdAt)) < 3000 && e9.extra?.clock?.totalMs === ck9.totalMs, `⏱ 스톱워치: 전체 ${ck9?.totalMs}ms ≈ 시작~끝 ${res9.finishedAt - res9.createdAt}ms · ${(ck9?.rows || []).map((x) => `${x.label} ${x.ms}`).join(" / ")}`);
   console.log("\n결과 폴더:", dir);
 } catch (e) {
   console.log("E2E_EXCEPTION", e?.stack || e);

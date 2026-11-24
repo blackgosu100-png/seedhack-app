@@ -491,6 +491,7 @@
     $("vDesc").textContent = d;
     $("ctabs").hidden = v !== "clean" && v !== "cn"; // 쿠팡 검색 · 1688 둘 다 탭 줄(2026-10-13)
     if (v === "clean" || v === "cn") drawTabs(v);
+    $("bProxy").hidden = v !== "clean";
     $("bNewClean").hidden = v !== "clean";
     $("listup").hidden = v !== "list";
     $("collect").hidden = v !== "collect";
@@ -1062,6 +1063,146 @@
     adFoldLabel();
   });
   adFoldLabel();
+
+  // 🌐 쿠팡 클린/숨은 세션용 프록시 설정 모달 및 상태 표시
+  function renderProxySummary(sum) {
+    if (!sum) return;
+    const bTop = $("bProxy"), bSide = $("bSideProxy"), sSide = $("sProxyT");
+    const isWarn = sum.enabled && (sum.totalCount === 0 || sum.availableCount === 0);
+    const isOn = sum.enabled && !isWarn;
+
+    if (bTop) {
+      bTop.classList.toggle("on", isOn);
+      bTop.classList.toggle("warn", isWarn);
+      if (!sum.enabled) bTop.textContent = "🌐 프록시";
+      else if (isWarn) bTop.textContent = sum.totalCount === 0 ? "🌐 프록시 미입력" : `🌐 프록시 대기 (0/${sum.totalCount})`;
+      else bTop.textContent = sum.activeLabel ? `🌐 ${sum.activeLabel}` : `🌐 프록시 ON (${sum.availableCount}/${sum.totalCount})`;
+      bTop.title = sum.enabled
+        ? `프록시 사용 중 · 사용 가능 ${sum.availableCount}/${sum.totalCount}개${sum.activeLabel ? ` · 현재 ${sum.activeLabel}` : ""}`
+        : "쿠팡 접속용 고정/로테이션 프록시 설정";
+    }
+    if (bSide && sSide) {
+      bSide.classList.toggle("on", isOn);
+      bSide.classList.toggle("warn", isWarn);
+      if (!sum.enabled) sSide.textContent = "프록시 꺼짐";
+      else if (isWarn) sSide.textContent = sum.totalCount === 0 ? "프록시 미입력" : `프록시 대기 0/${sum.totalCount}`;
+      else sSide.textContent = sum.activeLabel ? `프록시 · ${sum.activeLabel}` : `프록시 ON (${sum.availableCount}/${sum.totalCount})`;
+    }
+
+    const stat = $("pxStat");
+    if (stat) {
+      stat.className = "px-stat" + (isOn ? " on" : isWarn ? " warn" : "");
+      if (!sum.enabled) {
+        stat.textContent = sum.totalCount > 0 ? `프록시 꺼짐 · 저장된 프록시 ${sum.totalCount}개` : "프록시 꺼짐 · 현재 내 인터넷(IP)으로 쿠팡에 접속합니다.";
+      } else if (sum.totalCount === 0) {
+        stat.textContent = "프록시 사용이 켜져 있지만 유효한 프록시가 없습니다. 아래 목록에 입력해 주세요.";
+      } else if (sum.availableCount === 0) {
+        const minWait = sum.banned?.length ? Math.min(...sum.banned.map((x) => x.remainMin)) : sum.cooldownMin;
+        stat.textContent = `모든 프록시(${sum.totalCount}개)가 일시 제외 중입니다 (약 ${minWait}분 후 해제 · ${sum.noDirectFallback ? "직결 차단됨" : "직결 폴백"})`;
+      } else {
+        const curTxt = sum.activeLabel ? ` · 현재 세션: ${sum.activeLabel}` : "";
+        stat.textContent = `프록시 사용 중 · 사용 가능 ${sum.availableCount}/${sum.totalCount}개${curTxt}`;
+      }
+      if (sum.invalidCount > 0) stat.textContent += ` · 형식 오류 ${sum.invalidCount}줄`;
+      if (sum.socksAuthWarnCount > 0) stat.textContent += " · 주의: SOCKS ID/PW 인증은 크롬에서 제한됨";
+    }
+
+    const bansBox = $("pxBans"), bansList = $("pxBansList"), bansTitle = $("pxBansTitle");
+    if (bansBox && bansList && bansTitle) {
+      const list = sum.banned || [];
+      bansBox.hidden = !list.length;
+      bansTitle.textContent = `일시 제외된 프록시 (${list.length}개)`;
+      bansList.textContent = "";
+      for (const b of list) {
+        const row = document.createElement("div");
+        row.textContent = `• ${b.label} — 약 ${b.remainMin}분 남음`;
+        bansList.appendChild(row);
+      }
+    }
+  }
+
+  async function openProxyModal() {
+    const res = await api.invoke("proxy:get").catch(() => null);
+    if (res?.settings) {
+      $("proxyEnabled").checked = !!res.settings.proxyEnabled;
+      $("proxyApplyBg").checked = res.settings.proxyApplyBg !== false;
+      $("proxyNoDirectFallback").checked = res.settings.proxyNoDirectFallback !== false;
+      $("proxyCooldownMin").value = res.settings.proxyCooldownMin || 45;
+      $("proxyList").value = res.settings.proxyList || "";
+    }
+    if (res?.summary) renderProxySummary(res.summary);
+    $("pxTestRes").hidden = true;
+    $("pxTestRes").textContent = "";
+    await api.invoke("ui:modal", true).catch(() => {});
+    $("proxyModal").hidden = false;
+  }
+
+  async function closeProxyModal() {
+    if ($("proxyModal").hidden) return;
+    $("proxyModal").hidden = true;
+    await api.invoke("ui:modal", false).catch(() => {});
+  }
+
+  function readProxyForm() {
+    return {
+      proxyEnabled: $("proxyEnabled").checked,
+      proxyApplyBg: $("proxyApplyBg").checked,
+      proxyNoDirectFallback: $("proxyNoDirectFallback").checked,
+      proxyCooldownMin: Math.max(1, Math.min(1440, Math.round(+$("proxyCooldownMin").value || 45))),
+      proxyList: $("proxyList").value,
+    };
+  }
+
+  $("bProxy").onclick = openProxyModal;
+  $("bSideProxy").onclick = openProxyModal;
+  $("pxClose").onclick = closeProxyModal;
+  $("pxCancel").onclick = closeProxyModal;
+  $("proxyModal").addEventListener("click", (e) => { if (e.target === $("proxyModal")) closeProxyModal(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("proxyModal").hidden) closeProxyModal(); });
+
+  $("pxSave").onclick = async () => {
+    const btn = $("pxSave");
+    btn.disabled = true;
+    try {
+      const res = await api.invoke("proxy:save", { ...readProxyForm(), applyNow: true });
+      if (res?.summary) renderProxySummary(res.summary);
+      await closeProxyModal();
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  $("pxClearBans").onclick = async () => {
+    const sum = await api.invoke("proxy:clearBans").catch(() => null);
+    if (sum) renderProxySummary(sum);
+  };
+
+  $("pxTest").onclick = async () => {
+    const btn = $("pxTest"), out = $("pxTestRes");
+    btn.disabled = true;
+    out.hidden = false;
+    out.className = "px-test";
+    out.textContent = "⏳ 첫 번째 프록시로 외부 IP와 쿠팡 접속 상태를 확인하는 중입니다…";
+    try {
+      const r = await api.invoke("proxy:test", { proxyList: $("proxyList").value });
+      if (r?.ok) {
+        out.className = "px-test " + (r.coupangOk ? "ok" : "warn");
+        out.textContent = `✔ 연결 성공 · ${r.label} · 확인된 외부 IP: ${r.ip} (${r.ms}ms) · ${r.coupangNote || ""}`;
+        if (r.socksAuthWarn) out.textContent += " · 참고: SOCKS ID/PW 인증은 크롬에서 제한될 수 있습니다.";
+      } else {
+        out.className = "px-test bad";
+        out.textContent = `✕ 연결 실패${r?.label ? ` (${r.label})` : ""} · ${r?.error || "응답 없음"}`;
+      }
+    } catch (e) {
+      out.className = "px-test bad";
+      out.textContent = `✕ 테스트 오류 · ${e?.message || e}`;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  api.on("proxy:state", renderProxySummary);
+  api.invoke("proxy:get").then((r) => { if (r?.summary) renderProxySummary(r.summary); }).catch(() => {});
 
   // 리스트업 화면이 담김 상태를 바꾸면 카드 버튼을 다시 그린다
   window.PanelHooks = { onListupChange: () => { const d = cur(); if (d) renderGrid(d); }, log };

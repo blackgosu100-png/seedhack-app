@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { offerUrl } from "./extract-core.js"; // 📄 주소 칸 입력 → 1688 상품 주소(순수 함수, extract-core.test.js)
 import { routeProductUrl, cnWall, CN_WALL_PROBE_JS, SITE_NAME, isKoSite, buildKoRaw, koWallMessage } from "./site-core.js"; // ▶ 주소로 만들기: 1688·타오바오/티몰·쿠팡·네이버·오늘의집 주소 가려내기(site-core.test.js)
+import { newClock, clockKey, clockTick, clockStop, clockResume, clockSummary, fmtDur } from "./clock-core.js"; // ⏱ 버튼 누른 순간~완성까지 단계별 실제 시간(clock-core.test.js)
 import { addUsage, summarize as summarizeUsage } from "./usage-core.js"; // 🎨 이미지 생성 사용량(usage-core.test.js)
 import { createStore as createTemplateStore, themeAsTemplate, overrideChips, sourceKey as templateSourceKey, defaultName as templateDefaultName, newId as templateNewId } from "./templates.js"; // 🧲 내 템플릿 보관함(2단계, templates.test.js)
 
@@ -136,8 +137,10 @@ export function initDetail({ ipcMain, app, getWin, store, log, translate, getCnS
     const ev = { ...(job.bg ? { bg: true } : {}), jobId: job.jobId, step, stepIndex: Math.max(0, STEPS.indexOf(step)), steps: STEPS.length, pct: job.pct, msg, extra: extra || null, ts: Date.now() };
     job.events.push(ev); if (job.events.length > 400) job.events.shift();
     if (STEPS.includes(step)) { job.timings ||= {}; const t = (job.timings[step] ||= { start: ev.ts, end: ev.ts }); t.end = ev.ts; } // 단계별 실측(첫 이벤트~마지막 이벤트)
+    if (job.clock) clockTick(job.clock, clockKey(step, extra), ev.ts); // ⏱ 앞 이벤트~지금을 앞 이벤트 칸에
     send("detail:progress", ev);
   }
+  const clockSnap = (job) => (job.clock ? clockSummary(clockStop(JSON.parse(JSON.stringify(job.clock)), Date.now())) : null);
   const check = (job) => { if (job.cancelled) throw Object.assign(new Error("취소됨"), { cancelled: true }); };
 
   // ---------- AI 자가 검수: 완성 슬라이스를 Claude CLI(Read)가 보고 점수·결함을 돌려준다 (vision.js 와 같은 방식) ----------
@@ -300,7 +303,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
 
   // ---------- v5: 섹션별 장면 생성 · 검수 · 1회 재생성 · 섹션 다시 만들기 ----------
   const recordImageUsage = (ev) => store.set("imageUsage", addUsage(store.get("imageUsage"), ev)); // 받은 이미지 1장마다
-  const sceneSettingsNow = () => { const st = store.get("settings") || {}; return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", openaiImageModel: st.openaiImageModel || "", vertexProject: st.vertexProject || "", sceneConcurrency: st.detailSceneConcurrency || 6, /* A2 다지역 라우터(지역당 2) — 동시 6 */ sceneModelHero: st.detailSceneModelHero || "" }; };
+  const sceneSettingsNow = () => { const st = store.get("settings") || {}; return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", bakeEngine: st.detailBakeEngine || "", openaiImageModel: st.openaiImageModel || "", vertexProject: st.vertexProject || "", sceneConcurrency: st.detailSceneConcurrency || 6, /* A2 다지역 라우터(지역당 2) — 동시 6 */ sceneModelHero: st.detailSceneModelHero || "" }; };
   // 생성본을 원본 제품 사진과 대조(Claude CLI·Read): same_product · has_text · score — 통과 = 같은 제품·글자 없음·3점 이상
   // 배경 소품의 흐릿한·작은 글자(포장지·패턴)는 허용 — 브랜드 로고·상표는 불가
   const smallTextOk = (m) => m.has_text && (Number(m.score) || 0) >= 4 && /(흐릿|작은|미세|포장지|패턴|희미)/.test(m.note || "") && !/(로고|브랜드|상표|DELL|애플|Apple|Cuisinart|Nespresso|네스프레소)/i.test(m.note || "");
@@ -533,6 +536,16 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       const prevAi = Object.fromEntries(Object.entries(L.rd.locQa?.sections || {}).map(([id, q]) => [id, q.ai || null]));
       const r = await le.locEdit({ dir, renderId, plan: L.plan, tl: readJson(path.join(dir, "localize.json")) || {}, ocr: readJson(path.join(dir, "ocr.json")) || {}, rawOf, cli: cli?.cliAvailable?.() ? cli : null, ai: !noAi,
         settings: { ...sceneSettingsNow(), detailLocQaModel: sett.detailLocQaModel, detailLocEditModel: sett.detailLocEditModel }, prevAi, issues: L.rd.locQa?.sections?.[sectionId]?.issues || [], action, sectionId, payload: payload || {}, log, progress,
+        rebake: async (sec, say) => { // 🖼 통째로 그린 장: 고친 문구표로 그 장만 다시 그린다(검수 포함). 통과하면 같은 파일을 바꿔 끼운다
+          const bk = await import("./bake.js"), auth = await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null); if (!auth) throw new Error("이미지 AI 연결이 없어 다시 그릴 수 없어요");
+          const file = rawOf(sec.id); if (!file) throw new Error("원본 그림을 찾지 못했어요");
+          const o = ((readJson(path.join(dir, "ocr.json")) || {}).images || []).find((x) => x.id === sec.id), om = await mod("ocr", log);
+          say?.("🖼 이 장을 다시 그리는 중 (30초 안팎)");
+          const r = await bk.bakeImage({ file, layers: sec.bake.layers, boxes: (o?.boxes || []).filter((b) => !b.latin), w: o?.w, h: o?.h, out: path.join(dir, sec.image), auth, ocr: om?.ocrImages ? bk.makeBakeOcr(om.ocrImages, { log }) : null, log, id: sec.id });
+          if (!r.ok) throw new Error(`다시 그린 그림이 검수에서 떨어졌어요(${r.why}) — 문구를 조금 바꿔 다시 눌러 주세요`);
+          sec.baked = { tries: r.tries, ...(r.verdict || {}), edited: true }; if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; }
+          return { costUsd: r.usd || 0 };
+        },
         render: (plan) => renderLocInto(dir, plan, renderId) });
       writeJson(qaPlanFile(dir, renderId), L.plan); writeJson(path.join(dir, L.planFile), L.plan); // 다음에 다시 그려도 유지
       const res = readJson(path.join(dir, "result.json")) || {}; const x = (res.renders || []).find((q) => q.id === renderId);
@@ -789,6 +802,17 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const mods = { core: await mod("extract-core", log), extract: await mod("extract", log), ocr: await mod("ocr", log), image: await mod("image", log), copy: await mod("copy", log), planCore: await mod("plan-core", log), render: await mod("render", log), vision: await mod("vision", log), cutout: await mod("cutout", log), brief: await mod("brief", log), cli: await mod("cli", log), scene: await mod("scene", log), scenePrompt: await mod("scene-prompt", log), localize: await mod("localize", log), reference: await mod("reference", log), referenceCore: await mod("reference-core", log) };
     job.costs = {};
     let relay = null; try { relay = await import("./relay.js"); relay.setRelayJob(job.jobId); relay.clearRelayNotice(); } catch {} // 서버 AI: 하루 상세페이지 수는 작업 ID 로 센다
+    // 🚦 사전 점검: OCR·글 AI·이미지 AI 가 실제로 되는지 — 안 되면 만들기 전에 멈춘다(조용한 대체 금지, preflight.js)
+    job.aiFails = []; job.ocrUse = null;
+    const aiRun = !process.env.SEEDHACK_DETAIL_NO_AI && !job.regen && (!reuse || fresh.length > 0 || !!job.phase);
+    if (aiRun) {
+      const srcLang = (source || readJson(path.join(dir, "source.json")) || {}).lang;
+      const hasOcr = reuse && !fresh.includes("ocr") && exists(path.join(dir, "ocr.json"));
+      const pf = await (await import("./preflight.js")).checkReadiness({ needOcr: srcLang !== "ko" && !hasOcr, needText: true, needImage: job.phase === "prepare" || ["localize", "both", "scene"].includes(job.mode), settings: { ...(store.get("settings") || {}), ...sceneSettingsNow() } });
+      job.ocrUse = pf.ocrUse || null;
+      if (!pf.ok) { const e = new Error(`${pf.headline} — ${pf.problems.map((x) => x.msg).join(" · ")}`); e.preflight = { headline: pf.headline, problems: pf.problems, fix: pf.fix, tesseractOk: pf.tesseractOk }; throw e; }
+      if (job.ocrUse === "tesseract") log("warn", "△ 📄 글자 읽기는 낮은 품질 OCR(tesseract)로 진행해요 — 중국어·세로쓰기를 놓칠 수 있어요");
+    }
     { const st0 = store.get("settings") || {}; try { job.sceneOn = !!(mods.scene?.resolveProvider && mods.scene.resolveProvider({ settings: { geminiKey: st0.geminiKey || "", openaiKey: st0.openaiKey || "", geminiImageModel: st0.geminiImageModel || "" } })?.key); } catch { job.sceneOn = false; } }
     const how = {}; // 단계별 실제/대체 기록
     const t0 = Date.now();
@@ -848,14 +872,16 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     if (ocr) { how.ocr = "reuse"; emit(job, "ocr", `✔ OCR 결과 재사용 (${ocr.provider})`, { done: images.length, total: images.length }, 1); }
     else {
       emit(job, "ocr", src.lang === "ko" ? "이미지 속 한글을 읽는 중 (지우지 않고 정보로만 씀)" : "이미지 속 중국어 글자를 찾는 중", { done: 0, total: images.length }, 0);
+      var ocrFailed = 0, ocrErr = null; // eslint-disable-line no-var
       if (mods.ocr?.ocrImages) {
         try {
           // 6장씩(A2 Vision 묶음 크기와 같음) 돌려 묶음이 끝날 때마다 이미지별 실제 상자 개수로 진행 표시
           const CH = 6;
           for (let i = 0; i < images.length; i += CH) {
             check(job);
-            const r = await mods.ocr.ocrImages(images.slice(i, i + CH), { onProgress: () => {}, log, ...(src.lang === "ko" ? { langs: "ko-KR,en-US" } : {}) });
+            const r = await mods.ocr.ocrImages(images.slice(i, i + CH), { onProgress: () => {}, log, ...(src.lang === "ko" ? { langs: "ko-KR,en-US" } : {}), ...(job.ocrUse ? { provider: job.ocrUse } : {}) });
             if (!ocr) ocr = { provider: r?.provider || "none", images: [] };
+            ocrFailed += r?.failed || 0; if (r?.error) ocrErr = r.error;
             if (src.lang !== "ko" && r?.provider === "vision") { try { const { augmentOcr } = await import("./ocr-plus.js"); for (const [k, o] of (r.images || []).entries()) { const im = images[i + k]; if (im?.file) o.boxes = (await augmentOcr({ file: im.file, boxes: o.boxes || [], log })).boxes; } } catch (e) { log("dim", `  🔎 OCR 보강 건너뜀 (${e?.message || e})`); } } // v13.2 큰 숫자 배지 안 작은 한자 · 세로쓰기 글을 한 번 더 읽음
             (r?.images || []).forEach((o, k) => { ocr.images.push(o); const n = i + k + 1, nb = o.boxes?.length || 0; emit(job, "ocr", `字 ${o.id} · 글자 상자 ${nb}개 (${n}/${images.length})`, { done: n, total: images.length, id: o.id, boxes: nb }, n / images.length); });
           }
@@ -867,8 +893,12 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         for (let i = 0; i < images.length; i++) { emit(job, "ocr", `字 ${images[i].id} · OCR 없음 → 상자 0개 (${i + 1}/${images.length})`, { done: i + 1, total: images.length, id: images[i].id, boxes: 0 }, (i + 1) / images.length); }
       }
       if (src.lang !== "ko" && ["vision", "gcv", "gcv-direct"].includes(ocr.provider)) { try { const { augmentSeams } = await import("./ocr-plus.js"); await augmentSeams(ocr.images.map((o) => ({ id: o.id, file: images.find((im) => im.id === o.id)?.file, boxes: o.boxes || (o.boxes = []) })), { log }); } catch {} } // v13.2 이미지 경계에 걸친 글
-      writeJson(path.join(dir, "ocr.json"), ocr);
       const nb = ocr.images.reduce((n, x) => n + (x.boxes?.length || 0), 0);
+      { // 🚦 OCR 이 대부분 실패했거나(서버·구글) 글자를 하나도 못 찾았으면 결과를 만들지 않고 멈춘다 — 중국어가 그대로 남은 "완성"을 막는다
+        const bad = (await import("./preflight.js")).judgeOcr({ total: images.length, failed: ocrFailed, boxes: nb, lang: src.lang, remote: ["gcv", "gcv-direct", "none", "server", "google"].includes(ocr.provider) });
+        if (bad) { const gcm = await import("./google-conn.js"); const e = new Error(`${bad}${ocrErr ? ` — ${ocrErr}` : ""}`); e.preflight = { headline: "글자 읽기(OCR)에 실패해서 멈췄어요", problems: [{ what: "ocr", msg: bad }], fix: gcm.googleConnected() ? "wait" : "google", tesseractOk: mods.ocr?.hasTesseract?.() && job.ocrUse !== "tesseract" }; throw e; }
+      }
+      writeJson(path.join(dir, "ocr.json"), ocr);
       emit(job, "ocr", `✔ 글자 상자 ${nb}개 (${ocr.provider})`, { done: images.length, total: images.length, boxes: nb }, 1);
     }
 
@@ -982,8 +1012,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
           writeJson(path.join(dir, "vision.json"), vision);
           const usable = r.items.filter((x) => x.usable).length;
           emit(job, "vision", `✔ 사진 검수 · 쓸 수 있음 ${usable}/${r.items.length}장 · 글자 ${r.items.filter((x) => x.has_text).length} · 로고 ${r.items.filter((x) => x.has_logo).length} · ${((Date.now() - tv) / 1000).toFixed(1)}초${r.costUsd != null ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`, { done: r.items.length, total: r.items.length, usable }, 1);
-        } else { vision = null; how.vision = "skip"; log("warn", `△ 📄 사진 검수 실패 → 생략 (${r?.error || "결과 없음"})`); emit(job, "vision", `△ 사진 검수 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
-      } catch (e) { vision = null; how.vision = "skip"; log("warn", `△ 📄 사진 검수 오류 → 생략 (${e?.message || e})`); emit(job, "vision", `△ 사진 검수 오류 → 생략 · ${e?.message || e}`, null, 1); }
+        } else { vision = null; job.aiFails.push("사진 검수"); how.vision = "skip"; log("warn", `△ 📄 사진 검수 실패 → 생략 (${r?.error || "결과 없음"})`); emit(job, "vision", `△ 사진 검수 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
+      } catch (e) { vision = null; job.aiFails.push("사진 검수"); how.vision = "skip"; log("warn", `△ 📄 사진 검수 오류 → 생략 (${e?.message || e})`); emit(job, "vision", `△ 사진 검수 오류 → 생략 · ${e?.message || e}`, null, 1); }
     }
 
     // ④-3 사진 가장자리 글자 잘라내기 — vision 이 has_text + text_pos(top/bottom/left/right) 로 알려 준 사진은 그 가장자리 22% 를 잘라내고 여백을 다시 정리한다.
@@ -1103,7 +1133,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const runScene = async () => {
     // AI 장면 사진(scene, v3) — 이미지 생성 키(settings.geminiKey)가 있을 때만: 누끼(없으면 vision 점수 최고 사진) 1~3장 → planShots → generateScenes(n:2)
       //   → 생성본을 Claude CLI(Read)로 다시 검수(제품 형태가 원본과 같은지 same_product · 글자 없음) → 통과본만 plan 의 hero·point 사진 1순위. 키는 로그·json 어디에도 남기지 않는다
-      const sceneSettings = (() => { const st = store.get("settings") || {}; return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", openaiImageModel: st.openaiImageModel || "" }; })();
+      const sceneSettings = (() => { const st = store.get("settings") || {}; return { geminiKey: st.geminiKey || "", geminiImageModel: st.geminiImageModel || "", openaiKey: st.openaiKey || "", bakeEngine: st.detailBakeEngine || "", openaiImageModel: st.openaiImageModel || "" }; })();
       const sceneProv = mods.scene?.resolveProvider ? mods.scene.resolveProvider({ settings: sceneSettings }) : { key: sceneSettings.geminiKey || process.env.GEMINI_API_KEY || "", provider: "gemini", model: sceneSettings.geminiImageModel || "gemini-2.5-flash-image" };
       scene = reuse && !fresh.includes("scene") ? readJson(path.join(dir, "scene.json")) : null;
       if (scene?.items) { how.scene = "reuse"; sEmit(`✔ AI 장면 사진 재사용 (통과 ${scene.items.filter((x) => x.pass).length}장)`, null, 1); }
@@ -1199,8 +1229,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
           job.styleGuide3 = r.styleGuide || null; job.recommend3 = r.template || null;
           writeJson(path.join(dir, "brief.json"), brief); if (r.styleGuide) writeJson(path.join(dir, "style.json"), r.styleGuide);
           emit(job, "brief", `✔ 기획서 · ${String(brief.key_appeal || brief.angle || "").slice(0, 40)} (${how.brief}) · ${((Date.now() - tb) / 1000).toFixed(1)}초${r.costUsd != null ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`, { how: how.brief }, 1);
-        } else { brief = null; how.brief = "skip"; emit(job, "brief", `△ 기획서 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
-      } catch (e) { brief = null; how.brief = "skip"; log("warn", `△ 📄 기획서 오류 → 생략 (${e?.message || e})`); emit(job, "brief", `△ 기획서 오류 → 생략 · ${e?.message || e}`, null, 1); }
+        } else { brief = null; job.aiFails.push("기획"); how.brief = "skip"; emit(job, "brief", `△ 기획서 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
+      } catch (e) { brief = null; job.aiFails.push("기획"); how.brief = "skip"; log("warn", `△ 📄 기획서 오류 → 생략 (${e?.message || e})`); emit(job, "brief", `△ 기획서 오류 → 생략 · ${e?.message || e}`, null, 1); }
     }
     else if (process.env.SEEDHACK_DETAIL_NO_AI) { brief = null; how.brief = "skip"; emit(job, "brief", "AI 없이 진행 — 기획안 생략", null, 1); }
     else if (!mods.brief?.writeBrief) { brief = null; how.brief = "skip"; emit(job, "brief", "기획안 모듈 없음 — 생략", null, 1); }
@@ -1211,8 +1241,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         const r = await mods.brief.writeBrief(briefInput, { log });
         const got = r?.brief || (r?.ok && r?.result) || null;
         if (got && typeof got === "object") { brief = got; how.brief = r?.how || "cli"; job.costs.briefMs = Date.now() - tb; if (r?.costUsd != null) { job.costs.brief = r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; } writeJson(path.join(dir, "brief.json"), brief); emit(job, "brief", `✔ 기획안 · ${String(brief.angle || brief.headline || brief.audience || "").slice(0, 40)} · ${((Date.now() - tb) / 1000).toFixed(1)}초${r?.costUsd != null ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`, { how: how.brief }, 1); }
-        else { brief = null; how.brief = "skip"; log("warn", `△ 📄 기획안 실패 → 생략 (${r?.error || "결과 없음"})`); emit(job, "brief", `△ 기획안 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
-      } catch (e) { brief = null; how.brief = "skip"; log("warn", `△ 📄 기획안 오류 → 생략 (${e?.message || e})`); emit(job, "brief", `△ 기획안 오류 → 생략 · ${e?.message || e}`, null, 1); }
+        else { brief = null; job.aiFails.push("기획"); how.brief = "skip"; log("warn", `△ 📄 기획안 실패 → 생략 (${r?.error || "결과 없음"})`); emit(job, "brief", `△ 기획안 실패 → 생략 · ${r?.error || "결과 없음"}`, null, 1); }
+      } catch (e) { brief = null; job.aiFails.push("기획"); how.brief = "skip"; log("warn", `△ 📄 기획안 오류 → 생략 (${e?.message || e})`); emit(job, "brief", `△ 기획안 오류 → 생략 · ${e?.message || e}`, null, 1); }
     }
 
     // v4 1단계 끝: 7단 기획서(brief_text)·디자인 톤앤매너(styleGuide)·추천 템플릿을 만들고 "상품 정보를 가져왔어요" 확인 화면에서 멈춘다
@@ -1229,6 +1259,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       writeJson(path.join(dir, "info.json"), nextInfo);
       const prevR = readJson(path.join(dir, "result.json")) || {};
       writeJson(path.join(dir, "result.json"), { ...prevR, jobId: job.jobId, status: prevR.renders?.length ? prevR.status || "done" : "prepared", prepared: true, title: job.title, url: src.url, templateId: nextInfo.templateId, createdAt: job.createdAt, preparedAt: Date.now(), prepareMs: Date.now() - t0, costUsd: prevR.renders?.length ? prevR.costUsd : job.costUsd ?? null, costs: job.costs, timings: Object.fromEntries(Object.entries(job.timings || {}).map(([k, v]) => [k, v.end - v.start])) });
+      if (job.autoGo && !job.cancelled) { emit(job, "brief", `✔ 기획안 완성 · ${((Date.now() - t0) / 1000).toFixed(1)}초 — 이어서 상세페이지를 만듭니다`, { autoGo: true }, 1); return { prepared: true, auto: true, title: job.title, durationMs: Date.now() - t0 }; }
       emit(job, "done", `■ 상품 정보를 가져왔어요 · ${((Date.now() - t0) / 1000).toFixed(1)}초 — 확인하고 '상세페이지 생성하기'를 누르세요`, { prepared: true, durationMs: Date.now() - t0 }, 1);
       return { prepared: true, title: job.title, durationMs: Date.now() - t0 };
     }
@@ -1287,7 +1318,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       } };
       await Promise.all(Array.from({ length: Math.min(Math.max(1, Number((store.get("settings") || {}).detailLocalizeConcurrency) || 8), targets.length || 1) }, one)); // 동시 8장(사진 위 글자 AI 지우기는 다지역 라우터가 나눠 받는다)
       let tl = { images: targets.map((im) => ({ id: im.id, promo: false, layers: (layersById[im.id] || []).map((l) => ({ ...l, ko: l.mt || "", drop: !l.mt })) })), hero: {} };
-      if (mods.copy?.translateLayers) { try { const r = await mods.copy.translateLayers({ images: targets.map((im) => ({ id: im.id, kind: im.kind, w: im.w, h: im.h, layers: layersById[im.id] || [] })), brief: brief || null, attrs, log, ...(process.env.SEEDHACK_DETAIL_NO_AI ? { useCli: false } : {}) }); if (r?.images) { tl = r; if (r.costUsd != null) { job.costs.localize = (job.costs.localize || 0) + r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; } } } catch (e) { log("warn", `△ 📄 한글화 번역 실패 → 기계번역 (${e?.message || e})`); } }
+      if (mods.copy?.translateLayers) { try { const r = await mods.copy.translateLayers({ images: targets.map((im) => ({ id: im.id, kind: im.kind, w: im.w, h: im.h, layers: layersById[im.id] || [] })), brief: brief || null, attrs, log, ...(process.env.SEEDHACK_DETAIL_NO_AI ? { useCli: false } : {}) }); if (r?.images) { tl = r; if (r.how === "rules" && !process.env.SEEDHACK_DETAIL_NO_AI) job.aiFails.push("번역"); if (r.costUsd != null) { job.costs.localize = (job.costs.localize || 0) + r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; } } } catch (e) { log("warn", `△ 📄 한글화 번역 실패 → 기계번역 (${e?.message || e})`); } }
       (tl.images || []).forEach((x) => (x.layers || []).forEach((l) => { if (l.style && !l.box) l.box = { style: tplStyle(l.style) }; }));
       if (mods.localize?.eraseShapes) { let ns = 0; for (const x of tl.images || []) { const sh = (x.layers || []).filter((l) => l.drop && l.shape).map((l) => l.shape); if (sh.length && files[x.id] && !x.promo) { try { ns += mods.localize.eraseShapes(files[x.id], sh); } catch {} } } if (ns) log("dim", `  🈚 글을 뺀 알약·배지 ${ns}개는 도형째 지움(빈 장식 없음)`); } // v12
       if (locAi.used) log("info", `🈚 사진 위 글자 AI 지우기 ${locAi.used}장 · 적용 ${locAi.accepted}장 (장당 약 $0.04)`);
@@ -1314,7 +1345,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
           const briefLite = brief ? { product_name_ko: brief.product_name_ko, product_type: brief.product_type, key_appeal: brief.key_appeal, advantages: (brief.advantages || []).slice(0, 6), specs: (brief.specs || []).slice(0, 14), targets: (brief.targets || []).slice(0, 3), caution: (brief.caution || []).slice(0, 8), plan_direction: (brief.plan_direction || []).map((x) => ({ part: x.part, text: String(x.text || "").slice(0, 80) })), places: brief.places } : {};
           const copyInputLite = { ...copyInput, images: (copyInput.images || []).filter((im) => im.texts_ko?.length).slice(0, 20).map((im) => ({ ...im, texts_zh: [], texts_ko: (im.texts_ko || []).slice(0, 6) })), detailText_ko: String(copyInput.detailText_ko || "").slice(0, 400) };
           const r = await mods.copy.writeCopyV5(copyInputLite, { brief: briefLite, sections: secsForCopy, reference, log, timeoutMs: 360000, ...(process.env.SEEDHACK_DETAIL_NO_AI ? { useCli: false } : {}) });
-          copy = r?.copy || null; how.copy = r?.how || "copy"; job.costs.copyMs = Date.now() - tc;
+          copy = r?.copy || null; how.copy = r?.how || "copy"; job.costs.copyMs = Date.now() - tc; if (how.copy === "rules" && !process.env.SEEDHACK_DETAIL_NO_AI) job.aiFails.push("카피");
           if (r?.costUsd != null) { job.costs.copy = r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; }
           if (copy && prevCopy?.sections && job.regen?.sectionId) copy = { ...prevCopy, sections: { ...prevCopy.sections, [job.regen.sectionId]: copy.sections?.[job.regen.sectionId] || prevCopy.sections[job.regen.sectionId] } }; // 다시 쓰기는 그 섹션만
         }
@@ -1384,6 +1415,41 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         const by = ls.reduce((m, l) => { const k = l.erase.method || "없음"; m[k] = (m[k] || 0) + 1; return m; }, {});
         job.localizeErase = { by, residueFail: ls.filter((l) => l.erase.residue && !l.erase.residue.pass).length, areas: ls.length };
         log("dim", `  🈚 지우기 ${Object.entries(by).map(([k, v]) => `${k} ${v}`).join(" · ")} · 잔상 의심 ${job.localizeErase.residueFail}/${ls.length}`);
+      }
+      // 🖼 통째 한글화(bake, 2026-11-23): 글이 든 장은 원본 + 우리 문구표를 이미지 AI 에 주어 한글로 다시 그린다 → 다시 읽어 검수 → 통과한 장은 그 그림을 그대로 쓰고(얹는 글 없음),
+      //   떨어진 장만 예전 방식(지운 그림 + 얹는 글) 그대로. 설정 detailBake=false 또는 SEEDHACK_BAKE=off 로 끈다. 분당 한도가 낮아 동시 2장.
+      if (!process.env.SEEDHACK_DETAIL_NO_AI && (store.get("settings") || {}).detailBake !== false) {
+        try {
+          const bk = await import("./bake.js"), auth = await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null);
+          const secs = lplan.sections.filter((x) => x.type === "image" && x.id && (x.layers || []).length && targets.some((im) => im.id === x.id));
+          if (auth && secs.length) {
+            const tb0 = Date.now(), vOcr = mods.ocr?.ocrImages ? bk.makeBakeOcr(mods.ocr.ocrImages, { provider: job.ocrUse || undefined, log }) : null;
+            let nx = 0, okN = 0, done = 0, usd = 0; const failed = [];
+            // ✍ 장 단위 편집: 줄마다 옮긴 문구를 그림 한 장 단위로 묶어 다시 쓴다(문단 → 제목 + 3줄, 제목 다시 짓기). 설정 detailBakeEdit=false 로 끈다
+            const lyOf = (id) => ((tl.images || []).find((x) => x.id === id)?.layers || []).filter((l) => String(l.zh || "").trim());
+            let edited = new Map();
+            if (mods.copy?.editForBake && (store.get("settings") || {}).detailBakeEdit !== false) {
+              emit(job, job.step, `✍ 장마다 문구를 다듬는 중 · ${secs.length}장`, { bg: "localize", clk: "copy" }, 0);
+              const ed = await mods.copy.editForBake({ images: secs.map((sec) => { const im = targets.find((x) => x.id === sec.id); return { id: sec.id, w: im?.w, h: im?.h, layers: lyOf(sec.id) }; }), brief: brief || null, log }).catch((e) => { log("dim", `  ✍ 장 단위 편집 실패 → 줄 단위 문구 그대로 (${String(e?.message || e).slice(0, 80)})`); return null; });
+              if (ed?.byId) edited = ed.byId; if (ed?.costUsd) { job.costs.localize = (job.costs.localize || 0) + ed.costUsd; job.costUsd = (job.costUsd || 0) + ed.costUsd; }
+              job.localizeEdit = { images: edited.size, blocks: ed?.used || 0, rejected: (ed?.rejected || []).length };
+            }
+            emit(job, job.step, `🖼 이미지 AI 로 한글화 그리는 중 · ${secs.length}장 (장당 30초 안팎)`, { bg: "localize", clk: "bake" }, 0);
+            const worker = async () => { for (;;) { const sec = secs[nx++]; if (!sec) return; check(job);
+              const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id), tlL = edited.get(sec.id) || lyOf(sec.id);
+              const out = path.join(dir, "localize", `${sec.id}-bake.png`);
+              const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
+              usd += r.usd || 0; done++;
+              if (r.ok) { okN++; sec.overlay = { image: sec.image, layers: sec.layers, iw: sec.iw, ih: sec.ih }; sec.image = path.relative(dir, out).split(path.sep).join("/"); sec.layers = []; sec.baked = { tries: r.tries, ...(r.verdict || {}) }; sec.bake = { layers: tlL.map((l) => ({ zh: String(l.zh || ""), ko: String(l.ko || ""), drop: !!l.drop || !String(l.ko || "").trim(), role: l.role || "", ...(l.block ? { block: l.block } : {}), ...(l.head ? { head: true } : {}) })) }; if (edited.has(sec.id)) sec.bakeCopy = tlL.filter((l) => l.block).map((l) => ({ idxs: l.block, ko: l.ko, head: !!l.head })); if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; } }
+              else { failed.push(`${sec.id}(${r.why})`); sec.bakeFail = r.why; }
+              emit(job, job.step, `🖼 한글화 그리기 ${done}/${secs.length}${r.ok ? "" : ` · ${sec.id} 검수 탈락 → 예전 방식`}`, { bg: "localize", clk: "bake" }, 0);
+            } };
+            await Promise.all(Array.from({ length: Math.min(2, secs.length) }, worker));
+            if (usd) { job.costs.localize = (job.costs.localize || 0) + usd; job.costUsd = (job.costUsd || 0) + usd; }
+            job.localizeBake = { total: secs.length, ok: okN, failed, usd: +usd.toFixed(2), ms: Date.now() - tb0 };
+            log(okN === secs.length ? "go" : "info", `🖼 통째 한글화 ${okN}/${secs.length}장 · ${((Date.now() - tb0) / 1000).toFixed(0)}초 · 약 $${usd.toFixed(2)}${failed.length ? ` · 예전 방식으로: ${failed.join(", ")}` : ""}`);
+          } else if (!auth) log("dim", "  🖼 통째 한글화 건너뜀(구글 이미지 AI 연결 없음) → 예전 방식");
+        } catch (e) { if (e?.cancelled) throw e; log("warn", `△ 🖼 통째 한글화 오류 → 예전 방식 (${String(e?.message || e).slice(0, 120)})`); }
       }
       job.timings ||= {}; job.localizeMs = Date.now() - tl0;
       emit(job, job.step, `🈚 원본 한글화 구성 · 이미지 ${lplan.sections.filter((x) => x.image).length}장 · 제외 ${(lplan.excluded || []).length}장 · ${((Date.now() - tl0) / 1000).toFixed(0)}초`, { bg: "localize" }, 0);
@@ -1649,7 +1715,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       qa: qa ? { score: qa.score, fixed: qa.fixed, rounds: qa.rounds.length, remaining: qa.defects.length, passed: qa.passed, defects: qa.defects.slice(0, 10) } : null,
       brief: brief ? { how: how.brief, angle: brief.angle || brief.headline || "", audience: brief.audience || "" } : null,
       scene: scene ? { provider: scene.provider, model: scene.model, made: scene.items.length, passed: scene.items.filter((x) => x.pass).length, used: plan.sections.filter((sec) => sec.scene).length } : (how.scene === "no-key" ? { noKey: true } : null), cutout: cutout ? { items: cutout.items.length, ok: cutout.items.filter((x) => x.ok && x.file).length, palette: cutout.palette || null } : null,
-      ...(relay?.relayNotice?.() ? { aiNotice: relay.relayNotice() } : {}),
+      ...((relay?.relayNotice?.() || job.aiFails?.length) ? { aiNotice: [job.aiFails?.length ? `AI 연결 문제로 ${[...new Set(job.aiFails)].join("·")}을(를) AI 없이 만들었어요 — 품질이 낮을 수 있어요` : "", relay?.relayNotice?.() || ""].filter(Boolean).join(" · ") } : {}),
     };
     if (result.aiNotice) log("warn", `△ 📄 ${result.aiNotice}`);
     { // 렌더 내역: 이전 result.json 의 renders(또는 옛 out/ 바로 아래 결과)를 이어받아 이번 렌더를 덧붙인다
@@ -1660,16 +1726,20 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       if (extraRender) { const r2 = extraRender.rendered; result.renders = [...result.renders.filter((x) => x.id !== extraRender.id), { id: extraRender.id, templateId: "localize", mode: "localize", createdAt: Date.now(), dir: `out/${extraRender.id}`, slices: r2.slices, preview: r2.preview, html: r2.html, figmaManifest: r2.figmaManifest, figmaBundle: r2.figmaBundle, sliceCount: r2.slices.length, qa: null, sections: (r2.sections || []).map((x) => ({ type: x.type, id: x.id || null, y: x.y })), width: r2.width || WIDTH, label: "원본 한글화" }]; }
       entry.mode = job.mode || null;
       result.current = entry.id;
+      result.clock = clockSnap(job) || prevR.clock || null; // ⏱ 처음 만들 때 잰 시간(다시 렌더·테마 바꾸기는 예전 기록을 그대로 둔다)
+      if (job.clock && result.clock) log("info", `⏱ 실제 걸린 시간 ${fmtDur(result.clock.totalMs)} — ${result.clock.rows.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((x) => `${x.label} ${fmtDur(x.ms)}`).join(" · ")}`);
     }
     writeJson(path.join(dir, "result.json"), result);
-    emit(job, "done", `■ 상세페이지 완성 · ${rendered.slices.length}장 · ${((Date.now() - t0) / 1000).toFixed(1)}초`, { durationMs: Date.now() - t0, slices: rendered.slices.length, dir, timings: result.timings }, 1);
+    emit(job, "done", `■ 상세페이지 완성 · ${rendered.slices.length}장 · ${((Date.now() - t0) / 1000).toFixed(1)}초`, { durationMs: Date.now() - t0, slices: rendered.slices.length, dir, timings: result.timings, clock: result.clock || null }, 1);
     return result;
   }
 
   // ---------- 작업 시작/취소 ----------
   // reference: 벤치마킹 레퍼런스(reference.json 경로 또는 이미지 폴더) — info.json 에 적고 테마 custom · 섹션·카피는 새로(장면은 섹션 id 를 이어 받아 재사용)
   // templateRef: 🧲 내 템플릿 id — info.json 에 적고 테마 custom(보관함 토큰·섹션 순서·각도) · 섹션·카피는 새로. keepExtra: 우리 강점 섹션 유지 토글(생략하면 info 값 그대로)
-  function start({ source, jobId, templateId, reuse, fresh = [], review, phase, regen = null, skipQa = false, theme = null, bg = false, mode = null, reference = null, templateRef = null, keepExtra = null }) {
+  let pageReadT0 = 0; // ⏱ 주소로 만들기: 버튼 누른 시각(상품 화면을 여는·읽는 시간을 잰다)
+  let planFirstNext = false; // 다음 새 작업 한 번만: 기획안 확인 화면에서 멈춘다
+  function start({ source, jobId, templateId, reuse, fresh = [], review, phase, regen = null, skipQa = false, theme = null, bg = false, mode = null, reference = null, templateRef = null, keepExtra = null, auto = false, readMs = 0 }) {
     if (jobId && reference) { const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.templateRef; writeJson(f, { ...inf, reference: String(reference), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
     if (jobId && templateRef) { if (!isMine(templateRef)) return { error: "그 템플릿이 보관함에 없습니다" }; const f = path.join(jobDirOf(jobId), "info.json"); const inf = readJson(f) || {}; delete inf.reference; writeJson(f, { ...inf, templateRef: String(templateRef), theme: "custom", ...(typeof keepExtra === "boolean" ? { refKeepExtra: keepExtra } : {}) }); theme = "custom"; fresh = [...new Set([...fresh, "sections", "copy"])]; }
     // 가드: v5 작업(sections.json 이 있거나 plan v5)에서 다른 템플릿을 고르면 옛 v1 구성으로 다시 짜지 않고 card 엔진 테마만 바꾼다
@@ -1686,6 +1756,10 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     // 확인(review) 단계: 요청값 > 설정(detailReview, 기본 켬). 패널 창이 없으면(하네스) 끈다
     const st = store.get("settings") || {};
     job.phase = phase || undefined;
+    // 한 번에 만들기(기본): 새 상품의 1단계(수집·분석·기획)가 끝나면 확인 화면에서 멈추지 않고 바로 2단계(생성)로 잇는다.
+    //   멈추는 경우: "기획안 먼저 보고 만들기"를 누름(planFirstNext) · 한국 판매처(권리 확인을 먼저 받는다) · 다시 분석(jobId) · 설정 detailOneShot=false
+    //   화면에서 시작한 길(주소·1688 탭 버튼·폴더)만 auto 를 준다 — detail:prepare(두 단계 API)는 예전처럼 멈춘다
+    job.autoGo = auto === true && phase === "prepare" && !!source && !reuse && source.lang !== "ko" && st.detailOneShot !== false;
     job.theme = theme && isTheme(theme) ? theme : (tid === "card" ? (readJson(path.join(jobDirOf(id), "info.json"))?.theme || null) : null);
     { const inf0 = readJson(path.join(jobDirOf(id), "info.json")) || {}; job.mode = mode || (phase === "generate" && !regen ? inf0.mode : null) || (tid === "localize" ? "localize" : tid === "card" ? "scene" : null); }
     if (source?.lang === "ko" || readJson(path.join(jobDirOf(id), "source.json"))?.lang === "ko") { if (["localize", "both"].includes(job.mode)) job.mode = "scene"; if (tid === "localize") tid = job.templateId = "card"; } // 한국 판매처(이미 한글): 원본 한글화 없음
@@ -1694,13 +1768,19 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     job.regen = regen || null; job.skipQa = !!skipQa; job.bg = !!bg; // bg: 결과 화면을 가리지 않는 뒤 작업(진행 이벤트에 bg 표시)
     job.review = phase === "prepare" ? false : typeof review === "boolean" ? review : st.detailReview === true; // v4: 렌더 직전 확인은 기본 끔(1단계 확인으로 대체)
     if (job.review && !getWin?.()) { job.review = false; job.reviewSkipped = "확인 단계 건너뜀(화면 없음)"; }
+    // ⏱ 스톱워치: 새 상품이면 새로 시작(화면 읽은 시간 포함), 기획안 뒤 생성이면 이어 달린다(확인 화면에서 머문 시간은 뺀다)
+    const ckFile = path.join(jobDirOf(id), "clock.json");
+    if (!reuse) job.clock = newClock(Date.now(), readMs);
+    else if (phase === "generate" && !regen && !bg) { const c0 = readJson(ckFile); if (c0?.open && c0.parts) job.clock = clockResume(c0, Date.now()); }
     cur = job;
     log("sys", `▶ 📄 상세페이지 ${reuse ? "다시 렌더" : "만들기"} · ${id} · 템플릿 ${tid}`);
     changed();
+    let chain = false;
     (async () => {
       try {
         const r = await pipeline(job, { source, reuse, fresh });
         job.status = "done";
+        if (r?.prepared && r.auto) { job.status = "prepared"; chain = true; log("go", `■ 📄 기획안 준비 · ${String(r.title || "").slice(0, 30)} · ${(r.durationMs / 1000).toFixed(1)}초 — 한 번에 만들기: 바로 생성`); return; }
         if (r?.prepared) { job.status = "prepared"; log("go", `■ 📄 상품 정보 준비 · ${String(r.title || "").slice(0, 30)} · ${(r.durationMs / 1000).toFixed(1)}초 — 확인 화면에서 생성하기`); return; }
         log("go", `■ 📄 상세페이지 완성 · ${r.title.slice(0, 30)} · ${r.slices.length}장 · ${(r.durationMs / 1000).toFixed(1)}초 · ${path.join(job.dir, "out")}`);
       } catch (e) {
@@ -1717,10 +1797,18 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
           else writeJson(path.join(job.dir, "result.json"), { ...prev, jobId: job.jobId, status: job.status, title: job.title || prev.title || job.jobId, templateId: job.templateId, createdAt: job.createdAt, finishedAt: Date.now(), error: cancelled ? "" : why, failedAt: failedStep });
         } catch {}
         const tail = keep ? ` — 이전 결과(${prev.templateId} 템플릿)는 그대로 둡니다` : "";
-        emit(job, "fail", cancelled ? `✕ 취소됨${tail}` : `✕ ${STEP_KO[failedStep] || failedStep} 단계 실패 · ${why}${tail}`, { cancelled, failedStep, status: job.status, keepPrev: keep }, 0);
+        emit(job, "fail", cancelled ? `✕ 취소됨${tail}` : `✕ ${STEP_KO[failedStep] || failedStep} 단계 실패 · ${why}${tail}`, { cancelled, failedStep, status: job.status, keepPrev: keep, ...(e?.preflight ? { preflight: e.preflight } : {}) }, 0);
         log(cancelled ? "dim" : "stop", cancelled ? `  📄 상세페이지 취소 · ${job.jobId}` : `✕ 📄 상세페이지 실패 (${STEP_KO[failedStep] || failedStep}) · ${why}`);
       } finally {
-        if (cur === job) cur = null; changed();
+        if (job.clock) { try { clockStop(job.clock, Date.now()); if (phase !== "prepare" && job.status === "done") job.clock.open = false; writeJson(ckFile, job.clock); } catch {} }
+        if (cur === job) cur = null;
+        if (chain) { // 한 번에 만들기: 확인 화면의 [상세페이지 생성하기]와 같은 2단계를 바로 시작(같은 작업 번호 → 진행 화면이 이어진다)
+          const info = readJson(path.join(job.dir, "info.json")) || {};
+          const g = start({ jobId: id, templateId: info.templateId, theme: info.theme || null, reuse: true, fresh: ["copy", "scene", "qa", "sections"], phase: "generate" });
+          if (g?.error) { log("warn", `△ 📄 바로 생성 시작 실패 → 확인 화면으로 · ${g.error}`); emit(job, "done", "■ 상품 정보를 가져왔어요 — 확인하고 '상세페이지 생성하기'를 누르세요", { prepared: true }, 1); changed(); }
+          return;
+        }
+        changed();
         if (job.status === "done") afterDone(job);
       }
     })();
@@ -1750,7 +1838,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
   }
 
   // ---------- IPC ----------
-  mod("google-ipc", log).then((m) => m?.initGoogleIpc?.({ ipcMain, app, store, log })); // 🔗 내 구글 클라우드 연결(수강생 무료 체험 → Gemini·Vision)
+  mod("google-ipc", log).then((m) => m?.initGoogleIpc?.({ ipcMain, app, store, log, send })); // 🔗 내 구글 클라우드 연결(수강생 무료 체험 → Gemini·Vision)
   mod("thumb", log).then((m) => { thumbHook = m?.initThumb?.({ ipcMain, app, store, log, send }) || null; }); // 🖼 쿠팡 썸네일(thumb:get·run·update·export) + 상세페이지 끝나면 자동
   ipcMain.handle("detail:list", () => listJobs());
   ipcMain.handle("detail:templates", () => [...templates(), ...TPL.summaries().map((t) => ({ ...t, ready: true }))]); // v1 템플릿 + 🧲 내 템플릿(kind "mine")
@@ -1905,21 +1993,26 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       const next = { ...(store.get("settings") || {}) };
       if (typeof patch.detailReview === "boolean") next.detailReview = patch.detailReview;
       if (typeof patch.detailPresentAuto === "boolean") next.detailPresentAuto = patch.detailPresentAuto;
+      if (typeof patch.detailAllowTesseract === "boolean") next.detailAllowTesseract = patch.detailAllowTesseract; // 🚦 사용자가 고른 낮은 품질 OCR
       if (typeof patch.geminiKey === "string") { const k = patch.geminiKey.trim(); if (k) next.geminiKey = k.slice(0, 200); else delete next.geminiKey; } // 키는 저장만, 돌려주지도 로그하지도 않는다
+      if (typeof patch.openaiKey === "string") { const k = patch.openaiKey.trim(); if (k) next.openaiKey = k.slice(0, 300); else delete next.openaiKey; } // GPT 그리기(선택) — 저장만, 돌려주지도 로그하지도 않는다
+      if (typeof patch.detailBakeEngine === "string") { if (patch.detailBakeEngine === "codex") next.detailBakeEngine = "codex"; else delete next.detailBakeEngine; } // 🧪 내부용: 한글화 그리기를 이 컴퓨터의 GPT 명령줄로
       if (typeof patch.geminiImageModel === "string") { const m = patch.geminiImageModel.trim().slice(0, 60); if (m) next.geminiImageModel = m; else delete next.geminiImageModel; }
       store.set("settings", next);
     }
     const st = store.get("settings") || {};
+    const codexReady = [process.env.SEEDHACK_CODEX_BIN, "/Applications/ChatGPT.app/Contents/Resources/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"].some((f) => { try { return !!f && fs.statSync(f).isFile(); } catch { return false; } }); // bake.js codexBin 과 같은 자리
     let imageGen = { provider: "", connected: false, project: "" };
     try { const pv = mods0.scene?.resolveProvider ? mods0.scene.resolveProvider({ settings: sceneSettingsNow() }) : null; if (pv) imageGen = { provider: pv.provider, connected: !!pv.key, project: pv.project || "", model: pv.model || "" }; } catch {}
-    return { imageGen, detailReview: st.detailReview === true, detailPresentAuto: st.detailPresentAuto !== false, detailTemplate: st.detailTemplate || "clean", hasGeminiKey: !!(st.geminiKey || process.env.GEMINI_API_KEY), geminiKeyHint: st.geminiKey ? `…${String(st.geminiKey).slice(-4)}` : "", geminiImageModel: st.geminiImageModel || "gemini-2.5-flash-image" };
+    return { imageGen, detailReview: st.detailReview === true, detailPresentAuto: st.detailPresentAuto !== false, detailTemplate: st.detailTemplate || "clean", bakeEngine: st.detailBakeEngine === "codex" && codexReady ? "codex" : "", codexReady, hasOpenaiKey: !!st.openaiKey, openaiKeyHint: st.openaiKey ? `…${String(st.openaiKey).slice(-4)}` : "", hasGeminiKey: !!(st.geminiKey || process.env.GEMINI_API_KEY), geminiKeyHint: st.geminiKey ? `…${String(st.geminiKey).slice(-4)}` : "", geminiImageModel: st.geminiImageModel || "gemini-2.5-flash-image" };
   });
   // 1688 상품 화면(cn.cjs)에서 온 요청만: raw → 정리 → 실행 → 패널을 📄 화면으로
   ipcMain.handle("detail:fromPage", (e, raw) => {
     const cn = getCnView?.();
     if (!cn || e.sender !== cn.webContents) return { error: "1688 상품 화면에서만 됩니다" };
     if (!raw || typeof raw !== "object") return { error: "상품 정보를 읽지 못했습니다" };
-    const r = start({ source: { ...raw, _raw: true }, templateId: raw.templateId || (store.get("settings") || {}).detailTemplate || "clean", phase: (store.get("settings") || {}).detailTwoStep === false ? undefined : "prepare" });
+    const r = start({ source: { ...raw, _raw: true }, templateId: raw.templateId || (store.get("settings") || {}).detailTemplate || "clean", phase: "prepare", auto: !planFirstNext, readMs: pageReadT0 && Date.now() - pageReadT0 < 180000 ? Date.now() - pageReadT0 : 0 });
+    planFirstNext = false; pageReadT0 = 0;
     if (r.error) return r;
     if (showDetail) showDetail(); else send("nav", { tab: "detail", url: "📄 상세페이지" });
     return { ok: true, jobId: r.jobId };
@@ -2007,6 +2100,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
   let pageReadWaiter = null;
   ipcMain.on("detail:readPageDone", (e, r) => { const cn = getCnView?.(); if (cn && e.sender === cn.webContents && pageReadWaiter) pageReadWaiter(r || { error: "읽기 결과가 없습니다" }); });
   ipcMain.handle("detail:fromUrl", async (_e, p = {}) => {
+    pageReadT0 = Date.now();
+    planFirstNext = !!p.planFirst; // 주소 칸 아래 "기획안 먼저 보고 만들기"
     // 주소 가려내기(site-core): 1688(예전 그대로) · 타오바오/티몰(같은 1688 탭·같은 로그인에서 읽기) · 쿠팡/네이버/오늘의집(fromKoSite)
     const rt = routeProductUrl(p.url);
     if (rt.error) return { error: rt.error };
@@ -2067,7 +2162,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     try { const fn = ex?.importFolder || core?.importFolder; if (fn) { source = await fn(folder, { log: (t) => log("dim", `  📂 ${t}`), kinds: "v1" }); if (source?.error) { log("warn", `△ 📄 ${source.error}`); source = null; } } } catch (e) { log("warn", `△ 📄 폴더 가져오기(A1) 실패 → 자체 읽기 (${e?.message || e})`); }
     if (!source) source = importFolderLite(folder);
     if (!source || !((source.gallery || []).length + (source.detailImages || []).length)) return { error: "폴더에서 상품 이미지(main-·SKU-·detail-)를 찾지 못했습니다" };
-    return start({ source: { ...source, rowId: p.rowId ?? null }, templateId: "card", phase: "prepare" });
+    return start({ source: { ...source, rowId: p.rowId ?? null }, templateId: "card", phase: "prepare", auto: !!p.oneShot });
   });
   ipcMain.handle("detail:info:get", (_e, p = {}) => infoGet(String(p.jobId || "")));
   ipcMain.handle("detail:info:set", (_e, p = {}) => infoSet(String(p.jobId || ""), p.patch || {}));

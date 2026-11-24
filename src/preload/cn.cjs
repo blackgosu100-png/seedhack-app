@@ -1114,9 +1114,24 @@ function imgInfo(img) {
 const imgsIn = (root) => [...root.querySelectorAll("img")].filter((i) => !inOurUi(i)).map(imgInfo).filter(Boolean);
 
 // 긴 페이지의 지연 로딩 깨우기: 300ms 간격으로 최대 20단계 아래로 내려갔다가 맨 위로
+// 상세 설명 묶음의 아래 끝(문서 기준 px). 그림이 든 묶음을 찾았을 때만 — 그 아래(추천 상품·후기 무한 목록)까지 내려가지 않게 하는 기준
+// findDescContainer 는 화면 전체를 훑어 무겁다(큰 페이지·느린 PC 에서 한 번에 수백 ms) → 한 번 찾은 묶음은 기억하고, 못 찾았을 때만 1초에 한 번 다시 찾는다(걸음마다 부르면 읽기가 몇 배 느려짐 2026-11-23)
+let descElMemo = null, descElAt = 0;
+function descEnd() {
+  try {
+    if (!descElMemo || !descElMemo.isConnected) { if (Date.now() - descElAt < 1000) return null; descElAt = Date.now(); descElMemo = findDescContainer(); }
+    const d = descElMemo; if (!d) return null;
+    const r = d.getBoundingClientRect();
+    if (r.height < 400) { descElMemo = null; return null; } // 아직 그림이 안 열린 작은 묶음 — 기억하지 않고 1초 뒤 다시 찾는다
+    return Math.round(r.bottom + scrollY);
+  } catch { return null; }
+}
 async function wakeLazy() {
   const H = () => document.documentElement.scrollHeight, step = Math.max(600, innerHeight);
-  for (let i = 0, y = 0; i < 20 && y < H(); i++) { y += step; scrollTo(0, y); await sleep(300); }
+  for (let i = 0, y = 0; i < 20 && y < H(); i++) {
+    const end = descEnd(); if (end != null && y >= end) break; // 상세 설명 끝을 지났으면 그만(아래 추천 상품까지 내려가지 않는다)
+    y += step; scrollTo(0, y); await sleep(300);
+  }
   scrollTo(0, 0); await sleep(200);
 }
 
@@ -1325,7 +1340,8 @@ async function wakeLazyLong() {
   const step = Math.max(600, innerHeight);
   for (let i = 0, y = 0, lastH = 0, still = 0; i < 80 && still < 4; i++) {
     y += step; scrollTo(0, y); await sleep(350);
-    const H = document.documentElement.scrollHeight;
+    // 끝 기준: 상세 설명 묶음을 찾았으면 그 아래 끝(+200px), 못 찾았으면 페이지 끝. 아래 추천 상품이 끝없이 붙는 화면에서 계속 내려가던 문제(2026-11-23)
+    const end = descEnd(), H = end != null ? end + 200 : document.documentElement.scrollHeight;
     if (y + innerHeight >= H) { still = H === lastH ? still + 1 : 0; lastH = H; y = Math.max(0, H - innerHeight - step); }
   }
   scrollTo(0, 0); await sleep(200);

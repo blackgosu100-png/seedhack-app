@@ -202,7 +202,7 @@ export async function ocrImages(images, { onProgress = noop, log = noop, provide
     try { await getTessWorker({ log }); } catch (e) { log("dim", `  🔎 ${e.message} → OCR 없이 계속합니다`); prov = "none"; }
   }
   const out = [];
-  let done = 0;
+  let done = 0, failedN = 0, lastErr = null; // 서버·구글 OCR 이 실패한 장 수(index.js 가 대부분 실패면 멈춘다)
   if (prov === "vision") {
     const CHUNK = 6; // 몇 장씩 묶어 한 번에(프로세스 실행 비용↓, 진행 표시는 묶음마다)
     for (let i = 0; i < list.length; i += CHUNK) {
@@ -220,12 +220,13 @@ export async function ocrImages(images, { onProgress = noop, log = noop, provide
     }
   } else if (prov === "server" || prov === "google") {
     const direct = prov === "google";
-    let stop = null, i = 0;
+    let stop = null, i = 0; failedN = 0;
     const one = async () => {
       while (i < list.length) {
         const im = list[i++];
         let r = null;
-        if (!stop) { try { r = await runServerOcr(im, langs, direct); } catch (e) { log("dim", `  🔎 서버 OCR 실패(${im.id}): ${String(e?.message || e).slice(0, 120)}`); if (["login", "approval", "wing", "pages", "daily", "global"].includes(e.code)) stop = e.message; } }
+        if (!stop) { try { r = await runServerOcr(im, langs, direct); } catch (e) { failedN++; lastErr = String(e?.message || e).slice(0, 160); log("dim", `  🔎 서버 OCR 실패(${im.id}): ${lastErr.slice(0, 120)}`); if (["login", "approval", "wing", "pages", "daily", "global", "unsupported"].includes(e.code)) stop = e.message; } }
+        else failedN++;
         if (r?.error) log("dim", `  🔎 ${im.id}: ${r.error}`);
         const s = r?.w ? { w: r.w, h: r.h } : im.w && im.h ? { w: im.w, h: im.h } : await sizeOf(im.file);
         out.push({ id: im.id, w: s.w, h: s.h, boxes: finishBoxes(r?.boxes) });
@@ -254,6 +255,6 @@ export async function ocrImages(images, { onProgress = noop, log = noop, provide
     }
   }
   const nBox = out.reduce((s, im) => s + im.boxes.length, 0);
-  log("dim", `  🔎 OCR(${prov}) ${total}장 → 글자 상자 ${nBox}개`);
-  return { provider: prov, images: out };
+  log("dim", `  🔎 OCR(${prov}) ${total}장 → 글자 상자 ${nBox}개${failedN ? ` · 실패 ${failedN}장` : ""}`);
+  return { provider: prov, images: out, failed: failedN, error: lastErr };
 }

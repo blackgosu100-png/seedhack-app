@@ -241,12 +241,20 @@ export function renderCopyInputV5(input = {}, brief = {}, sections = [], guide =
 }
 
 // ─────────────────────────────── v6: 원본 한글화(이미지 레이어 번역) ───────────────────────────────
-export const LOCALIZE_SYSTEM = `당신은 쿠팡 상세페이지 카피라이터입니다. 중국 1688 상세 이미지의 글자 레이어를 한국 쇼핑몰 문구로 **다시 씁니다(번역이 아니라 카피라이팅)**. 레이어마다 원문 zh, 역할 role, 상자 폭 w px, rewrite_ok(자유롭게 다시 써도 되는 자리인지), 기계번역 mt 가 주어집니다.
+export const LOCALIZE_SYSTEM = `당신은 쿠팡 상세페이지 카피라이터입니다. 중국 1688 상세 이미지의 글자 레이어를 한국 쇼핑몰 문구로 **다시 씁니다(번역이 아니라 카피라이팅)**. 레이어마다 원문 zh, 역할 role, 상자 폭 w px, **한 줄 최대 글자 수(max)**, rewrite_ok(자유롭게 다시 써도 되는 자리인지), 기계번역 mt 가 주어집니다.
+
+글자 수가 가장 먼저입니다
+- 문구는 원본 글자가 있던 **그 자리에 그 크기로** 얹힙니다. 한 줄이 max 를 넘으면 글씨가 작아지거나 그림 밖으로 넘쳐 상세페이지가 망가집니다.
+- 그러니 **max 안에서 끝나는 문구를 처음부터 새로 짓습니다.** 긴 번역문을 쓰고 줄이는 게 아니라, 그 글자 수로 가장 힘 있는 말을 고릅니다(조사·군말·"~할 수 있습니다" 빼기, 명사형·짧은 구어체).
+  예(max 9): 足够快 才真省力 → "빠른 속도로 힘들이지 않고 간편하게"(X, 17자) → "빨라야 진짜 편하다"(O, 8자)
+  예(max 7): 一机多用 省时省力 → "한 대로 다 썰어요"(O)
+- 글자 수는 공백을 빼고 셉니다. 2줄이 허락된 자리("2줄 가능")는 줄마다 max 안.
+- 숫자가 든 문구(용량·속도·무게·시간)는 **절대 지우지 않습니다.** 600斤/1小时 → "시간당 300kg"처럼 단위만 바꿔 짧게.
 
 원칙
 - 원문의 뜻(기능·숫자·단위)은 지키되, 한국 쇼핑몰에서 실제로 쓰는 자연스러운 말로. 직역·한자어 나열·명사 붙여쓰기 금지.
   직역 금지 예: 承重能力强 → "강력 하중"(X) "무거운 가전도 거뜬히"(O) / 无需安装 收到即用 → "설치 불필요"(X) "받자마자 바로 쓰세요"(O) / 多场景适用 → "다양한 공간 활용"(X) "주방·사무실 어디든 잘 어울려요"(O) / 防尘防潮 → "방진방습"(X) "먼지·습기 걱정 덜어요"(O) / 桌面分层可抽拉收纳盒 → "데스크탑 다단 풀아웃 수납함"(X) "당겨 쓰는 2단 수납 서랍"(O) / 圆润把手 → "둥근 손잡이"(O, 짧은 라벨은 그대로 정확하게)
-- rewrite_ok=true(단색 배경·띠 위 글자, 글자를 지운 자리에 새로 얹는 문구): 길이·어순 자유, 과감하게 생동감 있게 다시 쓰고 강조할 곳을 고른다.
+- rewrite_ok=true(단색 배경·띠 위 글자, 글자를 지운 자리에 새로 얹는 문구): 어순·표현 자유(글자 수는 max 안), 과감하게 생동감 있게 다시 쓰고 강조할 곳을 고른다.
   rewrite_ok=false(사진 속 라벨·도면 치수 라벨): 짧고 정확하게, 원문 길이(원문 글자 수×1.3) 안에서.
   아이콘 라벨(원문 6자 이하 짧은 말): rewrite_ok 여도 **명사형, 원문 글자 수×1.3 이내**(예: 无需安装 → "설치 불필요", 多场景适用 → "어디든 활용", 防尘防潮 → "먼지·습기 관리").
 - 숫자·단위 그대로(13.5cm, 25kg, 37~57.5cm). 斤=0.5kg(百斤=약 50kg), 承重=하중. 규격 이름: 矮款=낮은형, 高款=높은형(다른 표기 금지). 하중 수치는 "제조사 표시 기준"이 기본.
@@ -268,12 +276,18 @@ export const LOCALIZE_SCHEMA = i6({
   images: { type: "array", items: i6({ id: { type: "string" }, promo: { type: "boolean" }, promo_reason: { type: "string" }, layers: { type: "array", items: i6({ idx: { type: "integer" }, ko: { type: "string" }, emph: EMPH, natural: { type: "boolean" } }) } }) },
   hero: i6({ label: { type: "string" }, sub: { type: "string" }, name: { type: "string" }, name_emph: { type: "array", maxItems: 1, items: EMPH.items } }),
 });
+// 한 줄에 들어가는 한글 글자 수(공백 제외): 한자와 한글은 같은 크기에서 폭이 거의 같다 → 원문 글자 수가 기준.
+//   글씨를 15% 줄이거나 상자를 조금 넓힐 여유로 ×1.25(올림), 아주 짧은 말(≤3자)은 +1. 영문·숫자는 반 글자로 센다.
+export const visLen = (t) => Array.from(String(t || "").replace(/\s/g, "")).reduce((n, c) => n + (/[\x00-\x7f]/.test(c) ? 0.55 : 1), 0);
+export function koBudget(ly = {}) { const z = visLen(String(ly.zh || "").split("\n").sort((a, b) => visLen(b) - visLen(a))[0]); return Math.max(2, Math.ceil(z <= 3 ? z + 1 : z * 1.25)); }
+export const twoLineOk = (ly = {}) => ly.rewrite_ok !== false && ["title", "sub"].includes(ly.role) && !/\n/.test(String(ly.zh || "")) && visLen(ly.zh) >= 6;
+export const koOver = (ly = {}, ko = "") => { const m = koBudget(ly), lines = String(ko || "").split("\n"); return lines.length > (twoLineOk(ly) ? 2 : Math.max(1, String(ly.zh || "").split("\n").length)) || Math.max(...lines.map(visLen)) > m * 1.15 + 0.5; };
 export function renderLocalizeInput(images = [], brief = null) {
   const L = [];
   if (brief) L.push(`[기획서] 상품명 ${brief.product_name_ko || ""} · 유형 ${brief.product_type || ""} · 핵심 소구 ${String(brief.key_appeal || "").slice(0, 160)}`, "");
   for (const im of images) {
     L.push(`[${im.id}] (${im.kind || "detail"} ${im.w || "?"}x${im.h || "?"})`);
-    (im.layers || []).forEach((ly, i) => L.push(`  ${i}. ${ly.role || "body"} · 폭 ${ly.w || "?"}px · rewrite_ok=${ly.rewrite_ok !== false} · ${ly.zh}${ly.mt && /[가-힣]/.test(ly.mt) ? `  → 기계번역: ${ly.mt}` : ""}`));
+    (im.layers || []).forEach((ly, i) => L.push(`  ${i}. ${ly.role || "body"} · 폭 ${ly.w || "?"}px · max ${koBudget(ly)}자${twoLineOk(ly) ? "(2줄 가능)" : ""} · rewrite_ok=${ly.rewrite_ok !== false} · ${ly.zh}${ly.mt && /[가-힣]/.test(ly.mt) ? `  → 기계번역: ${ly.mt}` : ""}`));
   }
   L.push("", "이미지마다 layers[idx] 의 한국어 카피(ko)·강조(emph)·자연스러움(natural)과 promo 판정, 그리고 hero 3줄을 JSON 으로.");
   return L.join("\n");

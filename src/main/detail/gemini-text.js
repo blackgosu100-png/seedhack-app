@@ -1,14 +1,24 @@
 // Claude 대신 Gemini(Vertex AI)로 구조화 출력 — cli.js runStructured 와 같은 인자·같은 반환({ ok, result, model, usage, costUsd } | { error }).
 // 수강생 구글 연결(google-conn.js)로 부르므로 무료 체험 크레딧이 쓰인다. 사진(Read 도구 대상)은 입력 글 속 경로를 찾아 메시지에 붙인다(relay.js 와 같은 방식).
-// 모델: sonnet·opus → gemini-3.1-pro-preview, haiku → gemini-2.5-flash (2026-10-23: 신규 프로젝트는 gemini-2.5-pro 404). SEEDHACK_GEMINI_PRO / SEEDHACK_GEMINI_FLASH 로 바꿈
+// 모델: sonnet·opus → gemini-3.1-pro-preview, haiku → gemini-3.8-flash. SEEDHACK_GEMINI_PRO / SEEDHACK_GEMINI_FLASH 로 바꿈
+// 2026-11-23: gemini-2.5-flash·pro 는 Vertex 에서 2026-10-20 종료(구글 수명 표) → 새 프로젝트는 404. 모델이 사라져도(404) 다음 후보로 자동 넘어간다(geminiChain) — 미리보기 모델은 예고 없이 닫힌다
 import { googleAuth, googleError } from "./google-conn.js";
 import { findImagePaths, prepImage } from "./relay.js";
 
 const noop = () => {};
 export function geminiModel(alias) {
   const a = String(alias || "sonnet").toLowerCase();
-  if (/^gemini-/.test(a)) return a;
-  return /haiku/.test(a) ? process.env.SEEDHACK_GEMINI_FLASH || "gemini-2.5-flash" : process.env.SEEDHACK_GEMINI_PRO || "gemini-3.1-pro-preview";
+  return geminiChain(a)[0];
+}
+const FLASH = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"], PRO = ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash"];
+const gone = new Set(); // 이번 실행에서 404 로 확인된 모델(다시 묻지 않는다)
+export function markGone(m) { gone.add(m); }
+export function geminiChain(alias) {
+  const a = String(alias || "sonnet").toLowerCase();
+  const flash = /haiku|flash/.test(a) && !/^gemini-.*pro/.test(a);
+  const list = [...new Set([/^gemini-/.test(a) ? a : flash ? process.env.SEEDHACK_GEMINI_FLASH : process.env.SEEDHACK_GEMINI_PRO, ...(flash ? FLASH : PRO)].filter(Boolean))];
+  const live = list.filter((m) => !gone.has(m));
+  return live.length ? live : list;
 }
 // 달러/100만 토큰(Vertex 표준, 20만 토큰 이하) — 생각(thinking) 토큰은 출력값으로 청구
 const PRICE = [[/3(\.\d+)?-pro/, 2, 12], [/3\.5-flash/, 1.5, 9], [/3(\.\d+)?-flash/, 0.5, 3], [/2\.5-pro/, 1.25, 10], [/2\.5-flash-lite/, 0.1, 0.4], [/2\.5-flash/, 0.3, 2.5]];
@@ -51,7 +61,7 @@ const REGIONS = ["global", "us-central1", "us-east4", "europe-west4"];
 
 export async function geminiStructured({ system, schema, text, model = "sonnet", timeoutMs = 300000, allowedTools = null, log = noop, fetchImpl = globalThis.fetch } = {}) {
   if (!system || !schema) return { error: "지시문(system)과 스키마(schema)가 필요합니다" };
-  const t0 = Date.now(), m = geminiModel(model);
+  const t0 = Date.now(); let m = geminiModel(model);
   const wantRead = Array.isArray(allowedTools) && allowedTools.includes("Read");
   const parts = [];
   if (wantRead) for (const f of findImagePaths(text).slice(0, 40)) { try { const p = await prepImage(f, { maxSide: 1536, quality: 85 }); parts.push({ text: `파일: ${f}` }, { inlineData: { mimeType: p.mime, data: p.b64 } }); } catch {} }
@@ -63,7 +73,7 @@ export async function geminiStructured({ system, schema, text, model = "sonnet",
   const base = { systemInstruction: { parts: [{ text: (wantRead ? system + READ_NOTE : system) + LIMIT_NOTE }] }, contents: [{ role: "user", parts }] };
   const cfg = (useJson) => ({ responseMimeType: "application/json", maxOutputTokens: /pro/.test(m) ? 65535 : 32768, ...(useJson ? { responseJsonSchema: geminiSchema(schema) } : { responseSchema: openApiSchema(schema) }) });
   let useJson = true, last = null, inTok = 0, outTok = 0;
-  for (let a = 0; a < 6; a++) {
+  for (let a = 0; a < 8; a++) {
     if (Date.now() - t0 > timeoutMs) break;
     const loc = /^gemini-3/.test(m) ? "global" : REGIONS[a % REGIONS.length];
     const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.max(20000, timeoutMs - (Date.now() - t0)));
@@ -74,7 +84,8 @@ export async function geminiStructured({ system, schema, text, model = "sonnet",
     const um = j?.usageMetadata || {};
     inTok += Number(um.promptTokenCount) || 0; outTok += (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0);
     if (r.status === 400 && useJson && /responseJsonSchema|json_schema|schema/i.test(j?.error?.message || "")) { useJson = false; log("dim", "  ✨ Gemini: responseJsonSchema 거절 → responseSchema 로 다시"); continue; }
-    if (r.status === 429 || r.status >= 500) { last = googleError(r.status, j?.error?.message); await new Promise((q) => setTimeout(q, [3000, 8000, 15000, 25000, 30000, 30000][a])); continue; }
+    if (r.status === 429 || r.status >= 500) { last = googleError(r.status, j?.error?.message); await new Promise((q) => setTimeout(q, [3000, 8000, 15000, 25000, 30000, 30000][a] || 30000)); continue; }
+    if (r.status === 404) { markGone(m); const nx = geminiChain(model).find((x) => !gone.has(x)); if (nx) { log("dim", `  ✨ Gemini: ${m} 은 이 프로젝트에서 못 씀(404) → ${nx} 로`); m = nx; continue; } }
     if (!r.ok) { log("dim", `  ✨ Gemini ${r.status}: ${String(j?.error?.message || "").slice(0, 300)}`); return { error: googleError(r.status, j?.error?.message), detail: String(j?.error?.message || "").slice(0, 300), status: r.status, costUsd: geminiCost(m, inTok, outTok) }; }
     const cand = j?.candidates?.[0];
     const txt = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");

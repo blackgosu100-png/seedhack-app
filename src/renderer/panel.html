@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="listup.css">
 <link rel="stylesheet" href="aiscan.css">
 <link rel="stylesheet" href="detail.css">
+<link rel="stylesheet" href="google-wizard.css">
 <link rel="stylesheet" href="reco.css">
 <link rel="stylesheet" href="name.css">
 <link rel="stylesheet" href="onboard.css">
@@ -43,14 +44,15 @@
   <div class="side-foot">
     <div class="st" id="sWing" title="Wing 로그인 상태"><span class="dot"></span><span class="lbl" id="sWingT">Wing 확인 중</span></div>
     <div class="budget lbl" id="sBudget" title="오늘 Wing 검색 횟수(하루 예산)"></div>
+    <button id="bSideProxy" class="px-side" type="button" title="쿠팡 클린 세션 프록시 설정 (고정 IP · 로테이션 · ID/PW 인증)"><span class="dot"></span><span class="lbl" id="sProxyT">프록시 꺼짐</span></button>
     <button id="acct" class="acct" type="button" hidden title="계정 · 누르면 로그아웃 메뉴"></button>
     <button id="sideFold" class="fold" type="button" title="사이드바 접기">«</button>
   </div>
 </aside>
 
 <div class="main">
-<header class="bar">
 <div class="updband" id="updBand" role="status"><span>🔔 씨드핵 새 버전이 나왔어요 <small id="updVer"></small></span><span class="sp"></span><button id="bUpdate" class="pri small upd" type="button" hidden>지금 업데이트</button></div>
+<header class="bar">
   <div class="vhead"><h1 id="vTitle">🔑 Wing 로그인</h1><span class="vdesc" id="vDesc"></span></div>
   <div class="sitectl" id="siteCtl">
     <div class="navbtns">
@@ -59,6 +61,7 @@
       <button id="bHome" type="button" title="처음 화면">⌂</button>
     </div>
     <form class="urlform" id="urlForm"><input class="url mono" id="url" type="text" value="wing.coupang.com" spellcheck="false" autocomplete="off" aria-label="주소" title="주소를 고치고 Enter · 주소가 아닌 글자는 쿠팡 검색어로 엽니다"></form>
+    <button id="bProxy" class="ghost px-btn" type="button" hidden title="쿠팡 접속용 고정/로테이션 프록시 설정">🌐 프록시</button>
     <button id="bNewClean" class="ghost" type="button" hidden title="쿠키 없는 새 세션으로 다시 열기">🕶 새 클린 세션</button>
   </div>
 </header>
@@ -70,7 +73,6 @@
 
     <div class="listup collect" id="collect" hidden>
       <div class="lu-bar">
-        <b>📦 수집함</b>
         <span class="spacer"></span>
         <!-- 가끔 쓰는 것(삭제)은 연하게 · 자주 쓰는 "리스트업 담기"는 맨 오른쪽(가독성 매뉴얼 2-14) -->
         <button id="coDel" class="sec faint" type="button" disabled>선택 삭제</button>
@@ -109,7 +111,6 @@
 
     <div class="listup" id="listup" hidden>
       <div class="lu-bar">
-        <b>📋 소싱 리스트업</b>
         <span class="lu-auto" id="luAuto" hidden></span>
         <span class="spacer"></span>
         <button id="luAdd" class="sec" type="button">+ 빈 행</button>
@@ -259,12 +260,69 @@
   </aside>
 </main>
 </div>
+<div class="px-modal" id="proxyModal" hidden role="dialog" aria-modal="true" aria-labelledby="pxTitle">
+  <div class="px-card">
+    <div class="px-head">
+      <div>
+        <h2 id="pxTitle">🌐 쿠팡 프록시 설정</h2>
+        <p class="px-sub">고정 프록시 1개 또는 여러 개 로테이션 연결 · Wing 로그인·1688에는 적용되지 않습니다</p>
+      </div>
+      <button id="pxClose" class="px-x" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div class="px-body">
+      <div class="px-stat" id="pxStat"></div>
+      <label class="px-chk px-chk-main">
+        <input type="checkbox" id="proxyEnabled">
+        <span><b>쿠팡 클린 세션에 프록시 사용</b></span>
+      </label>
+      <div class="px-opts">
+        <label class="px-chk" title="키워드 분석의 쿠폰가 읽기·상품명 짓기 연관검색어 숨은 쿠팡 화면에도 프록시를 적용합니다">
+          <input type="checkbox" id="proxyApplyBg" checked>
+          <span>숨은 자동 조회(쿠폰가·연관검색어)에도 적용</span>
+        </label>
+        <label class="px-chk" title="프록시가 없거나 모두 일시 제외 상태일 때 내 로컬 IP로 자동 전환되지 않도록 보호합니다">
+          <input type="checkbox" id="proxyNoDirectFallback" checked>
+          <span>프록시 오류·전체 차단 시 내 IP 직결 전환 금지 (안전)</span>
+        </label>
+        <label class="px-num">
+          <span>차단 프록시 제외 시간</span>
+          <input type="number" id="proxyCooldownMin" min="1" max="1440" value="45">
+          <span>분 (2개 이상일 때 자동 로테이션)</span>
+        </label>
+      </div>
+      <div class="px-field">
+        <label for="proxyList">프록시 목록 <small class="px-dim">(한 줄에 하나씩, 또는 쉼표/세미콜론 구분)</small></label>
+        <textarea id="proxyList" class="mono" rows="5" spellcheck="false" placeholder="지원 형식 예)&#10;1.2.3.4:8080&#10;1.2.3.4:8080:아이디:비밀번호&#10;http://아이디:비밀번호@1.2.3.4:8080&#10;socks5://1.2.3.4:1080"></textarea>
+        <small class="px-hint">
+          • <b>고정 IP 1개</b>: 한 줄만 넣으면 모든 쿠팡 탭이 해당 IP로 고정 연결됩니다.<br>
+          • <b>여러 개 로테이션</b>: 여러 줄을 넣으면 세션마다 순환하고, “사용권한이 제한된 페이지”가 뜨면 차단된 IP를 제외하고 다음 프록시로 자동 전환합니다.<br>
+          • <b>ID/PW 인증</b>: HTTP/HTTPS 프록시는 <code>IP:PORT:ID:PW</code> 또는 <code>http://ID:PW@IP:PORT</code> 자동 인증 지원 (SOCKS5는 IP 화이트리스트 권장).
+        </small>
+      </div>
+      <div class="px-bans" id="pxBans" hidden>
+        <div class="px-bans-h">
+          <span id="pxBansTitle">일시 제외된 프록시</span>
+          <button id="pxClearBans" class="sec px-sm" type="button">차단 목록 초기화</button>
+        </div>
+        <div class="px-bans-list mono" id="pxBansList"></div>
+      </div>
+      <div class="px-test" id="pxTestRes" hidden></div>
+    </div>
+    <div class="px-foot">
+      <button id="pxTest" class="sec" type="button">🔍 연결 테스트</button>
+      <span class="spacer"></span>
+      <button id="pxCancel" class="sec" type="button">취소</button>
+      <button id="pxSave" class="pri" type="button">💾 저장 및 새 세션 적용</button>
+    </div>
+  </div>
+</div>
 <script src="aiscan.js"></script>
 <script src="entry.js"></script>
 <script src="panel.js"></script>
 <script src="rg.js"></script>
 <script src="listup.js"></script>
 <script src="detail.js"></script>
+<script src="google-wizard.js"></script>
 <script src="thumb.js"></script>
 <script src="reco.js"></script>
 <script src="name.js"></script>

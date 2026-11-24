@@ -10,6 +10,7 @@
   const fileUrl = (p) => { if (!p) return ""; const parts = String(p).replace(/\\/g, "/").split("/"); return "file://" + (parts[0] === "" ? "" : "/") + parts.map((x) => encodeURIComponent(x).replace(/%3A/gi, ":")).join("/"); };
   const clock = () => new Date().toLocaleTimeString("en-GB");
   const reduce = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const fmtDur = (ms) => { const s = Math.max(0, Math.round((ms || 0) / 1000)); if (s < 60) return `${s}초`; const m = Math.floor(s / 60), r = s % 60; return r ? `${m}분 ${r}초` : `${m}분`; }; // ⏱ 13분 5초
   const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   // 진행 표시는 Moast 처럼 5단계로 묶는다(내부 단계는 그대로)
   const GROUPS = [
@@ -33,7 +34,7 @@
   const root = $("detail");
   if (!root || !api) return;
   root.innerHTML = `
-  <div class="dt-bar"><b>📄 상세페이지 자동 생성</b><span class="muted" id="dtInfo">1688 상세 이미지 → 중국어 지우고 한글로 → 쿠팡 780px 상세페이지</span><span class="spacer"></span><button id="dtRefresh" class="sec" type="button" title="리스트업·지난 작업 다시 읽기">↻ 목록</button></div>
+  <div class="dt-bar"><span class="muted" id="dtInfo" hidden></span><span class="spacer"></span><button id="dtRefresh" class="sec" type="button" title="리스트업·지난 작업 다시 읽기">↻ 목록</button></div>
   <div class="dt-body">
     <div class="dt-scrim" id="dtScrim"></div>
     <aside class="dt-left" id="dtLeft">
@@ -45,9 +46,10 @@
     <section class="dt-main" id="dtMain">
       <div class="dt-setup" id="dtSetup">
         <div class="dt-sec">상품 주소로 바로 만들기</div>
-        <form class="dt-url" id="dtUrlForm"><input id="dtUrl" class="mono" type="text" spellcheck="false" autocomplete="off" placeholder="상품 주소 붙여넣기 (1688 · 타오바오 · 쿠팡 · 네이버 · 오늘의집)"><button id="dtUrlGo" type="submit">▶ 주소로 만들기</button></form>
+        <form class="dt-url" id="dtUrlForm"><input id="dtUrl" class="mono" type="text" spellcheck="false" autocomplete="off" placeholder="상품 주소 붙여넣기 (1688 · 타오바오 · 쿠팡 · 네이버 · 오늘의집)"><button id="dtUrlGo" type="submit" data-tip="읽기부터 완성까지 멈추지 않고 만들어요. 글·사진은 완성된 뒤에도 고칠 수 있어요">▶ 한 번에 만들기</button></form>
         <div class="dt-sites" id="dtSites">${[["1688", "1688"], ["taobao", "타오바오"], ["coupang", "쿠팡"], ["naver", "네이버"], ["ohou", "오늘의집"]].map(([k, n]) => `<span data-site="${k}">${n}</span>`).join("")}</div>
         <p class="dt-urlmsg" id="dtUrlMsg">그 사이트 화면에서 상품 정보를 읽어 옵니다. 로그인·인증이 뜨면 그 화면에서 넘겨 주세요.</p>
+        <button id="dtPlanFirst" class="dt-planfirst" type="button" data-tip="만들기 전에 사진 선별·상품명·기획안을 먼저 보고 고친 뒤 만들어요">기획안 먼저 보고 만들기 ›</button>
         <div class="dt-pick" id="dtPick"><div class="dt-pick-empty">왼쪽에서 상품을 고르거나, <b>🇨🇳 1688 상품 화면</b> 오른쪽 위의 <b>📄 상세페이지 만들기</b> 버튼을 누르세요.</div></div>
         <div class="dt-sec">템플릿</div>
         <div class="dt-tpls" id="dtTpls"></div>
@@ -56,11 +58,16 @@
         <p class="dt-guide" id="dtGuide"></p>
         <div class="dt-opts"><label><input type="checkbox" id="dtOptReview"> 렌더 직전에 구성 한 번 더 확인(사람 손 30초 — 사진 교체·헤드라인 수정)</label><label><input type="checkbox" id="dtOptPresentAuto" checked> 발표 모드에서는 확인 없이 자동 진행</label>
           <div class="dt-key"><span>🎨 이미지 생성 키(Gemini)</span><input id="dtKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza… (저장만 하고 어디에도 기록하지 않습니다)"><select id="dtKeyModel" title="이미지 생성 모델"><option value="gemini-2.5-flash-image">gemini-2.5-flash-image (기본)</option><option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview-image-generation</option></select><button id="dtKeySave" class="sec" type="button">저장</button><button id="dtKeyClear" class="sec" type="button" title="저장된 키 지우기">지우기</button><small id="dtKeyState"></small></div>
+          <div class="dt-key"><span>🖼 GPT 키(OpenAI · 선택)</span><input id="dtOaKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-… (저장만 하고 어디에도 기록하지 않습니다)"><button id="dtOaSave" class="sec" type="button">저장</button><button id="dtOaClear" class="sec" type="button" title="저장된 키 지우기">지우기</button><small id="dtOaState"></small></div>
+          <div class="dt-key" id="dtEngRow" hidden><span>🧪 한글화 그리기 엔진(내부용)</span><select id="dtEng"><option value="">구글 (기본)</option><option value="codex">GPT · 이 컴퓨터의 ChatGPT 앱</option></select><small id="dtEngState"></small></div>
           <div class="dt-gc" id="dtGc">
             <div class="dt-gc-head"><b>🔗 내 구글 클라우드</b><span id="dtGcState">연결 안 됨</span><small id="dtGcTrial"></small></div>
-            <div class="dt-gc-form"><label class="sec dt-gc-file" data-tip="서비스 계정 키 파일(.json)을 고르거나 이 칸으로 끌어다 놓기">📄 키 파일로 연결<input id="dtGcFile" type="file" accept=".json,application/json" hidden></label><input id="dtGcKey" type="password" autocomplete="off" spellcheck="false" placeholder="또는 API 키 (AIza…)"><input id="dtGcProj" autocomplete="off" spellcheck="false" placeholder="프로젝트 ID"><button id="dtGcSave" class="sec" type="button">연결</button><button id="dtGcTest" class="sec" type="button" data-tip="글 AI · 이미지 AI · 글자 읽기가 되는지 다시 확인">확인</button><button id="dtGcClear" class="sec" type="button" data-tip="이 PC 에서 구글 연결 지우기">끊기</button></div>
+            <div class="dt-gc-main"><button id="dtGcOAuth" class="dt-go dt-gc-oauth" type="button">🔗 구글로 연결</button><small id="dtGcOAuthNote">버튼 → 구글 로그인 → (처음이면) 카드 등록. 나머지는 자동이에요</small></div>
             <ul class="dt-gc-checks" id="dtGcChecks"></ul>
+            <details class="dt-gc-adv"><summary>고급: 키 파일·API 키로 연결</summary><div class="dt-gc-form"><label class="sec dt-gc-file" data-tip="서비스 계정 키 파일(.json)을 고르거나 이 칸으로 끌어다 놓기">📄 키 파일로 연결<input id="dtGcFile" type="file" accept=".json,application/json" hidden></label><input id="dtGcKey" type="password" autocomplete="off" spellcheck="false" placeholder="또는 API 키 (AIza…)"><input id="dtGcProj" autocomplete="off" spellcheck="false" placeholder="프로젝트 ID"><button id="dtGcSave" class="sec" type="button">연결</button><button id="dtGcTest" class="sec" type="button" data-tip="글 AI · 이미지 AI · 글자 읽기가 되는지 다시 확인">확인</button><button id="dtGcClear" class="sec" type="button" data-tip="이 PC 에서 구글 연결 지우기">끊기</button></div>
             <div class="dt-gc-links"><button class="lnk" type="button" data-gc="trial">무료 체험 시작</button><button class="lnk" type="button" data-gc="vertex">Vertex AI 켜기</button><button class="lnk" type="button" data-gc="vision">Cloud Vision 켜기</button><button class="lnk" type="button" data-gc="keys">API 키 만들기</button><button class="lnk" type="button" data-gc="credits">남은 크레딧 보기</button></div>
+            </details>
+            
           </div>
           <div class="dt-usage" id="dtUsage" hidden>
             <div class="dt-unums"><div><b id="uToday">0장</b><small>오늘</small></div><div><b id="uMonth">0장</b><small>이번 달</small></div><div><b id="uCost">₩0</b><small>이번 달 예상 비용</small></div><button id="uBill" class="sec" type="button" data-tip="실제 청구 금액 보기(브라우저로 열림)">💳 실제 청구</button></div>
@@ -126,7 +133,7 @@
         <div class="dt-rtabs" id="drTabs"></div>
         <div class="dt-rtpl" id="drTplPick" hidden></div>
         <div class="dt-rsum" id="drSumWrap"><button type="button" class="dt-rsumline" id="drSum" aria-expanded="false" data-tip="누르면 검수 제안·단계별 시간·처리 내역을 펼칩니다"></button>
-          <div class="dt-rsumbody" id="drSumBody" hidden><div class="dt-qa" id="drQa" hidden></div><p class="dt-times" id="drTimes" hidden></p><p class="dt-rhow" id="drHow"></p></div></div>
+          <div class="dt-rsumbody" id="drSumBody" hidden><div class="dt-qa" id="drQa" hidden></div><div class="dt-times" id="drTimes" hidden></div><p class="dt-rhow" id="drHow"></p></div></div>
         <div class="dt-rbody">
           <aside class="dt-secs" id="drSecs" hidden><div class="dt-sec">섹션 <small>누르면 편집</small></div><div class="dt-locqa" id="drLocQa" hidden></div><button type="button" class="dt-qafilter" id="drQaOnly" hidden aria-pressed="false" data-tip="⚠ 확인이 필요한 장만 보기 — 다시 누르면 전체"></button><div class="dt-locrem" id="drLocRem" hidden></div><div class="dt-srcsum"><span id="drSrcSum"></span><button class="sec" id="drSrcToggle" type="button" aria-pressed="true" data-tip="미리보기 위에 섹션마다 원본/AI 생성 표시를 켜고 끕니다">미리보기 표시</button></div><ol id="drSecList"></ol></aside>
           <div class="dt-slices" id="drSlices"></div>
@@ -251,32 +258,35 @@
   const siteOfText = (s) => { s = String(s || "").trim(); return /^\d{6,20}$/.test(s) || /1688\.com/i.test(s) ? "1688" : /tmall\.(com|hk)/i.test(s) ? "tmall" : /taobao\.com/i.test(s) ? "taobao" : /coupang\.com/i.test(s) ? "coupang" : /(smartstore|brand)\.naver\.com/i.test(s) ? "naver" : /ohou\.se/i.test(s) ? "ohou" : ""; };
   const paintSites = () => { const s = siteOfText($("dtUrl").value), k = s === "tmall" ? "taobao" : s; $("dtSites").querySelectorAll("[data-site]").forEach((el) => el.classList.toggle("on", el.dataset.site === k)); $("dtSites").classList.toggle("has", !!k); };
   $("dtUrl").addEventListener("input", paintSites);
-  async function fromUrl(url, rowId = null) {
+  async function fromUrl(url, rowId = null, planFirst = false) {
     if (urlBusy) return;
+    if (window.SeedGoogle && !(await window.SeedGoogle.ensure(() => fromUrl(url, rowId, planFirst)))) return; // 🔗 AI 연결 안 됐으면 연결 마법사 → 끝나면 이어서(입력 그대로)
     const msg = $("dtUrlMsg"), btn = $("dtUrlGo");
     const site = siteOfText(url), where = site && site !== "1688" ? SITE_KO[site] : "1688"; // 1688 은 예전 문구 그대로
     urlBusy = true; btn.disabled = true; btn.textContent = `⠋ ${where}에서 읽는 중…`;
     msg.className = "dt-urlmsg busy"; msg.textContent = where === "1688" ? "1688 탭에서 상품 화면을 열고 제목·속성표·상세 이미지를 읽는 중입니다 (10~30초)" : `${where} 상품 화면을 열고 제목·옵션·상세 이미지를 읽는 중입니다 (20~60초)`;
     const spin = setInterval(() => { btn.textContent = `${SPIN[Math.floor(performance.now() / 80) % SPIN.length]} ${where}에서 읽는 중…`; }, 80);
     try {
-      const r = await api.invoke("detail:fromUrl", { url, rowId, templateId: st.tpl });
-      if (r?.ok) { msg.className = "dt-urlmsg ok"; msg.textContent = `✔ 읽었습니다 — 상세페이지를 만드는 중 (작업 ${r.jobId})`; $("dtUrl").value = ""; paintSites(); }
+      const r = await api.invoke("detail:fromUrl", { url, rowId, templateId: st.tpl, planFirst });
+      if (r?.ok) { msg.className = "dt-urlmsg ok"; msg.textContent = planFirst ? `✔ 읽었습니다 — 기획안을 만드는 중, 끝나면 확인 화면이 열려요 (작업 ${r.jobId})` : `✔ 읽었습니다 — 상세페이지를 만드는 중 (작업 ${r.jobId})`; $("dtUrl").value = ""; paintSites(); }
       else {
         msg.className = "dt-urlmsg err"; msg.textContent = "✕ " + (r?.error || "만들지 못했습니다");
         if (r?.needVisible) { // 네이버·오늘의집 로그인·보안 확인 → 같은 세션의 보이는 창에서 사람이 넘긴다
           const vb = document.createElement("button"); vb.type = "button"; vb.className = "sec dt-urlvis"; vb.textContent = "보이는 창으로 열기";
-          vb.onclick = async () => { const o = await api.invoke("detail:openVisible", { url }); if (o?.error) flash(o.error); else { msg.className = "dt-urlmsg busy"; msg.textContent = "열린 창에서 로그인·확인을 마친 뒤 ▶ 주소로 만들기를 다시 누르세요"; $("dtUrl").value = url; paintSites(); } };
+          vb.onclick = async () => { const o = await api.invoke("detail:openVisible", { url }); if (o?.error) flash(o.error); else { msg.className = "dt-urlmsg busy"; msg.textContent = "열린 창에서 로그인·확인을 마친 뒤 ▶ 한 번에 만들기를 다시 누르세요"; $("dtUrl").value = url; paintSites(); } };
           msg.append(" ", vb);
         }
       }
     } catch (e) { msg.className = "dt-urlmsg err"; msg.textContent = "✕ " + String(e?.message || e).replace(/^Error invoking remote method '[^']+': /, "").slice(0, 160); }
-    clearInterval(spin); urlBusy = false; btn.disabled = false; btn.textContent = "▶ 주소로 만들기";
+    clearInterval(spin); urlBusy = false; btn.disabled = false; btn.textContent = "▶ 한 번에 만들기";
   }
   $("dtUrlForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("dtUrl").value.trim(); if (!v) { $("dtUrl").focus(); return; } fromUrl(v); });
+  // 기획안 먼저 보고 만들기(드문 선택 — 조용한 글자 버튼): 주소 칸에 주소가 있으면 그것, 없으면 고른 상품(1688 주소)
+  $("dtPlanFirst").onclick = () => { const v = $("dtUrl").value.trim(), s = st.sel; if (v) return fromUrl(v, null, true); if (s?.kind === "row" && is1688(s.cnUrl)) return fromUrl(s.cnUrl, s.id, true); $("dtUrl").focus(); const m = $("dtUrlMsg"); m.className = "dt-urlmsg err"; m.textContent = "먼저 상품 주소를 붙여 넣어 주세요"; };
   function flash(msg) { const g = $("dtGuide"); g.textContent = msg; g.classList.add("hot"); setTimeout(() => g.classList.remove("hot"), 2500); }
   function setMode(m) { st.mode = m; root.classList.toggle("dt-mresult", m === "result"); if (m !== "result") root.classList.remove("dt-listopen"); { const g = $("dtRowsGrp"); if (g) g.hidden = m === "result" || !st.rows.length; } $("dtSetup").hidden = m !== "setup"; $("dtWork").hidden = m !== "work"; $("dtResult").hidden = m !== "result"; $("dtReview").hidden = m !== "review"; $("dtInfoV").hidden = m !== "info"; if (m !== "work") stopWork(); else startWorkLoop(); }
   // ---------- 설정(확인 단계·발표 모드 자동) ----------
-  async function loadOpts() { const o = await api.invoke("detail:settings", null).catch(() => null); if (!o) return; $("dtOptReview").checked = o.detailReview === true; $("dtOptPresentAuto").checked = o.detailPresentAuto !== false; $("dtKeyModel").value = o.geminiImageModel || "gemini-2.5-flash-image"; $("dtKeyState").textContent = o.imageGen?.connected ? `✔ 이미지 생성: ${o.imageGen.provider === "vertex" ? `Vertex(프로젝트 ${o.imageGen.project || "?"})` : o.imageGen.provider === "server" ? "씨드핵 서버" : o.imageGen.provider} 연결됨${o.hasGeminiKey ? ` · Gemini 키 ${o.geminiKeyHint || ""}` : ""}` : "이미지 생성: 키 없음 — AI 장면 사진 단계 건너뜀"; loadUsage(); }
+  async function loadOpts() { const o = await api.invoke("detail:settings", null).catch(() => null); if (!o) return; oaState(o); engState(o); $("dtOptReview").checked = o.detailReview === true; $("dtOptPresentAuto").checked = o.detailPresentAuto !== false; $("dtKeyModel").value = o.geminiImageModel || "gemini-2.5-flash-image"; $("dtKeyState").textContent = o.imageGen?.connected ? `✔ 이미지 생성: ${o.imageGen.provider === "vertex" ? `Vertex(프로젝트 ${o.imageGen.project || "?"})` : o.imageGen.provider === "server" ? "씨드핵 서버" : o.imageGen.provider} 연결됨${o.hasGeminiKey ? ` · Gemini 키 ${o.geminiKeyHint || ""}` : ""}` : "이미지 생성: 키 없음 — AI 장면 사진 단계 건너뜀"; loadUsage(); }
   // 🎨 이미지 생성 사용량(받은 장만 · 비용은 토큰 수 × 공개 단가로 낸 예상)
   async function loadUsage() {
     const u = await api.invoke("detail:imageUsage").catch(() => null); if (!u) return;
@@ -310,6 +320,11 @@
   $("dtGcTest").onclick = async () => { $("dtGcState").textContent = "확인 중…"; showGc(await api.invoke("detail:google:test").catch(() => null)); };
   $("dtGcClear").onclick = async () => { showGc(await api.invoke("detail:google:clear").catch(() => null)); loadOpts(); };
   root.querySelectorAll("[data-gc]").forEach((b) => { b.onclick = () => api.invoke("detail:google:open", { what: b.dataset.gc }); });
+  function engState(o) { $("dtEngRow").hidden = !o?.codexReady; $("dtEng").value = o?.bakeEngine || ""; $("dtEngState").textContent = o?.bakeEngine === "codex" ? "ChatGPT 로그인으로 그려요 · 장당 1분쯤" : ""; }
+  $("dtEng").onchange = async () => { const o = await api.invoke("detail:settings", { detailBakeEngine: $("dtEng").value }).catch(() => null); if (o) engState(o); };
+  function oaState(o) { $("dtOaState").textContent = o?.hasOpenaiKey ? `✔ 키 저장됨 ${o.openaiKeyHint || ""}` : "키 없음"; }
+  $("dtOaSave").onclick = async () => { const k = $("dtOaKey").value.trim(); if (!k) return flash("키를 붙여 넣고 저장을 눌러 주세요"); const o = await api.invoke("detail:settings", { openaiKey: k }).catch(() => null); $("dtOaKey").value = ""; if (o) oaState(o); };
+  $("dtOaClear").onclick = async () => { const o = await api.invoke("detail:settings", { openaiKey: "" }).catch(() => null); $("dtOaKey").value = ""; if (o) oaState(o); };
   $("dtKeyClear").onclick = async () => { const o = await api.invoke("detail:settings", { geminiKey: "" }).catch(() => null); $("dtKey").value = ""; if (o) $("dtKeyState").textContent = "키 없음 — AI 장면 사진 단계 건너뜀"; };
   $("dtKeyModel").onchange = () => api.invoke("detail:settings", { geminiImageModel: $("dtKeyModel").value }).catch(() => {});
   $("dtOptReview").onchange = () => api.invoke("detail:settings", { detailReview: $("dtOptReview").checked }).catch(() => {});
@@ -421,7 +436,7 @@
       return;
     }
     navRun(ev.pct, !(ev.step === "done" || ev.step === "fail"));
-    if (!st.work || st.work.jobId !== ev.jobId) { if (ev.step === "fail" || ev.step === "done") return; newWork(ev.jobId, ev.extra?.title); }
+    if (!st.work || st.work.jobId !== ev.jobId) { if ((ev.step === "fail" && !ev.extra?.preflight) || ev.step === "done") return; newWork(ev.jobId, ev.extra?.title); } // 사전 점검 멈춤은 첫 이벤트여도 화면에 보인다
     const w = st.work; const x = ev.extra || {};
     if (st.mode !== "work" && !w.finished) setMode("work");
     if (ev.step !== w.step) { w.tStep = performance.now(); }
@@ -456,9 +471,10 @@
     root.querySelectorAll("#dwSteps li").forEach((li) => (li.className = "done"));
     root.querySelectorAll("#dwGrid .cell").forEach((c) => c.classList.add("rd"));
     const box = document.createElement("div"); box.className = "dt-done";
+    const ck = ev.extra?.clock;
     const secs = ((ev.extra?.durationMs || 0) / 1000).toFixed(1);
-    const tm = ev.extra?.timings ? Object.entries(ev.extra.timings).filter(([, ms]) => ms >= 500).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, ms]) => `${STEP_KO[k] || k} ${(ms / 1000).toFixed(0)}초`).join(" · ") : "";
-    box.innerHTML = `<div class="dt-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h3>상세페이지 완성!</h3><p>${esc(w.title)} · 이미지 ${ev.extra?.slices ?? "?"}장 · ${secs}초</p>${tm ? `<p class="dt-tm">⏱ ${esc(tm)}</p>` : ""}<small>클릭하면 바로 결과로</small>`;
+    const tm = ck?.rows?.length ? ck.rows.slice().sort((a, b) => b.ms - a.ms).slice(0, 3).map((x) => `${x.label} ${fmtDur(x.ms)}`).join(" · ") : ev.extra?.timings ? Object.entries(ev.extra.timings).filter(([, ms]) => ms >= 500).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, ms]) => `${STEP_KO[k] || k} ${(ms / 1000).toFixed(0)}초`).join(" · ") : "";
+    box.innerHTML = `<div class="dt-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h3>상세페이지 완성!</h3><p>${esc(w.title)} · 이미지 ${ev.extra?.slices ?? "?"}장 · ${ck ? `⏱ ${fmtDur(ck.totalMs)}` : `${secs}초`}</p>${tm ? `<p class="dt-tm">⏱ ${esc(tm)}</p>` : ""}<small>클릭하면 바로 결과로</small>`;
     $("dtWork").querySelector(".dt-win").appendChild(box);
     if (!reduce()) sparks(box);
     const go = () => { clearTimeout(t); showResult(w.jobId); };
@@ -468,6 +484,7 @@
   }
   function failed(ev) {
     const w = st.work; w.finished = true;
+    if (ev.extra?.preflight) return needSetup(ev.extra.preflight);
     const cancelled = !!ev.extra?.cancelled;
     const box = document.createElement("div"); box.className = "dt-done fail";
     box.innerHTML = `<div class="dt-check"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></div><h3>${cancelled ? "취소했습니다" : "만들지 못했습니다"}</h3><p>${esc(ev.msg)}</p><small>클릭하면 닫힙니다</small>`;
@@ -475,6 +492,20 @@
     const back = () => { clearTimeout(t); st.work = null; setMode("setup"); load(); };
     const t = setTimeout(back, 6000);
     box.onclick = back;
+  }
+  // 🚦 사전 점검·OCR 실패로 멈춤(main/detail/preflight.js) — 저절로 닫지 않고, 무엇이 안 되는지 + 고치는 버튼
+  function needSetup(pf) {
+    const box = document.createElement("div"); box.className = "dt-done fail dt-need";
+    box.innerHTML = `<div class="dt-check"><svg viewBox="0 0 24 24"><path d="M12 6v8M12 17.5v.5"/></svg></div><h3>${esc(pf.headline || "AI 연결을 확인해 주세요")}</h3>
+      <ul class="dt-need-list">${(pf.problems || []).map((x) => `<li>${esc(x.msg)}</li>`).join("")}</ul>
+      <p class="dt-need-sub">${pf.fix === "google" ? "내 구글 클라우드(무료 체험)를 연결하면 바로 만들 수 있어요. 결과는 만들지 않았어요." : "씨드핵 서버가 준비되면 다시 만들 수 있어요. 구글을 연결하면 지금 바로 쓸 수 있어요. 결과는 만들지 않았어요."}</p>
+      <div class="dt-need-acts"><button type="button" class="dt-go dt-need-google">🔗 구글 연결하기</button>${pf.tesseractOk ? `<button type="button" class="sec dt-need-tess" data-tip="중국어·세로쓰기를 놓쳐 글이 남을 수 있어요">글자 읽기만 낮은 품질로 계속</button>` : ""}<button type="button" class="sec dt-need-close">닫기</button></div>`;
+    $("dtWork").querySelector(".dt-win").appendChild(box);
+    const back = () => { st.work = null; setMode("setup"); load(); };
+    box.querySelector(".dt-need-close").onclick = back;
+    box.querySelector(".dt-need-google").onclick = () => { back(); setTimeout(() => window.SeedGoogle?.open(), 150); };
+    const tb = box.querySelector(".dt-need-tess");
+    if (tb) tb.onclick = async () => { await api.invoke("detail:settings", { detailAllowTesseract: true }).catch(() => null); tb.disabled = true; tb.textContent = "✔ 켰어요 — 다시 만들기를 눌러 주세요"; };
   }
   function sparks(box) {
     const cols = ["#3ddc84", "#a6ffcf", "#5ccfe6", "#ffcc4d"];
@@ -499,7 +530,9 @@
     // 단계별 시간
     const TK = { total: "전체", vision: "사진 검수", cutout: "누끼", brief: "기획", copy: "카피", sceneGen: "장면 생성(카피와 동시)", scene: "장면 마무리 대기", plan: "구성", render: "렌더", qa: "검수", qaBackground: "뒤 검수" };
     const tm = r.timings ? Object.entries(r.timings).filter(([k, ms]) => TK[k] && ms >= 500).map(([k, ms]) => `${TK[k]} ${(ms / 1000).toFixed(0)}초`).join(" · ") : "";
-    $("drTimes").textContent = tm ? `⏱ ${tm}` : ""; $("drTimes").hidden = !tm;
+    const ck = r.clock?.rows?.length ? r.clock : null; // ⏱ 스톱워치(버튼 누른 순간~완성). 없으면(예전 작업) 옛 표기
+    if (ck) { $("drTimes").className = "dt-times dt-clock"; $("drTimes").innerHTML = `<b>⏱ 만드는 데 걸린 시간 · ${esc(fmtDur(ck.totalMs))}</b>${ck.rows.map((x) => `<span class="row${x.bar === 100 ? " top" : ""}"><i>${esc(x.label)}</i><u><s style="width:${Math.max(2, x.bar)}%"></s></u><em>${esc(fmtDur(x.ms))}</em></span>`).join("")}${ck.waitMs >= 5000 ? `<small>기획안을 보신 시간 ${esc(fmtDur(ck.waitMs))}은 뺐어요</small>` : ""}`; $("drTimes").hidden = false; }
+    else { $("drTimes").className = "dt-times"; $("drTimes").textContent = tm ? `⏱ ${tm}` : ""; $("drTimes").hidden = !tm; }
     // AI 검수 제안(뒤 검수) — 누르면 그 섹션 다시 만들기/글 수정
     const sugg = (r.qa?.suggestions || []).filter((x) => !x.applied);
     $("drQa").hidden = !r.qa?.background; 
@@ -526,7 +559,7 @@
     const totalS = Math.round(((r.timings?.total) || r.durationMs || 0) / 1000);
     const lq = (r.renders || []).find((x) => x.id === r.current)?.locQa; // 원본 한글화 탭: 뒤 검수 결과를 맨 앞에
     const lqPart = lq?.status === "running" ? "🔍 검수 중…" : lq?.status === "done" ? [lq.flagged ? `⚠ 확인 필요 ${lq.flagged}장` : `✔ 검수 통과 ${lq.checked}장`, lq.fixed ? `🔧 자동으로 고침 ${lq.fixed}장` : ""].filter(Boolean).join(" · ") : "";
-    const sumParts = [lqPart, r.qa?.score != null && !lq ? `🤖 AI 검수 ${r.qa.score}/5${sugg.length ? ` · 제안 ${sugg.length}건` : ""}` : "", totalS ? `⏱ ${totalS}초` : "", r.scene?.used ? `⚠ AI 생성 이미지 ${r.scene.used}장 확인` : "", notes.length ? `△ 대체 동작 ${notes.length}단계` : ""].filter(Boolean);
+    const sumParts = [lqPart, r.qa?.score != null && !lq ? `🤖 AI 검수 ${r.qa.score}/5${sugg.length ? ` · 제안 ${sugg.length}건` : ""}` : "", ck ? `⏱ ${fmtDur(ck.totalMs)}` : totalS ? `⏱ ${fmtDur(totalS * 1000)}` : "", r.scene?.used ? `⚠ AI 생성 이미지 ${r.scene.used}장 확인` : "", notes.length ? `△ 대체 동작 ${notes.length}단계` : ""].filter(Boolean);
     $("drSum").innerHTML = `<span>${esc(sumParts.join(" · ") || "✔ 모든 단계 정상")}</span><em>${$("drSumBody").hidden ? "자세히 ▾" : "접기 ▴"}</em>`;
     $("drSum").classList.toggle("warn", !!(r.scene?.used || notes.length || (r.qa?.score != null && r.qa.score < 4 && !lq) || lq?.flagged));
     setMode("result");
@@ -688,17 +721,19 @@
     const busy = !!le.busy;
     $("leState").innerHTML = !q ? "" : q.pass ? `<p class="ok">✔ ${q.edited ? "고쳤어요 — 다시 검수해 보니 문제 없어요" : "검수에서 문제 없음"}</p>`
       : `<p class="warn">⚠ 이 장에서 확인할 것</p><ul>${(q.issues || []).map((i) => `<li>${esc(i.why)}<small>${esc(HINT[i.kind === "ai" ? AI_HINT[i.ai] || "layout" : i.kind] || "")}</small></li>`).join("")}</ul>`;
-    root.querySelectorAll("#drLoced [data-le]").forEach((b) => { b.disabled = busy || (v.type !== "image" && b.dataset.le !== "drop"); });
-    $("leAsk").disabled = $("leAskGo").disabled = busy || v.type !== "image"; $("leSave").disabled = busy; $("leUndo").disabled = busy || !v.canUndo;
+    root.querySelectorAll("#drLoced [data-le]").forEach((b) => { b.disabled = busy || ((v.type !== "image" || v.baked) && b.dataset.le !== "drop"); });
+    if (v.baked) $("leMore").open = true; // 통째로 그린 장: 할 수 있는 것은 문구 고치기 → 바로 보이게
+    $("leSave").textContent = v.baked ? "저장하고 이 장 다시 그리기 (30초쯤)" : $("leSave").dataset.t0 || ($("leSave").dataset.t0 = $("leSave").textContent);
+    $("leAsk").disabled = $("leAskGo").disabled = busy || v.type !== "image" || !!v.baked; $("leSave").disabled = busy; $("leUndo").disabled = busy || !v.canUndo;
     $("leMore").hidden = v.type !== "image" || !v.layers.length;
     $("leLines").innerHTML = v.layers.map((l) => { const e = { ...l, ...(le.edits[l.i] || {}) }; const bold = e.weight >= 700; const al = e.align || "";
       return `<div class="le-line${e.drop ? " off" : ""}${issueTexts(q).some((t) => { const n = nzt(l.ko); return n.startsWith(t) || t.startsWith(n); }) ? " bad" : ""}" data-i="${l.i}">
         <textarea rows="1" data-k="ko"${e.drop ? " disabled" : ""}>${esc(e.ko)}</textarea>
-        <div class="le-ctl"><button type="button" data-op="size" data-v="-2" data-tip="글자 작게">−</button><span class="sz" title="글자 크기">${Math.round(e.size)}</span><button type="button" data-op="size" data-v="2" data-tip="글자 크게">+</button>
+        ${l.baked ? `<div class="le-ctl"><small class="le-shape">${l.head ? "첫 줄 = 굵은 제목 · " : ""}줄을 바꾸면 그림도 줄이 바뀌어요</small><button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 글 다시 살리기" : "이 글 지우기"}">${e.drop ? "↺" : "✕"}</button></div></div>` : `<div class="le-ctl"><button type="button" data-op="size" data-v="-2" data-tip="글자 작게">−</button><span class="sz" title="글자 크기">${Math.round(e.size)}</span><button type="button" data-op="size" data-v="2" data-tip="글자 크게">+</button>
         <button type="button" data-op="bold" class="${bold ? "on" : ""}" data-tip="굵게 켜고 끄기"><b>굵게</b></button>
         <span class="le-al">${[["left", "왼쪽"], ["center", "가운데"], ["right", "오른쪽"]].map(([k, t]) => `<button type="button" data-op="align" data-v="${k}" class="${al === k ? "on" : ""}" data-tip="${t} 맞춤">${t}</button>`).join("")}</span>
         <button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 줄 다시 살리기" : "이 줄 빼기"}">${e.drop ? "↺" : "✕"}</button></div>
-        ${l.shape ? `<small class="le-shape">${l.shape} 안 글</small>` : ""}</div>`; }).join("") || `<p class="dt-empty">고칠 한글 줄이 없어요.</p>`;
+        ${l.shape ? `<small class="le-shape">${l.shape} 안 글</small>` : ""}</div>`}`; }).join("") || `<p class="dt-empty">고칠 한글 줄이 없어요.</p>`;
     $("leLines").querySelectorAll("textarea").forEach(fitTa);
     $("leSave").hidden = !Object.keys(le.edits).length;
     $("leBusy").textContent = busy ? `⏳ ${le.busy.msg || "고치는 중"} · ${Math.round((Date.now() - le.busy.t0) / 1000)}초` : le.last || "";
@@ -884,7 +919,7 @@
     toast(n ? `✦ 문구 예시 ${n}개 — ${r.note || "□ 칸은 실제 숫자로 채우고, 넣을 항목만 켜 주세요"}` : "이미 문구가 있어요 — 빈 칸에만 예시를 넣습니다(다른 예시는 입력 칸 목록에)");
   };
   const ivSave = async (patch) => { const r = await api.invoke("detail:info:set", { jobId: iv.jobId, patch }); if (r?.error) flash(r.error); };
-  $("dtFolder").onclick = async () => { const r = await api.invoke("detail:importFolder", {}); if (r?.cancelled) return; if (r?.error) return flash(r.error); newWork(r.jobId, "폴더에서 가져오는 중"); };
+  $("dtFolder").onclick = async () => { if (window.SeedGoogle && !(await window.SeedGoogle.ensure(() => $("dtFolder").click()))) return; const r = await api.invoke("detail:importFolder", { oneShot: true }); if (r?.cancelled) return; if (r?.error) return flash(r.error); newWork(r.jobId, "폴더에서 가져오는 중"); };
   $("ivModes").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (!b) return; iv.info.mode = b.dataset.mode; renderInfo(); ivSave({ mode: b.dataset.mode }); });
   [$("ivGallery"), $("ivDetail"), $("ivSku")].forEach((g) => g.addEventListener("click", (e) => {
     const lg = e.target.closest("[data-logo]");
@@ -930,6 +965,7 @@
     b.disabled = true; b.classList.add("busy"); b.innerHTML = `<span class="spin"></span> 생성 시작 중…`;
     const edits = { product_name_ko: $("ivName").value, brief_text: $("ivBrief").value, templateId: iv.info.templateId };
     let r = null;
+    if (window.SeedGoogle && !(await window.SeedGoogle.ensure(() => $("ivGo")?.click()))) { ivBtnReset(); return; } // 🔗 연결 안 됐으면 마법사 → 끝나면 생성하기 다시
     try { r = await api.invoke("detail:confirm", { jobId: iv.jobId, edits, review: reviewFlag() }); } catch (e) { r = { error: e?.message || String(e) }; }
     if (r?.error) { ivBtnReset(); ivErr(r.error, /이미/.test(r.error) ? r.jobId || null : null); return; }
     ivBtnReset();
