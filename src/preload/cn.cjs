@@ -857,6 +857,7 @@ async function askPill() {
   boxBtn.addEventListener("click", () => ipcRenderer.invoke("chat:act", { a: "show" }));
   el.querySelector(".wave")?.addEventListener("click", (e) => waveStart(e.currentTarget));
   el.querySelector(".tb")?.addEventListener("click", async (e) => {
+    if (isOffer()) return tbKeywords(e.currentTarget); // 상품 화면: 제목을 키워드로 나눠 타오바오 검색(사진 검색은 창 안의 "사진으로 찾기")
     const r = await ipcRenderer.invoke("tb:search");
     if (r?.error) { e.currentTarget.textContent = "✕ " + r.error.slice(0, 30); setTimeout(() => { e.currentTarget.textContent = "🛍 타오바오"; }, 4000); }
   });
@@ -1025,6 +1026,7 @@ const WAVE_CSS = `
 #sg-wave .kws{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 #sg-wave .kw{border:1px solid #d4d4d8;background:#fff;border-radius:16px;padding:5px 11px;cursor:pointer;font-size:13px;color:#3f3f46}
 #sg-wave .kw.on{background:#16a34a;border-color:#16a34a;color:#fff;font-weight:700} #sg-wave .kw small{opacity:.75;margin-left:4px}
+#sg-wave .kw.main{border-color:#16a34a;color:#166534;font-weight:700;background:#f0fdf4} #sg-wave .kw.main.on{background:#16a34a;color:#fff} #sg-wave .kw.ad{opacity:.55} #sg-wave .site button:disabled{opacity:.5;cursor:default}
 #sg-wave .site{display:flex;gap:6px;margin-top:8px;align-items:center;font-size:12px;color:#52525b}
 #sg-wave .site button{border:1px solid #d4d4d8;background:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px}
 #sg-wave .site button.on{background:#18181b;color:#fff;border-color:#18181b;font-weight:700}
@@ -1058,6 +1060,39 @@ async function waveStart(btn) {
   btn.disabled = false; btn.textContent = old;
   if (r?.error) { sgBand("sg-wave-err", "🌊 " + r.error, 6000); return; }
   waveChooser(r.ctx);
+}
+// 🛍 타오바오 키워드로 찾기: 1688 제목을 뜻 단위로 나눠(한글 뜻 포함) 보여 주고, 누르면 그 말로 타오바오를 검색한다
+// ★ 대표 상품어 = 초록 · 꾸밈말 = 보통 · 광고 말 = 흐리게. 여러 개를 골라 한 번에 검색할 수도 있다(고르기 켬)
+async function tbKeywords(btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = "⏳ 제목 나누는 중…";
+  const img = document.querySelector('meta[property="og:image"]')?.content || "";
+  const r = await ipcRenderer.invoke("tb:keywords", { titleZh: document.title, img, url: location.href, cost: readPrice() })
+    .catch((e) => ({ error: /No handler/.test(String(e)) ? "앱을 한 번 다시 켜야 합니다 (Cmd+Q 후 다시 실행)" : String(e?.message || e).slice(0, 80) }));
+  btn.disabled = false; btn.textContent = old;
+  if (r?.error) { sgBand("sg-tbk-err", "🛍 " + r.error, 6000); return; }
+  document.getElementById("sg-wave")?.remove();
+  if (!document.getElementById("sg-wave-css")) { const st = document.createElement("style"); st.id = "sg-wave-css"; st.textContent = WAVE_CSS; document.documentElement.appendChild(st); }
+  const box = document.createElement("div"); box.id = "sg-wave"; box.style.bottom = "auto";
+  const S = { multi: false, sel: new Set() };
+  const go = (kw) => ipcRenderer.invoke("wave:open", { kw, site: "taobao", sort: false });
+  const chip = (k, cls) => `<button type="button" class="kw ${cls}${S.sel.has(k.zh) ? " on" : ""}" data-kw="${esc(k.zh)}" title="${esc(k.ko)}">${esc(k.zh)}<small>${esc(k.ko)}</small></button>`;
+  const draw = () => {
+    box.innerHTML = `<div class="hd"><div class="t"><b>🛍 타오바오에서 찾기</b><button type="button" class="x" aria-label="닫기">✕</button></div>
+      <div class="sub" title="${esc(r.titleZh)}">${esc(r.titleZh)}</div>
+      ${r.combos.length ? `<div class="site" style="margin-top:10px">추천 검색어</div><div class="kws" style="margin-top:6px">${r.combos.map((k) => chip(k, "main")).join("")}</div>` : ""}
+      <div class="site" style="margin-top:10px">제목 키워드 <span style="color:#16a34a;font-weight:700">● 대표</span> · 누르면 타오바오 검색</div>
+      <div class="kws" style="margin-top:6px">${r.parts.map((k) => chip(k, k.type)).join("")}<button type="button" class="kw add">+ 직접 입력</button></div>
+      <div class="site" style="margin-top:10px"><button type="button" class="mt ${S.multi ? "on" : ""}">여러 개 골라 검색</button>${S.multi ? `<button type="button" class="run" ${S.sel.size ? "" : "disabled"} style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">${S.sel.size ? esc([...S.sel].join(" ")) + " 검색" : "키워드를 고르세요"}</button>` : ""}<button type="button" class="photo" title="쿠팡 사진으로 타오바오 사진 검색">📷 사진으로 찾기</button></div></div>`;
+    box.querySelector(".x").onclick = () => box.remove();
+    box.querySelectorAll(".kw[data-kw]").forEach((b) => (b.onclick = () => { if (!S.multi) return go(b.dataset.kw); S.sel.has(b.dataset.kw) ? S.sel.delete(b.dataset.kw) : S.sel.add(b.dataset.kw); draw(); }));
+    box.querySelector(".kw.add").onclick = () => { const k = prompt("타오바오에서 찾을 중국어 검색어 (예: 旅行折叠衣架)"); if (k && k.trim()) go(k.trim()); };
+    box.querySelector(".mt").onclick = () => { S.multi = !S.multi; S.sel.clear(); draw(); };
+    const run = box.querySelector(".run"); if (run) run.onclick = () => { const order = [...r.combos, ...r.parts].map((k) => k.zh).filter((z) => S.sel.has(z)); if (order.length) go(order.join(" ")); };
+    box.querySelector(".photo").onclick = async () => { const x = await ipcRenderer.invoke("tb:search"); if (x?.error) sgBand("sg-tbk-err", "🛍 " + x.error, 6000); };
+  };
+  draw();
+  (document.body || document.documentElement).appendChild(box);
+  makeDraggable(box, "tb-kw", { handle: ".hd .t" });
 }
 function waveChooser(ctx) {
   document.getElementById("sg-wave")?.remove();

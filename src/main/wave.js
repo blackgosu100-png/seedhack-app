@@ -3,12 +3,22 @@
 // 원칙: 검색 화면은 사람이 키워드를 누를 때만 1페이지 연다(여러 페이지 자동 순회 금지). 화면에 뜬 글자만 읽는다.
 import { BrowserWindow, shell } from "electron";
 import { askCliJson, cliAvailable } from "./ai-cli.js";
+import { relayStructured, relayEnabled } from "./detail/relay.js";
 
 const KW_SYSTEM = `당신은 1688·타오바오 소싱 키워드 전문가입니다. 1688 상품 제목(중국어)에서 같은 종류 상품을 넓게 다시 찾을 "검색 키워드"를 뽑습니다.
 - 3~5개. 2~6글자 중국어 상품어 중심(예: U型枕, 护颈枕, 记忆棉颈枕). 브랜드·광고어(爆款, 新款, 跨境, 批发, 代发, 厂家, 包邮)·색상·수량은 빼기.
 - 첫 번째는 가장 대표하는 상품어, 나머지는 소재·형태·용도로 좁힌 변형.
 - ko는 한국어 뜻(짧게).
 반드시 JSON 하나만: {"keywords":[{"zh":"…","ko":"…"}]}`;
+
+const SPLIT_SYSTEM = `당신은 1688·타오바오 소싱 키워드 전문가입니다. 1688 상품 제목(중국어)을 **뜻 단위 키워드**로 제목 순서대로 쪼개고 한국어 뜻을 붙입니다.
+- parts: 제목에 나온 순서대로. zh 는 제목 원문 글자 그대로(보통 2~6글자), ko 는 한국어 뜻(짧게).
+  type: "main" = 이 상품이 무엇인지 가리키는 대표 상품어(1~2개. 예: 折叠衣架, U型枕) · "attr" = 소재·형태·용도·대상 같은 꾸밈말(旅行, 便携, 收纳包, 防滑) · "ad" = 광고·유통 말(跨境, 热销, 爆款, 新款, 批发, 厂家, 代发, 亚马逊)
+- combos: 타오바오에서 같은 상품을 찾기 좋은 검색어 2개(대표 상품어 + 핵심 꾸밈말을 붙인 말. 예: 旅行折叠衣架). ko 는 한국어 뜻.
+반드시 JSON 하나만: {"parts":[{"zh":"…","ko":"…","type":"main|attr|ad"}],"combos":[{"zh":"…","ko":"…"}]}`;
+const SPLIT_SCHEMA = { type: "object", additionalProperties: false, required: ["parts", "combos"], properties: {
+  parts: { type: "array", items: { type: "object", additionalProperties: false, required: ["zh", "ko", "type"], properties: { zh: { type: "string" }, ko: { type: "string" }, type: { type: "string", enum: ["main", "attr", "ad"] } } } },
+  combos: { type: "array", items: { type: "object", additionalProperties: false, required: ["zh", "ko"], properties: { zh: { type: "string" }, ko: { type: "string" } } } } } };
 
 // 국내 쇼핑몰(구글 렌즈 결과에서 이름으로 센다). 해외 직구몰(알리·테무)은 국내 판매로 치지 않는다
 const KR_SHOPS = [["쿠팡", /쿠팡|coupang/i], ["네이버", /스마트스토어|네이버\s*쇼핑|navershopping|smartstore/i], ["11번가", /11번가|11st/i], ["G마켓", /G마켓|지마켓|gmarket/i], ["옥션", /옥션|auction\.co/i],
@@ -40,6 +50,30 @@ export function initWave({ ipcMain, store, log, getCnView, fromCn, getTarget }) 
     log("go", `■ 🌊 핵심 키워드 ${kws.length}개 (${((Date.now() - t0) / 1000).toFixed(1)}초) · ${kws.map((k) => `${k.zh}(${k.ko})`).join(" · ")}`);
     return { ok: true, ctx };
   });
+  // 🛍 타오바오 키워드로 찾기(2026-11-25 대표님 요청): 1688 제목을 뜻 단위로 쪼개 한글 뜻을 붙이고, 대표 상품어·추천 검색어를 표시한다 → 누르면 타오바오 검색
+  // AI: 이 PC에 Claude CLI가 있으면 CLI, 없으면(수강생 PC) 서버 중계
+  ipcMain.handle("tb:keywords", async (e, p = {}) => {
+    if (!fromCn(e)) return { error: "1688 화면에서만 됩니다" };
+    const titleZh = String(p.titleZh || "").replace(/\s*[-—_|].*阿里巴巴.*$/, "").trim().slice(0, 120);
+    if (!/[\u4e00-\u9fff]{2}/.test(titleZh)) return { error: "상품 제목(중국어)을 못 읽었습니다" };
+    const t = getTarget() || {}, t0 = Date.now();
+    const text = `1688 제목: ${titleZh}${t.name ? `\n쿠팡 상품명(참고): ${t.name}` : ""}`;
+    let r;
+    try {
+      if (cliAvailable() && process.env.SEEDHACK_RELAY !== "server") r = await askCliJson({ system: SPLIT_SYSTEM, text });
+      else if (relayEnabled()) r = await relayStructured({ system: SPLIT_SYSTEM, schema: SPLIT_SCHEMA, text, model: "haiku", purpose: "other", timeoutMs: 45000, log });
+      else r = { error: "AI 연결이 없습니다" };
+    } catch (err) { r = { error: String(err?.message || err).slice(0, 120) }; }
+    const zhOk = (x) => /[\u4e00-\u9fff]/.test(x || "");
+    let parts = r?.ok ? (r.result?.parts || []).map((k) => ({ zh: String(k.zh || "").trim().slice(0, 16), ko: String(k.ko || "").trim().slice(0, 24), type: ["main", "attr", "ad"].includes(k.type) ? k.type : "attr" })).filter((k) => zhOk(k.zh)).slice(0, 14) : [];
+    const combos = r?.ok ? (r.result?.combos || []).map((k) => ({ zh: String(k.zh || "").trim().slice(0, 20), ko: String(k.ko || "").trim().slice(0, 30) })).filter((k) => zhOk(k.zh)).slice(0, 3) : [];
+    if (!parts.length) { log("dim", `  🛍 키워드 나누기 실패: ${r?.error || "빈 응답"}`); parts = [{ zh: titleZh.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "").slice(0, 8), ko: "제목 앞부분 (AI 연결 안 됨)", type: "main" }]; }
+    // 타오바오 검색 화면에서도 같은 키워드로 이어 볼 수 있게 파도타기 맥락에 넣어 둔다
+    ctx = { titleZh, img: String(p.img || "").slice(0, 400), name: t.name || "", cost: Number(p.cost) || null, at: Date.now(), from: String(p.url || "").slice(0, 300),
+      keywords: [...combos, ...parts.filter((k) => k.type !== "ad")].filter((k, i, a) => a.findIndex((x) => x.zh === k.zh) === i).slice(0, 8).map((k) => ({ zh: k.zh, ko: k.ko })) };
+    log("go", `■ 🛍 제목 키워드 ${parts.length}개 (${((Date.now() - t0) / 1000).toFixed(1)}초) · ${parts.map((k) => `${k.type === "main" ? "★" : ""}${k.zh}(${k.ko})`).join(" · ")}${combos.length ? ` · 추천 ${combos.map((k) => k.zh).join(", ")}` : ""}`);
+    return { ok: true, titleZh, parts, combos };
+  });
   ipcMain.handle("wave:ctx", (e) => (fromCn(e) ? ctx : null));
   // 🖐 1688 화면에 띄우는 버튼들(상세페이지 만들기 · AI 문의/번역/타오바오/파도타기 묶음 · 리뷰 사진)의 마지막 자리 — 1688은 화면마다 주소(출처)가 달라 앱이 대신 기억한다
   ipcMain.handle("ui:posGet", (e) => (fromCn(e) ? store.get("uiPos") || {} : {}));
@@ -63,9 +97,9 @@ export function initWave({ ipcMain, store, log, getCnView, fromCn, getTarget }) 
     if (!kw) return { error: "키워드가 없습니다" };
     const url = p.site === "1688"
       ? `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(kw)}&charset=utf8&sortType=va_rmdarkgmv`
-      : `https://s.taobao.com/search?q=${encodeURIComponent(kw)}&sort=sale-desc`;
+      : `https://s.taobao.com/search?q=${encodeURIComponent(kw)}${p.sort === false ? "" : "&sort=sale-desc"}`; // sort:false = 타오바오 기본 순서(🛍 키워드로 찾기)
     if (ctx) ctx.lastKw = kw, ctx.lastSite = p.site === "1688" ? "1688" : "taobao";
-    log("sys", `▶ 🌊 ${p.site === "1688" ? "1688" : "타오바오"} 판매순 · ${kw}`);
+    log("sys", `▶ ${p.sort === false ? "🛍" : "🌊"} ${p.site === "1688" ? "1688" : "타오바오"} ${p.sort === false ? "검색" : "판매순"} · ${kw}`);
     getCnView()?.webContents.loadURL(url);
     return { ok: true };
   });
