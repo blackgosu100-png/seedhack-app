@@ -667,8 +667,8 @@ try {
   const p7 = call("detail:prepare", { source: src });
   await waitN(p7.jobId, 1);
   const d7 = det.jobDirOf(p7.jobId);
-  assert(JSON.parse(fs.readFileSync(path.join(d7, "info.json"), "utf8")).templateId === "card", "1단계 기본 템플릿 card(v5)");
-  call("detail:info:set", { jobId: p7.jobId, patch: { mode: "scene" } }); // 이 묶음은 AI 장면(v5)만 — 둘 다는 ⑧에서
+  assert(JSON.parse(fs.readFileSync(path.join(d7, "info.json"), "utf8")).mode === "localize", "1단계 중국 상품 기본 방식 localize");
+  call("detail:info:set", { jobId: p7.jobId, patch: { mode: "scene", templateId: "card" } }); // 이 묶음은 AI 장면(v5)만 명시 시험
   call("detail:confirm", { jobId: p7.jobId });
   const e7 = await waitN(p7.jobId, 2);
   const plan7 = JSON.parse(fs.readFileSync(path.join(d7, "plan.json"), "utf8"));
@@ -728,7 +728,7 @@ try {
   assert(!!p8.jobId && !p8.error, `폴더 가져오기 → 1단계 ${p8.jobId || p8.error}`);
   await waitN(p8.jobId, 1);
   const inf8 = call("detail:info:get", { jobId: p8.jobId });
-  assert(inf8.gallery?.length === 2 && inf8.sku?.length === 1 && inf8.detail?.length === 4 && inf8.mode === "both" && inf8.modes?.localize && inf8.modes?.both, `main ${inf8.gallery?.length} · SKU ${inf8.sku?.length} · detail ${inf8.detail?.length} · 기본 방식 ${inf8.mode} · 예상 한글화 $${inf8.modes?.localize?.usd}/둘 다 $${inf8.modes?.both?.usd}`);
+  assert(inf8.gallery?.length === 2 && inf8.sku?.length === 1 && inf8.detail?.length === 4 && inf8.mode === "localize" && inf8.modes?.localize && !inf8.modes?.both && !inf8.modes?.scene, `main ${inf8.gallery?.length} · SKU ${inf8.sku?.length} · detail ${inf8.detail?.length} · 기본 방식 ${inf8.mode}(원본 한글화만) · 예상 한글화 $${inf8.modes?.localize?.usd}`);
   // 판매 실적·신뢰 배지(선택): 예시 받기 → 켠 항목만 plan 에(꺼 둔 예시는 빠짐)
   const sug8 = await call("detail:claims:suggest", { jobId: p8.jobId });
   call("detail:info:set", { jobId: p8.jobId, patch: { claims: { ...Object.fromEntries(Object.entries(sug8.items || {}).map(([k, v]) => [k, { on: false, text: v.text }])), sold_out_banner: { on: true, text: "누적 □차 완판", value: "3" }, rank_badge: { on: true, text: "수납 카테고리 □위", value: "" } } } }); // 순위 칸이 비어 있으면(□ 남음) 넣지 않는다
@@ -736,14 +736,14 @@ try {
   const e8 = await waitN(p8.jobId, 2);
   const d8 = det.jobDirOf(p8.jobId), res8 = JSON.parse(fs.readFileSync(path.join(d8, "result.json"), "utf8"));
   const loc8 = (res8.renders || []).find((x) => x.templateId === "localize"), card8 = (res8.renders || []).find((x) => x.templateId === "card");
-  assert(e8?.step === "done" && loc8 && card8 && loc8.slices.every((sl) => fs.existsSync(path.join(d8, sl.file))), `둘 다 → 렌더 탭 2개(${(res8.renders || []).map((x) => x.id).join(", ")})`);
+  assert(e8?.step === "done" && loc8 && !card8 && res8.renders.length === 1 && loc8.slices.every((sl) => fs.existsSync(path.join(d8, sl.file))), `기본 생성 → 원본 한글화만 1개(${(res8.renders || []).map((x) => x.id).join(", ")})`);
   { const pl8 = JSON.parse(fs.readFileSync(path.join(det.jobDirOf(p8.jobId), "plan.json"), "utf8")), cl8 = pl8.sections.filter((x) => x.claim || ["sold_out_banner", "rank_badge", "review_stat", "cert", "rnd_cost", "official_store", "trust_badges"].includes(x.type));
     assert(Object.keys(sug8.items || {}).length >= 5 && cl8.length === 1 && cl8[0].type === "sold_out_banner" && cl8[0].text === "누적 3차 완판" && !JSON.stringify(cl8).includes("□") && call("detail:info:get", { jobId: p8.jobId }).claims?.sold_out_banner?.on, `신뢰 배지: 예시 ${Object.keys(sug8.items || {}).length}개(${sug8.how}) · 켠 것 중 값 채운 1개만 plan 반영(${cl8.map((x) => x.type).join(",")}) · info.json 유지`); }
   call("detail:info:set", { jobId: p8.jobId, patch: { mode: "localize" } });
   call("detail:confirm", { jobId: p8.jobId });
   const e8b = await waitN(p8.jobId, 3);
   const res8b = JSON.parse(fs.readFileSync(path.join(d8, "result.json"), "utf8")), plan8b = JSON.parse(fs.readFileSync(path.join(d8, "plan.json"), "utf8"));
-  assert(e8b?.step === "done" && res8b.templateId === "localize" && plan8b.meta?.templateId === "localize" && plan8b.sections.some((x) => x.type === "image" || x.type === "hero"), `원본 한글화만 → ${res8b.current} · 섹션 ${plan8b.sections.length}개`);
+  assert(e8b?.step === "done" && res8b.templateId === "localize" && plan8b.meta?.templateId === "localize" && plan8b.sections.some((x) => x.type === "image" || x.type === "hero"), `원본 한글화 재실행 → ${res8b.current} · 섹션 ${plan8b.sections.length}개`);
   // ── 9) 한 번에 만들기(화면에서 시작: oneShot) — 1단계에서 멈추지 않고 같은 작업 번호로 완성까지 ──
   console.log("\n⑨ 한 번에 만들기");
   const p9 = await call("detail:importFolder", { dir: fd, oneShot: true });

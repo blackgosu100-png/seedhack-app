@@ -51,8 +51,8 @@
         <p class="dt-urlmsg" id="dtUrlMsg">그 사이트 화면에서 상품 정보를 읽어 옵니다. 로그인·인증이 뜨면 그 화면에서 넘겨 주세요.</p>
         <button id="dtPlanFirst" class="dt-planfirst" type="button" data-tip="만들기 전에 사진 선별·상품명·기획안을 먼저 보고 고친 뒤 만들어요">기획안 먼저 보고 만들기 ›</button>
         <div class="dt-pick" id="dtPick"><div class="dt-pick-empty">왼쪽에서 상품을 고르거나, <b>🇨🇳 1688 상품 화면</b> 오른쪽 위의 <b>📄 상세페이지 만들기</b> 버튼을 누르세요.</div></div>
-        <div class="dt-sec">템플릿</div>
-        <div class="dt-tpls" id="dtTpls"></div>
+        <div class="dt-sec" id="dtTplH" hidden>템플릿</div>
+        <div class="dt-tpls" id="dtTpls" hidden></div>
         <button id="dtGo" class="dt-go" type="button" disabled>▶ 딸깍 — 상세페이지 만들기</button>
         <button id="dtFolder" class="sec dt-folder" type="button" title="이미지 다운로더로 받은 폴더(main-·SKU-·detail- 파일)로 시작">📂 폴더로 만들기</button>
         <p class="dt-guide" id="dtGuide"></p>
@@ -167,8 +167,7 @@
     </section>
   </div>`;
 
-  const st = { rows: [], jobs: [], tpls: [], sel: null, tpl: "clean", mode: "setup", work: null, lastResult: null };
-  try { st.tpl = localStorage.getItem("detailTpl") || "clean"; } catch {}
+  const st = { rows: [], jobs: [], tpls: [], sel: null, tpl: "localize", mode: "setup", work: null, lastResult: null };
 
   // ---------- 왼쪽 목록 ----------
   const is1688 = (u) => /^https?:\/\/([\w-]+\.)*1688\.com\//.test(String(u || ""));
@@ -556,6 +555,7 @@
     if (r.qa) { const ang = r.brief ? String(r.brief.angle || r.brief.audience || "").trim() : ""; const qp = [r.qa.score != null ? `🤖 AI 검수 ${r.qa.score}/5` : "", r.qa.fixed != null ? `고친 것 ${r.qa.fixed}건` : "", r.qa.rounds != null ? `${r.qa.rounds}회차` : "", r.qa.remaining ? `남은 지적 ${r.qa.remaining}건: ${(r.qa.defects || []).slice(0, 2).map((d) => d.what).join(" / ")}` : "", ang ? `기획 "${ang}"` : ""].filter(Boolean); $("drHow").textContent = `${qp.join(" · ")} — ${$("drHow").textContent}`; $("drHow").className = "dt-rhow" + (r.qa.score >= 4 && !r.scene?.used ? "" : " warn"); }
     $("drSlices").innerHTML = (r.slicePaths || []).map((p, i) => `<figure><img src="${esc(fileUrl(p))}?t=${Date.now()}" alt="" loading="lazy"><figcaption>${esc(r.slices?.[i]?.file || "")} · ${r.slices?.[i]?.w || ""}×${r.slices?.[i]?.h || ""}</figcaption></figure>`).join("") || `<p class="dt-empty">이미지가 없습니다.</p>`;
     $("drTplPick").hidden = true;
+    $("drTpl").hidden = r.templateId === "localize" || (r.renders || []).find((x) => x.id === r.current)?.templateId === "localize";
     // 한 줄 요약(AI 검수 · 시간 · 확인할 것) — 누르면 검수 제안·단계별 시간·처리 내역 펼침
     const totalS = Math.round(((r.timings?.total) || r.durationMs || 0) / 1000);
     const lq = (r.renders || []).find((x) => x.id === r.current)?.locQa; // 원본 한글화 탭: 뒤 검수 결과를 맨 앞에
@@ -1040,9 +1040,10 @@
     const card = (x) => `<button type="button" class="dt-ivimg${x.excluded ? " off" : ""}" data-id="${esc(x.id)}" title="${esc(x.why || "")}"><img src="${esc(fileUrl(x.photo || x.path))}" alt="" loading="lazy">${x.excluded ? `<em>제외</em>` : ""}<small>${esc(x.id)}${x.label ? ` · ${esc(x.label)}` : ""}${x.score != null ? ` · ${x.score}점` : ""}${x.sameAs ? ` · 대표 ${esc(x.sameAs)}과 같음` : ""}</small><span class="dt-logo${x.logo ? " on" : ""}" role="button" tabindex="0" data-logo="${esc(x.id)}" data-tip="사진에 다른 브랜드 로고가 있으면 켜세요 — 주요 섹션에서 뺍니다">${x.logo ? "로고 있음" : "로고?"}</span></button>`;
     $("ivGallery").innerHTML = r.gallery.map(card).join("") || `<p class="dt-empty">대표 이미지가 없습니다.</p>`;
     const sku = r.sku || []; $("ivSkuH").hidden = !sku.length; $("ivSku").innerHTML = sku.map(card).join(""); $("ivSkuN").textContent = sku.length ? `${sku.length}장 — 옵션 사진(색상·규격)` : "";
-    // 만들기 방식(원본 한글화 · AI 장면 연출 · 둘 다) — 예상 비용·시간 따로
-    const MD = [["localize", "🈚 원본 한글화", "1688 원본 사진을 살리고 중국어만 한글로 · 빠름·저비용 · 실제 사진·크기 정확"], ["scene", "🎨 AI 장면 연출(v5)", "섹션마다 AI 장면 사진 + 짧은 카드 글 · 분위기·연출"], ["both", "✨ 둘 다", "렌더 탭 2개(원본 한글화 + AI 장면) — 비교해서 고르기"]];
-    $("ivModes").innerHTML = MD.filter(([id]) => !r.koSource || r.modes?.[id]).map(([id, name, desc]) => { const m = r.modes?.[id] || {}; return `<button type="button" class="dt-mode${(r.mode || "both") === id ? " on" : ""}" data-mode="${id}"><b>${name}</b><small>${desc}</small><em>약 $${(m.usd ?? 0).toFixed(2)} · 약 ${m.minutes ?? "?"}분</em></button>`; }).join("");
+    // 만들기 방식(중국 상품은 원본 한글화만 · 한국 상품은 AI 장면 연출)
+    const curMode = r.mode || (r.koSource ? "scene" : "localize");
+    const MD = [["localize", "🈚 원본 한글화", "원본 사진을 살리고 중국어만 한국어 상세페이지로 · 실제 사진·크기 정확"], ["scene", "🎨 AI 장면 연출(v5)", "섹션마다 AI 장면 사진 + 짧은 카드 글 · 분위기·연출"], ["both", "✨ 둘 다", "렌더 탭 2개(원본 한글화 + AI 장면) — 비교해서 고르기"]];
+    $("ivModes").innerHTML = MD.filter(([id]) => r.modes?.[id]).map(([id, name, desc]) => { const m = r.modes?.[id] || {}; return `<button type="button" class="dt-mode${curMode === id ? " on" : ""}" data-mode="${id}"><b>${name}</b><small>${desc}</small><em>약 $${(m.usd ?? 0).toFixed(2)} · 약 ${m.minutes ?? "?"}분</em></button>`; }).join("");
     $("ivDetail").innerHTML = r.detail.map(card).join("");
     $("ivDetailN").textContent = `${r.detail.filter((x) => !x.excluded).length}/${r.detail.length}장 사용`;
     const withText = [...r.gallery, ...r.detail].filter((x) => x.texts?.length);
@@ -1051,7 +1052,9 @@
     $("ivName").value = r.product_name_ko || "";
     $("ivBrief").value = r.brief_text || "";
     const tpls = st.tpls.length ? st.tpls : [];
-    if ((r.mode || "both") === "localize") $("ivTpls").innerHTML = `<p class="dt-ivnote">원본 한글화는 원본 이미지 그대로 — 테마 선택이 필요 없어요.</p>`;
+    const tplSec = $("ivTpls").closest("section");
+    if (tplSec) tplSec.hidden = curMode === "localize";
+    if (curMode === "localize") $("ivTpls").innerHTML = `<p class="dt-ivnote">원본 한글화 전용 — 원본 이미지 그대로 한국어로만 만듭니다.</p>`;
     else if (r.templateId === "card" && (r.themes || THEMES).length) { // 기본은 고른 한 장만(자동 추천) — "다른 디자인 고르기"를 펼치면 기본 테마 + 🧲 내 템플릿 + 가져오기, 내 템플릿이면 세부 조정·순서 토글
       const list = r.themes || THEMES, selId = r.templateRef || (r.theme === "custom" ? "" : r.theme) || "ivory", sel = list.find((t) => t.id === selId) || (r.theme === "custom" ? { id: "custom", name: "레퍼런스 자동 템플릿", desc: "폴더 레퍼런스에서 뽑은 손잡이", colors: ["#fff", "#eee", "#1c1f26"] } : list[0]);
       const mine = list.filter((t) => t.kind === "mine");
@@ -1069,8 +1072,8 @@
       ${sg.sectionConsistencyRules?.length ? `<details><summary>섹션 일관성 규칙 ${sg.sectionConsistencyRules.length}개</summary><ul>${sg.sectionConsistencyRules.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${sg.forbiddenProductUsageNote ? `<p class="warn">⚠ ${esc(sg.forbiddenProductUsageNote)}</p>` : ""}</details>` : ""}`;
     renderClaims();
     const e = r.estimate || {};
-    const mm = r.modes?.[r.mode || "both"];
-    $("ivEst").textContent = mm ? `${mm.label} · 예상 약 $${mm.usd.toFixed(2)} · 약 ${mm.minutes}분${(r.mode || "both") !== "localize" ? ` · ${e.sections || "?"}개 섹션${e.sceneOn ? " · AI 장면 사진 포함" : " · 장면 사진 없음(이미지 생성 키 없음)"}` : ""}` : `${e.sections || "?"}개 섹션 · 예상 약 $${(e.usd ?? 0).toFixed(2)} · 약 ${e.minutes || "?"}분`;
+    const mm = r.modes?.[curMode];
+    $("ivEst").textContent = mm ? `${mm.label} · 예상 약 $${mm.usd.toFixed(2)} · 약 ${mm.minutes}분${curMode !== "localize" ? ` · ${e.sections || "?"}개 섹션${e.sceneOn ? " · AI 장면 사진 포함" : " · 장면 사진 없음(이미지 생성 키 없음)"}` : ""}` : `${e.sections || "?"}개 섹션 · 예상 약 $${(e.usd ?? 0).toFixed(2)} · 약 ${e.minutes || "?"}분`;
     $("ivSub").textContent = `대표 ${r.gallery.filter((x) => !x.excluded).length}장 · 상세 ${r.detail.filter((x) => !x.excluded).length}장 · 텍스트 ${withText.length}개 — 확인하고 고친 뒤 생성하세요`;
   }
   // ⑦ 판매 실적·신뢰 배지(선택): 항목별 켜기 + 문구 + 숫자

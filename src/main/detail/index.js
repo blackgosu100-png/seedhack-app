@@ -277,16 +277,17 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const modes = { localize: { usd: Math.round((0.13 + nLoc * 0.4 * 0.039) * 100) / 100, minutes: Math.max(2, Math.ceil(nLoc / 8)), /* 실측(커피 랙 24장): 번역 $0.13 + 사진 위 글 AI 지우기 7장×$0.039, 약 3분 */ label: "원본 한글화" }, scene: { usd: Math.round(usd * 100) / 100, minutes, label: "AI 장면 연출" } };
     modes.both = { usd: Math.round((modes.localize.usd + modes.scene.usd) * 100) / 100, minutes: modes.scene.minutes + 1, label: "둘 다" };
     const tplSel = info.templateRef ? TPL.get(info.templateRef) : null; // 🧲 고른 내 템플릿(세부 조정 칩 포함)
-    const ko = src.lang === "ko"; // 한국 판매처: 원본 한글화·둘 다 없음 · 권리 확인(rightsOk) 전에는 생성하지 않음
+    const ko = src.lang === "ko"; // 한국 판매처: 원본 한글화 없음 · 중국 판매처: 원본 한글화만(다른 템플릿·AI 장면 연출 숨김)
     if (ko) { delete modes.localize; delete modes.both; }
-    return { ...info, claims: cleanClaims(info.claims), claimTypes: CLAIMS, mode: ko ? "scene" : info.mode || "both", modes, koSource: ko ? src.source : "", rightsOk: !!info.rightsOk, themes: themeList(), templateRef: tplSel ? tplSel.id : "", templateChips: tplSel ? overrideChips(tplSel) : null, refKeepExtra: !!info.refKeepExtra, dir, url: info.url || src.url || "", gallery: items.filter((x) => x.kind === "gallery" || x.kind === "main"), sku: items.filter((x) => x.kind === "option" || x.kind === "sku"), detail: items.filter((x) => !["gallery", "main", "option", "sku"].includes(x.kind)), templates: TEMPLATES, estimate: { sections, usd: Math.round(usd * 100) / 100, minutes, sceneOn } };
+    else { delete modes.scene; delete modes.both; }
+    return { ...info, claims: cleanClaims(info.claims), claimTypes: CLAIMS, mode: ko ? "scene" : info.mode || "localize", modes, koSource: ko ? src.source : "", rightsOk: !!info.rightsOk, themes: themeList(), templateRef: tplSel ? tplSel.id : "", templateChips: tplSel ? overrideChips(tplSel) : null, refKeepExtra: !!info.refKeepExtra, dir, url: info.url || src.url || "", gallery: items.filter((x) => x.kind === "gallery" || x.kind === "main"), sku: items.filter((x) => x.kind === "option" || x.kind === "sku"), detail: items.filter((x) => !["gallery", "main", "option", "sku"].includes(x.kind)), templates: TEMPLATES, estimate: { sections, usd: Math.round(usd * 100) / 100, minutes, sceneOn } };
   }
   function infoSet(id, patch) {
     const dir = jobDirOf(id); const info = readJson(path.join(dir, "info.json")); if (!info) return { error: "상품 정보가 아직 없습니다" };
     const out = { ...info };
     if (typeof patch.product_name_ko === "string") out.product_name_ko = patch.product_name_ko.slice(0, 80);
     if (typeof patch.brief_text === "string") out.brief_text = patch.brief_text.slice(0, 6000);
-    if (typeof patch.templateId === "string" && TEMPLATES.some((t) => t.id === patch.templateId)) out.templateId = patch.templateId;
+    if (typeof patch.templateId === "string" && TEMPLATES.some((t) => t.id === patch.templateId)) { out.templateId = patch.templateId; if (patch.templateId !== "localize" && !patch.mode && out.mode === "localize") out.mode = "scene"; }
     if (typeof patch.theme === "string" && THEMES.some((t) => t.id === patch.theme)) { out.theme = patch.theme; delete out.templateRef; } // 기본 테마를 고르면 내 템플릿 선택은 풀린다
     if (typeof patch.theme === "string" && isMine(patch.theme)) patch = { ...patch, templateRef: patch.theme }; // 테마 자리에 내 템플릿 id 가 와도 된다
     if (typeof patch.templateRef === "string") { if (patch.templateRef && isMine(patch.templateRef)) { out.templateRef = patch.templateRef; out.theme = "custom"; delete out.reference; } else if (!patch.templateRef) { delete out.templateRef; if (out.theme === "custom" && !out.reference) out.theme = "ivory"; } }
@@ -1288,7 +1289,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       const rec = job.recommend3?.templateId ? { templateId: job.recommend3.templateId, reason: job.recommend3.why || job.recommend3.reason || "" } : await makeRecommend(mods, ctx, styleGuide);
       const nextInfo = { ...prevInfo, jobId: job.jobId, url: src.url || "", product_name_ko: fresh.includes("brief") && prevInfo.product_name_ko ? prevInfo.product_name_ko : (prevInfo.product_name_ko || productNameOf(ctx)),
         brief_text: fresh.includes("brief") || !prevInfo.brief_text ? brief_text : prevInfo.brief_text, styleGuide: prevInfo.styleGuideEdited ? prevInfo.styleGuide : styleGuide,
-        templateId: prevInfo.templateId || (mods.planCore?.buildPlanV5 ? "card" : rec.templateId), mode: prevInfo.mode || (src.lang === "ko" ? "scene" : "both"), recommend: rec, excluded: prevInfo.excluded || [], included: prevInfo.included || [], texts: prevInfo.texts || {}, preparedAt: Date.now(), how: { brief: how.brief, vision: how.vision, cutout: how.cutout } };
+        templateId: prevInfo.templateId || (src.lang === "ko" ? (mods.planCore?.buildPlanV5 ? "card" : rec.templateId) : "localize"), mode: prevInfo.mode || (src.lang === "ko" ? "scene" : "localize"), recommend: rec, excluded: prevInfo.excluded || [], included: prevInfo.included || [], texts: prevInfo.texts || {}, preparedAt: Date.now(), how: { brief: how.brief, vision: how.vision, cutout: how.cutout } };
       writeJson(path.join(dir, "info.json"), nextInfo);
       const prevR = readJson(path.join(dir, "result.json")) || {};
       writeJson(path.join(dir, "result.json"), { ...prevR, jobId: job.jobId, status: prevR.renders?.length ? prevR.status || "done" : "prepared", prepared: true, title: job.title, url: src.url, templateId: nextInfo.templateId, createdAt: job.createdAt, preparedAt: Date.now(), prepareMs: Date.now() - t0, costUsd: prevR.renders?.length ? prevR.costUsd : job.costUsd ?? null, costs: job.costs, timings: Object.fromEntries(Object.entries(job.timings || {}).map(([k, v]) => [k, v.end - v.start])) });
@@ -2162,7 +2163,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const cn = getCnView?.();
     if (!cn || e.sender !== cn.webContents) return { error: "1688 상품 화면에서만 됩니다" };
     if (!raw || typeof raw !== "object") return { error: "상품 정보를 읽지 못했습니다" };
-    const r = start({ source: { ...raw, _raw: true }, templateId: raw.templateId || (store.get("settings") || {}).detailTemplate || "clean", phase: "prepare", auto: !planFirstNext, readMs: pageReadT0 && Date.now() - pageReadT0 < 180000 ? Date.now() - pageReadT0 : 0 });
+    const r = start({ source: { ...raw, _raw: true }, templateId: "localize", phase: "prepare", auto: !planFirstNext, readMs: pageReadT0 && Date.now() - pageReadT0 < 180000 ? Date.now() - pageReadT0 : 0 });
     planFirstNext = false; pageReadT0 = 0;
     if (r.error) return r;
     if (showDetail) showDetail(); else send("nav", { tab: "detail", url: "📄 상세페이지" });
@@ -2278,7 +2279,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     const r = await new Promise((res) => {
       const t = setTimeout(() => res({ error: tb ? `${SITE_NAME[rt.site]} 화면에서 상품 정보를 읽지 못했습니다(시간 초과) — 1688 탭에 상품 화면이 떠 있는지 확인하고 오른쪽 위 📄 버튼을 눌러 주세요` : "1688 화면에서 상품 정보를 읽지 못했습니다(시간 초과) — 1688 탭에서 상품 화면이 맞는지 확인하고 📄 버튼을 눌러 주세요" }), tb ? 75000 : 45000);
       pageReadWaiter = (v) => { clearTimeout(t); res(v); };
-      wc.send("detail:readPage", { templateId: TEMPLATES.some((t) => t.id === p.templateId) ? p.templateId : (store.get("settings") || {}).detailTemplate || "clean", rowId: p.rowId ?? null, ...(tb ? { site: rt.site } : {}) });
+      wc.send("detail:readPage", { templateId: "localize", rowId: p.rowId ?? null, ...(tb ? { site: rt.site } : {}) });
     });
     pageReadWaiter = null;
     if (tb && /상품 화면이 아닙니다/.test(r?.error || "")) r.error = `${SITE_NAME[rt.site]} 상품 화면이 아닙니다 — 타오바오 탭에서 로그인·인증을 넘긴 뒤 다시 눌러 주세요`;
@@ -2313,7 +2314,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     try { const fn = ex?.importFolder || core?.importFolder; if (fn) { source = await fn(folder, { log: (t) => log("dim", `  📂 ${t}`), kinds: "v1" }); if (source?.error) { log("warn", `△ 📄 ${source.error}`); source = null; } } } catch (e) { log("warn", `△ 📄 폴더 가져오기(A1) 실패 → 자체 읽기 (${e?.message || e})`); }
     if (!source) source = importFolderLite(folder);
     if (!source || !((source.gallery || []).length + (source.detailImages || []).length)) return { error: "폴더에서 상품 이미지(main-·SKU-·detail-)를 찾지 못했습니다" };
-    return start({ source: { ...source, rowId: p.rowId ?? null }, templateId: "card", phase: "prepare", auto: !!p.oneShot });
+    return start({ source: { ...source, rowId: p.rowId ?? null }, templateId: "localize", phase: "prepare", auto: !!p.oneShot });
   });
   ipcMain.handle("detail:info:get", (_e, p = {}) => infoGet(String(p.jobId || "")));
   ipcMain.handle("detail:info:set", (_e, p = {}) => infoSet(String(p.jobId || ""), p.patch || {}));
