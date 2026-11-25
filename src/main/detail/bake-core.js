@@ -11,26 +11,48 @@ const bigrams = (s) => { const a = Array.from(s), o = new Set(); for (let i = 0;
 // 기대 문구가 읽은 글 안에 있는지(글자 쌍 겹침 비율) — OCR 은 띄어쓰기·한두 글자를 틀리므로 느슨하게
 export function textHit(expect, seen) { const e = bigrams(norm(expect)); if (!e.size) return 1; const sset = bigrams(norm(seen)); let h = 0; for (const b of e) if (sset.has(b)) h++; return h / e.size; }
 
-// layers: [{ zh, ko, drop, role }] → 지시문. 바꿀 글·지울 글을 표로 준다(모델이 문구를 지어내지 않게)
+// 글꼴 프리셋(미리보기 더블클릭 즉시 편집 · AI 다시 그리기 공용)
+export const FONT_PRESETS = [
+  { id: "gothic", label: "기본 고딕", css: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', prompt: "깔끔한 고딕체" },
+  { id: "bold", label: "굵은 타이틀", css: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', prompt: "힘 있고 두꺼운 제목 고딕체" },
+  { id: "serif", label: "명조", css: '"AppleMyungjo", "Batang", "Noto Serif KR", Georgia, serif', prompt: "단정한 명조체(세리프)" },
+  { id: "round", label: "둥근 고딕", css: '"NanumSquareRound", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', prompt: "부드러운 둥근 고딕체" },
+  { id: "mono", label: "숫자·스펙", css: 'ui-monospace, "SF Mono", "Consolas", "Pretendard Variable", monospace', prompt: "정갈한 숫자·스펙용 고딕체" },
+];
+const fontPromptOf = (id) => FONT_PRESETS.find((f) => f.id === id)?.prompt || "";
+
+// layers: [{ zh, ko, drop, role, style? }] → 지시문. 바꿀 글·지울 글을 표로 준다(모델이 문구를 지어내지 않게)
 export function bakePrompt(layers = [], { retry = null } = {}) {
   const keep = layers.filter((l) => S(l.zh) && !l.drop && S(l.ko)), drop = layers.filter((l) => S(l.zh) && (l.drop || !S(l.ko)));
+  const styleHint = (l) => {
+    const st = l.style || {}, hints = [];
+    if (st.color) hints.push(`글자색 ${st.color}`);
+    if (st.font && fontPromptOf(st.font)) hints.push(`글꼴 ${fontPromptOf(st.font)}`);
+    if (st.weight >= 700) hints.push("굵게");
+    else if (st.weight && st.weight <= 400) hints.push("보통 굵기");
+    if (st.size) hints.push(`글자 크기 약 ${Math.round(st.size)}px 비율`);
+    if (st.align === "left") hints.push("왼쪽 맞춤");
+    else if (st.align === "center") hints.push("가운데 맞춤");
+    else if (st.align === "right") hints.push("오른쪽 맞춤");
+    return hints.length ? ` [사용자 지정 스타일: ${hints.join(", ")}]` : "";
+  };
   const L = [
     "이 상품 상세 이미지의 중국어 글자를 한국어로 바꿔 다시 그려 주세요.",
     "",
     "지킬 것",
     "- 글자만 바꿉니다. 제품·사진·배경·도형·아이콘·구도·이미지 비율은 원본 그대로.",
-    "- 글자 색은 원본 그 자리의 글자 색과 똑같이(빨간 강조는 빨강, 회색 글은 회색, 흰 글은 흰색 — 검정으로 바꾸지 않습니다). 굵기·정렬·위계도 원본을 따릅니다.",
+    "- 글자 색은 원본 그 자리의 글자 색과 똑같이(빨간 강조는 빨강, 회색 글은 회색, 흰 글은 흰색 — 검정으로 바꾸지 않습니다). 단, [사용자 지정 스타일]이 적힌 줄은 그 색·글꼴·굵기·크기를 우선 따릅니다.",
     "- 같은 문단·같은 표·같은 줄의 항목들은 한 글자 크기로 가지런히. 글이 도형·칸·그림 밖으로 넘치지 않게, 넘칠 것 같으면 그 묶음 전체를 조금 줄입니다.",
-    "- 「 」 안의 글자만 그립니다. 「 」 기호, '1째 줄:' 같은 안내 말, 괄호 속 설명은 그리지 않습니다.",
+    "- 「 」 안의 글자만 그립니다. 「 」 기호, '1째 줄:' 같은 안내 말, 괄호·대괄호 속 설명은 그리지 않습니다.",
     "- 아래 표의 한국어 문구를 **그대로** 씁니다(뜻을 바꾸거나 덧붙이지 않습니다). 숫자·단위·영문 모델명은 그대로.",
     "- 표에 없는 중국어가 보이면 짧고 자연스러운 한국 쇼핑몰 말로 옮깁니다. 영문·숫자만 있는 글은 건드리지 않습니다.",
     "- 원본에 없는 문구·로고·가격·배지를 새로 넣지 않습니다. 한글 맞춤법을 정확히. 중국어가 한 글자도 남지 않게.",
     "",
     "바꿀 글 (원문 → 한국어)",
     ...keep.flatMap((l) => { // 여러 줄 문구는 줄마다 따로 적는다(줄바꿈 기호를 쓰면 그 기호를 글자로 그린다 — 2026-11-23 실측: " / "·"⏎" 모두 그려짐)
-      const ls = S(l.ko).split("\n").map(S).filter(Boolean), zh = S(l.zh).replace(/\n/g, " "), same = "글자 굵기·크기·색은 원본 그 자리 글과 같게(가는 글은 가늘게, 검은 글은 검게)";
-      if (ls.length < 2) return [`- 「${zh}」 → 「${ls[0] || ""}」${l.block ? ` (${same})` : ""}`];
-      return [`- 「${zh}」 → 아래 ${ls.length}줄로 나눠 씁니다${l.head ? " (첫째 줄만 굵은 소제목, 나머지는 원본 본문과 같은 굵기·크기·색)" : ` (${same})`}${(l.block || []).length > 1 ? " · 원문 묶음이 있던 자리에 가지런히 두고 남는 자리는 여백으로" : ""}`, ...ls.map((t, k) => `    ${k + 1}째 줄: 「${t}」`)];
+      const ls = S(l.ko).split("\n").map(S).filter(Boolean), zh = S(l.zh).replace(/\n/g, " "), same = "글자 굵기·크기·색은 원본 그 자리 글과 같게(가는 글은 가늘게, 검은 글은 검게)", sh = styleHint(l);
+      if (ls.length < 2) return [`- 「${zh}」 → 「${ls[0] || ""}」${l.block ? ` (${same})` : ""}${sh}`];
+      return [`- 「${zh}」 → 아래 ${ls.length}줄로 나눠 씁니다${l.head ? " (첫째 줄만 굵은 소제목, 나머지는 원본 본문과 같은 굵기·크기·색)" : ` (${same})`}${(l.block || []).length > 1 ? " · 원문 묶음이 있던 자리에 가지런히 두고 남는 자리는 여백으로" : ""}${sh}`, ...ls.map((t, k) => `    ${k + 1}째 줄: 「${t}」`)];
     }),
   ];
   if (drop.length) L.push("", "지울 글 (글자를 없애고 그 자리는 주변 바탕색·무늬로 자연스럽게 메웁니다. 글이 든 알약·배지 도형도 함께 지웁니다)", ...drop.map((l) => `- 「${S(l.zh).replace(/\n/g, " ")}」`));
@@ -131,4 +153,171 @@ export function applyEdit(layers = [], blocks = [], { banned = () => [] } = {}) 
   }
   const out = []; layers.forEach((l, i) => { if (merged.has(i)) out.push(merged.get(i)); else if (!taken.has(i)) out.push(l); });
   return { layers: out, used, rejected };
+}
+
+// ---------- 👁 구글 비전 카피(2026-11-24): 원본 그림을 직접 보고 한국 브랜드 상세페이지 톤으로 문구표 생성 ----------
+//  줄 단위 번역·장 단위 편집(그림 안 봄)을 대신한다. 범용 구조·문체 규칙만 두고 상품별 낱말 예시는 넣지 않는다.
+export const VISION_COPY_SYSTEM = `당신은 한국 대형 이커머스 상위 브랜드의 상세페이지 카피라이터입니다.
+첨부한 중국 쇼핑몰 상세페이지 이미지를 직접 보고, 이미지 안의 중국어 문구를 한국 브랜드 상세페이지에 어울리는 **담백하고 정돈된 카피**로 다시 씁니다.
+
+[핵심 문체 규칙]
+1. 설명조·구어체·홈쇼핑 멘트를 쓰지 않습니다.
+   - 제목·부제·라벨에 서술형·권유형 어미("~하세요", "~해보세요", "~진짜죠", "~좋습니다", "~됩니다", "~해야 함")를 쓰지 않습니다.
+   - 느낌표(!), 물결(~), 말줄임, 의성어·의태어, 과장 수식어(완벽, 최고, 1위, 100%, 무조건 등)를 쓰지 않습니다.
+2. 딱딱한 한자어·보고서/매뉴얼식 명사 나열을 피합니다.
+   - "~을 이용한 OO XX" 같은 문어체·기술보고서 말투 대신, 한국 쇼핑몰 구매자가 평소 읽고 검색하는 **쉽고 자연스러운 일상어**로 씁니다.
+   - 직역투·낯선 외래어 대신 한국에서 실제 통용되는 쉬운 표현을 고릅니다.
+3. 역할별 길이와 호흡:
+   - 큰 제목(title): 핵심 이점·특징 한 가지만 담아 **명사형** 또는 **부사형("~하게", "~있게", "~없이", "~까지")** 으로 짧게 끊습니다(한 줄 12자 안팎, 필요 시 2줄).
+   - 부제(sub): 대상·용도·핵심 스펙을 간결하게 적습니다(한 줄 18자 이내, 나열은 가운뎃점 "·" 사용, 슬래시·세로줄 금지).
+   - 사진 위 라벨·비교 항목(label): 짧고 쉬운 표현으로 통일합니다(2~5단어).
+   - 표 칸(table): 원문 항목·수치를 정확히 살린 짧은 명사형으로 적습니다. 같은 뜻의 단어를 중복 나열하지 않습니다.
+   - 긴 안내·팁 박스(body): 2문장 이상 긴 설명이 있는 박스만 예외적으로 **첫 줄 짧은 소제목(명사구, head=true) + 담백한 존댓말("~합니다 / ~할 수 있습니다") 2~3줄**로 군말 없이 압축합니다.
+4. 원문 자리 존중: 중국어 특유의 감탄·반복·자랑 군말은 과감히 덜어내고, 글이 원본 자리를 넘겨 사진이나 도형을 덮지 않게 짧게 맞춥니다.
+5. 사실 유지: 숫자·단위·영문 모델명·규격은 원문 그대로 정확히 유지합니다. 원문에 없는 수치·기능·효능·인증·보증은 지어내지 않습니다(중국 무게 단위 斤만 1斤=0.5kg 으로 환산 허용).
+6. 제외 규칙:
+   - 판매자 홍보, 사은품·리뷰 이벤트, 가격·할인·배송·환불 약속, 구매자 후기, 다른 상품 추천, 판매자 공지 문구는 drop=true 로 두고 ko 를 비웁니다.
+   - 이미지 전체가 사은품·리뷰 이벤트, 가격 설명, 판매 정책, 판매자 공지, 후기 모음, 다른 상품 목록이면 promo=true 로 표시하고 promo_reason 에 사유를 적습니다.
+7. 한자는 한 글자도 남기지 않습니다. ko 의 줄바꿈은 \\n 으로 적습니다.
+8. 항목마다 원문 뜻을 그대로 옮긴 직역(literal)도 함께 적어, 사용자가 "원문 → 직역 → 의역(ko)" 과정을 확인할 수 있게 합니다.
+응답은 JSON 만.`;
+
+export const VISION_COPY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["promo", "promo_reason", "items"],
+  properties: {
+    promo: { type: "boolean" },
+    promo_reason: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["zh", "literal", "ko", "role", "head", "drop"],
+        properties: {
+          zh: { type: "string" },
+          literal: { type: "string" },
+          ko: { type: "string" },
+          role: { type: "string", enum: ["title", "sub", "body", "label", "table"] },
+          head: { type: "boolean" },
+          drop: { type: "boolean" },
+        },
+      },
+    },
+  },
+};
+
+export function renderVisionCopyInput({ brief = null } = {}) {
+  const L = [];
+  if (brief) {
+    const bits = [S(brief.product_name_ko), S(brief.product_type), S(brief.key_appeal).slice(0, 140)].filter(Boolean);
+    if (bits.length) L.push(`[상품 정보] ${bits.join(" · ")}`, "");
+  }
+  L.push("첨부한 상세페이지 이미지의 중국어 문구를 한국 브랜드 상세페이지 카피로 바꿔 JSON 으로 답해 주세요.");
+  return L.join("\n");
+}
+
+// 중국 斤 단위 환산 숫자 허용(예: 600斤 → 300)
+function allowedNumbersFrom(texts = []) {
+  const set = new Set();
+  for (const t of texts) {
+    const s = String(t || "");
+    for (const n of digits(s)) set.add(n);
+    for (const m of s.matchAll(/(\d+(?:\.\d+)?)\s*斤/g)) {
+      const half = Math.round(Number(m[1]) * 0.5 * 10) / 10;
+      if (Number.isFinite(half)) set.add(String(half));
+    }
+    if (/百斤/.test(s)) set.add("50");
+    if (/千斤/.test(s)) set.add("500");
+  }
+  return set;
+}
+
+// 비전 카피 결과 정화·검증: 한자·금지어·지어낸 숫자·과한 문장부호를 거른다 → { ok, promo, promo_reason, layers, rejected }
+export function sanitizeVisionCopy(res = null, { ocrLayers = [], banned = () => [] } = {}) {
+  if (!res || typeof res !== "object") return { ok: false, promo: false, promo_reason: "", layers: [], rejected: ["응답 없음"] };
+  const promo = !!res.promo;
+  const promo_reason = S(res.promo_reason).slice(0, 120);
+  const rawItems = Array.isArray(res.items) ? res.items : [];
+  if (promo) return { ok: true, promo: true, promo_reason: promo_reason || "홍보·정책·안내 이미지", layers: [], rejected: [] };
+  const poolNums = allowedNumbersFrom([
+    ...rawItems.map((x) => x?.zh),
+    ...(ocrLayers || []).flatMap((l) => [l?.zh, l?.ko]),
+  ]);
+  const layers = [], rejected = [];
+  for (const it of rawItems) {
+    const zh = String(it?.zh || "").split("\n").map(S).filter(Boolean).join("\n");
+    if (!zh) continue;
+    const literal = String(it?.literal || "").split("\n").map(S).filter(Boolean).join("\n");
+    const role = ["title", "sub", "body", "label", "table"].includes(it?.role) ? it.role : "body";
+    if (it?.drop || !S(it?.ko)) {
+      layers.push({ zh, literal, ko: "", drop: true, role, head: false });
+      continue;
+    }
+    let ko = String(it.ko || "").split("\n").map(S).filter(Boolean).join("\n");
+    // 나열 기호(/ |)를 가운뎃점으로 정리(숫자/숫자 비율은 유지)
+    ko = ko.split("\n").map((ln) => ln.replace(/(?<![\dA-Za-z])\s*[\/|｜]\s*(?![\dA-Za-z])/g, ln.includes("·") ? ", " : " · ")).join("\n");
+    // 제목·부제·라벨·표 끝의 느낌표/물결 제거(담백한 톤 유지)
+    if (role !== "body") ko = ko.split("\n").map((ln) => ln.replace(/[!~～]+$/g, "").trim()).filter(Boolean).join("\n");
+    else ko = ko.replace(/!+/g, "");
+    if (!ko) { layers.push({ zh, literal, ko: "", drop: true, role, head: false }); continue; }
+    if (hanCount(ko)) { rejected.push(`${zh.slice(0, 10)}: 한자 남음`); continue; }
+    const bad = banned(ko);
+    if (bad && bad.length) { rejected.push(`${zh.slice(0, 10)}: 금지 문구(${[].concat(bad).slice(0, 2).join(",")})`); continue; }
+    const itemNums = allowedNumbersFrom([zh]);
+    const invented = numTokens(ko).filter((n) => !itemNums.has(n) && !poolNums.has(n));
+    if (invented.length) { rejected.push(`${zh.slice(0, 10)}: 없던 숫자(${invented.join(",")})`); continue; }
+    layers.push({ zh, literal, ko, ko_ai: ko, drop: false, role, head: !!it.head && ko.includes("\n") });
+  }
+  const hasUsable = layers.some((l) => !l.drop && S(l.ko)) || (layers.length > 0 && rawItems.every((x) => x?.drop || !S(x?.ko)));
+  return { ok: hasUsable, promo: false, promo_reason: "", layers, rejected };
+}
+
+// 통째로 그린 그림의 OCR 상자(seenBoxes) 또는 원본 OCR 상자(origBoxes)에서 각 레이어의 위치(box: {x,y,w,h})를 찾아 붙인다.
+//  미리보기 더블클릭 즉시 편집 시 정확한 위치에 편집창을 띄우고, 그 자리만 빠르게 지워 새 글자를 얹기 위함.
+export function matchBakeBoxes(layers = [], { seenBoxes = [], origBoxes = [], w0 = 0, h0 = 0, w1 = 0, h1 = 0 } = {}) {
+  const valid = (b) => b && Number.isFinite(b.x) && Number.isFinite(b.y) && b.w > 0 && b.h > 0 && S(b.text);
+  const seen = (seenBoxes || []).filter(valid);
+  const sx = w0 > 0 && w1 > 0 ? w1 / w0 : 1, sy = h0 > 0 && h1 > 0 ? h1 / h0 : 1;
+  const orig = (origBoxes || []).filter(valid).map((b) => ({ ...b, x: Math.round(b.x * sx), y: Math.round(b.y * sy), w: Math.round(b.w * sx), h: Math.round(b.h * sy) }));
+  const union = (arr) => {
+    const x0 = Math.min(...arr.map((b) => b.x)), y0 = Math.min(...arr.map((b) => b.y));
+    const x1 = Math.max(...arr.map((b) => b.x + b.w)), y1 = Math.max(...arr.map((b) => b.y + b.h));
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.max(1, Math.round(x1 - x0)), h: Math.max(1, Math.round(y1 - y0)) };
+  };
+  const matchIn = (text, pool, used) => {
+    const lines = String(text || "").split("\n").map(S).filter(Boolean);
+    if (!lines.length || !pool.length) return null;
+    const picked = [];
+    for (const ln of lines) {
+      const k = norm(ln);
+      if (!k) continue;
+      let best = null, bestScore = 0;
+      for (const b of pool) {
+        if (used.has(b)) continue;
+        const bt = norm(b.text);
+        if (!bt) continue;
+        const sc = bt === k ? 1 : (bt.includes(k) || k.includes(bt)) ? Math.min(k.length, bt.length) / Math.max(k.length, bt.length) * 0.95 : Math.max(textHit(ln, b.text), textHit(b.text, ln) * 0.9);
+        if (sc > bestScore) { bestScore = sc; best = b; }
+      }
+      if (best && bestScore >= 0.42) { picked.push(best); used.add(best); }
+    }
+    if (picked.length) return union(picked);
+    // 한 줄에 여러 OCR 상자가 쪼개져 들어간 경우(예: "대형 투입구" + "업소용")
+    const full = norm(lines.join(""));
+    const subs = pool.filter((b) => !used.has(b) && norm(b.text).length >= 2 && full.includes(norm(b.text)));
+    if (subs.length) {
+      subs.forEach((b) => used.add(b));
+      return union(subs);
+    }
+    return null;
+  };
+  const usedSeen = new Set(), usedOrig = new Set();
+  return (layers || []).map((l) => {
+    if (!l || l.drop) return l;
+    if (l.box && l.box.w > 0 && l.box.h > 0) return l;
+    const box = matchIn(l.ko, seen, usedSeen) || matchIn(l.zh, orig, usedOrig);
+    return box ? { ...l, box } : l;
+  });
 }

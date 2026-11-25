@@ -5,39 +5,76 @@
 // 기록: <작업>/.loc-edit/<렌더 id>/history.json { stack:{ id:[{ kind, sec, img?, index? }] }, removed:[{ id, name }] }
 import fs from "node:fs";
 import path from "node:path";
-import { runLocQa, measurePage } from "./loc-qa.js";
 import { fixPlan, norm } from "./loc-qa-core.js";
 
 const noop = () => {};
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return null; } };
 const MAX_HIST = 20;
-export const ACTIONS = ["autofix", "drop", "plain", "tidy", "text", "request", "undo"];
+export const ACTIONS = ["autofix", "drop", "plain", "tidy", "text", "rebake", "request", "undo"];
 const ALIGN = ["left", "center", "right"];
+const FONTS = ["gothic", "bold", "serif", "round", "mono"];
+const HEX = /^#[0-9a-f]{6}$/i;
 
 export const histDirOf = (dir, rid) => path.join(dir, ".loc-edit", rid);
 export function loadHist(dir, rid) { return readJson(path.join(histDirOf(dir, rid), "history.json")) || { stack: {}, removed: [] }; }
 function saveHist(dir, rid, H) { const d = histDirOf(dir, rid); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, "history.json"), JSON.stringify(H)); }
 
-// 화면에 줄 목록: plan 레이어(뺀 줄 포함 — 다시 살릴 수 있게) · 지금 크기·굵기·정렬
-const sizeOf = (l) => Math.round(Number(l?.style?.size ?? l?.style?.fontSizePx) || (Number(l?.h) || 0) * 0.78);
+// 화면에 줄 목록: plan 레이어(뺀 줄 포함 — 다시 살릴 수 있게) · 원문/직역/의역 + 색·크기·폰트·굵기·정렬·위치
+const sizeOf = (l) => Math.round(Number(l?.style?.size ?? l?.style?.fontSizePx) || (Number(l?.box?.h ?? l?.h) || 32) * 0.78);
 export function sectionView(plan, id, H = { stack: {}, removed: [] }) {
   const sec = (plan.sections || []).find((x) => x.id === id);
   if (!sec) return null;
-  if (sec.type === "image" && sec.bake?.layers?.length) return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, baked: true, canUndo: !!(H.stack[id] || []).length, removed: H.removed || [],
-    layers: sec.bake.layers.map((l, i) => ({ i, ko: String(l.ko || ""), role: l.role || "", baked: true, drop: !!l.drop, head: !!l.head })).filter((l) => l.ko.trim()) };
-  const layers = sec.type === "image" ? (sec.layers || []).map((l, i) => ({ i, ko: String(l.ko || ""), role: l.role || "", size: sizeOf(l), weight: Number(l.style?.weight ?? l.style?.fontWeight) || (l.role === "title" ? 700 : 400), align: l.style?.align || "", drop: !!l.drop, plain: !!l.qaPlain, shape: l.shape ? (l.shape.circle ? "원" : l.shape.round || l.shape.pill ? "알약" : "칸") : "" }))
-    .filter((l) => l.ko.trim() && !["number", "dims", "price", "logo"].includes(l.role)) : [];
-  return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, layers, canUndo: !!(H.stack[id] || []).length, removed: H.removed || [] };
+  if (sec.type === "image" && sec.bake?.layers?.length) {
+    const layers = sec.bake.layers.map((l, i) => ({
+      i,
+      zh: String(l.zh || ""),
+      literal: String(l.literal || l.mt || ""),
+      ko_ai: String(l.ko_ai || l.ko || ""),
+      ko: String(l.ko || ""),
+      role: l.role || "",
+      baked: true,
+      drop: !!l.drop,
+      head: !!l.head,
+      edited: !!l.edited,
+      box: l.box && l.box.w > 0 && l.box.h > 0 ? l.box : null,
+      size: sizeOf(l),
+      weight: Number(l.style?.weight ?? l.style?.fontWeight) || (l.role === "title" ? 700 : 400),
+      color: HEX.test(String(l.style?.color || "")) ? String(l.style.color) : "#222222",
+      font: FONTS.includes(l.style?.font) ? l.style.font : (l.role === "title" ? "bold" : "gothic"),
+      align: ALIGN.includes(l.style?.align) ? l.style.align : (l.role === "title" ? "center" : "left"),
+    })).filter((l) => l.ko.trim() || l.zh.trim());
+    return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, ih: sec.ih || null, baked: true, hasPatched: layers.some((l) => l.edited), canUndo: !!(H.stack[id] || []).length, removed: H.removed || [], layers };
+  }
+  const layers = sec.type === "image" ? (sec.layers || []).map((l, i) => ({
+    i,
+    zh: String(l.zh || ""),
+    literal: String(l.literal || l.mt || ""),
+    ko_ai: String(l.ko_ai || l.ko_before || l.ko || ""),
+    ko: String(l.ko || ""),
+    role: l.role || "",
+    box: Number.isFinite(l.x) && Number.isFinite(l.y) && l.w > 0 && l.h > 0 ? { x: l.x, y: l.y, w: l.w, h: l.h } : null,
+    size: sizeOf(l),
+    weight: Number(l.style?.weight ?? l.style?.fontWeight) || (l.role === "title" ? 700 : 400),
+    color: HEX.test(String(l.style?.color || "")) ? String(l.style.color) : "#222222",
+    font: FONTS.includes(l.style?.font) ? l.style.font : (l.role === "title" ? "bold" : "gothic"),
+    align: l.style?.align || "",
+    drop: !!l.drop,
+    plain: !!l.qaPlain,
+    shape: l.shape ? (l.shape.circle ? "원" : l.shape.round || l.shape.pill ? "알약" : "칸") : "",
+  })).filter((l) => (l.ko.trim() || l.zh.trim()) && !["number", "dims", "price", "logo"].includes(l.role)) : [];
+  return { id, type: sec.type, image: sec.image || null, iw: sec.iw || null, ih: sec.ih || null, layers, canUndo: !!(H.stack[id] || []).length, removed: H.removed || [] };
 }
 
-// 문구 고치기 한 줄 적용(AI 0) — 값은 안전한 범위로
-function applyPatch(l, p) {
+// 문구·스타일 고치기 한 줄 적용(AI 0) — 값은 안전한 범위로
+export function applyPatch(l, p) {
   if (!l || !p) return false;
   let ch = false; const st = { ...(l.style || {}) };
-  if (typeof p.ko === "string") { const ko = p.ko.replace(/\s+$/g, "").slice(0, 120); if (ko && ko !== l.ko) { l.ko_before ??= l.ko; l.ko = ko; ch = true; } }
-  if (p.size != null && isFinite(p.size)) { const v = Math.max(8, Math.min(160, Math.round(Number(p.size) * 10) / 10)); if (v !== sizeOf(l)) { st.size = v; ch = true; } }
-  if (p.weight != null) { const v = [400, 500, 700, 800].includes(Number(p.weight)) ? Number(p.weight) : null; if (v) { st.weight = v; ch = true; } }
-  if (ALIGN.includes(p.align)) { st.align = p.align; ch = true; }
+  if (typeof p.ko === "string") { const ko = p.ko.replace(/[ \t]+$/gm, "").trim().slice(0, 200); if (ko && ko !== l.ko) { l.ko_before ??= l.ko; l.ko = ko; ch = true; } }
+  if (p.size != null && isFinite(p.size)) { const v = Math.max(8, Math.min(200, Math.round(Number(p.size) * 10) / 10)); if (v !== sizeOf(l)) { st.size = v; st.userEdit = true; ch = true; } }
+  if (p.weight != null) { const v = [400, 500, 700, 800].includes(Number(p.weight)) ? Number(p.weight) : null; if (v && v !== Number(st.weight)) { st.weight = v; st.userEdit = true; ch = true; } }
+  if (typeof p.color === "string" && HEX.test(p.color.trim())) { const c = p.color.trim().toLowerCase(); if (c !== String(st.color || "").toLowerCase()) { st.color = c; st.userColor = true; st.userEdit = true; ch = true; } }
+  if (typeof p.font === "string" && FONTS.includes(p.font)) { if (p.font !== st.font) { st.font = p.font; st.userEdit = true; ch = true; } }
+  if (ALIGN.includes(p.align)) { if (p.align !== st.align) { st.align = p.align; st.userEdit = true; ch = true; } }
   if (p.dx || p.dy) { const dx = Math.max(-300, Math.min(300, Number(p.dx) || 0)), dy = Math.max(-300, Math.min(300, Number(p.dy) || 0)); l.x += dx; l.y += dy; if (l.textBox) l.textBox = { ...l.textBox, x: l.textBox.x + dx, y: l.textBox.y + dy }; ch = true; }
   if (typeof p.drop === "boolean" && p.drop !== !!l.drop) { l.drop = p.drop; if (!p.drop) delete l.qaPlain; ch = true; }
   if (ch) l.style = st;
@@ -56,6 +93,7 @@ const REQ_SCHEMA = { type: "object", additionalProperties: false, required: ["pa
  * → { section(그 장 새 검수 결과 | null=뺌), tops(장마다 새 y), rendered, costUsd, ms, note, removed, canUndo }
  */
 export async function locEdit(ctx) {
+  const { runLocQa, measurePage } = await import("./loc-qa.js");
   const { dir, renderId, plan, action, sectionId: id, payload = {} } = ctx;
   const log = ctx.log || noop, say = ctx.progress || noop, t0 = Date.now();
   if (!ACTIONS.includes(action)) throw new Error("모르는 고치기입니다");
@@ -84,15 +122,40 @@ export async function locEdit(ctx) {
     note = "이 장을 뺐어요"; recheck = false;
   } else {
     const baked = !!sec.bake?.layers?.length;
-    if (baked && !["text"].includes(action)) throw new Error("이 장은 이미지 AI 가 통째로 그린 장이에요 — 아래 '글 고치기'에서 문구를 고치면 이 장만 다시 그려요");
+    if (baked && !["text", "rebake"].includes(action)) throw new Error("이 장은 이미지 AI 가 통째로 그린 장이에요 — 글자를 더블클릭하거나 오른쪽에서 바로 고칠 수 있어요");
     push({ kind: action, sec: JSON.stringify(sec), img: baked || ["plain", "autofix", "request"].includes(action) ? keepImg() : null, prevAi: prevAi[id] ?? null });
-    if (baked) { // 문구(·빼기)만 고친다 → 그 장만 다시 그리기. 실패하면 문구표를 되돌린다
-      let n = 0; for (const p of payload.layers || []) { const l = sec.bake.layers[p.i]; if (!l) continue; if (typeof p.ko === "string") { const ko = p.ko.replace(/[ \t]+$/gm, "").trim().slice(0, 200); if (ko && ko !== l.ko) { l.ko = ko; l.edited = true; n++; } } if (typeof p.drop === "boolean" && p.drop !== !!l.drop) { l.drop = p.drop; n++; } }
-      if (!n) { (H.stack[id] || []).pop(); throw new Error("바뀐 줄이 없어요"); }
+    if (baked && action === "text") {
+      // 방법 2(즉시 반영 · 0초): 수정한 줄의 자리만 바탕색으로 빠르게 지우고 지정한 내용·색상·크기·폰트로 즉시 얹는다.
+      // 좌표(box)가 없는 예전 작업은 AI 다시 그리기로 자연스럽게 넘어간다.
+      let n = 0, needRebake = false;
+      for (const p of payload.layers || []) {
+        const l = sec.bake.layers[p.i]; if (!l) continue;
+        if (applyPatch(l, p)) { l.edited = true; n++; if (!l.box || !(l.box.w > 1)) needRebake = true; }
+      }
+      if (!n) { (H.stack[id] || []).pop(); throw new Error("바뀐 내용이 없어요"); }
+      if (!needRebake && typeof ctx.patchBake === "function") {
+        say("✏️ 바꾼 글·스타일을 바로 적용하는 중");
+        const pr = await ctx.patchBake(sec);
+        if (pr?.ok) { note = `${n}줄 바로 반영했어요 (배경이 거슬리면 'AI 다시 그리기')`; keepImageAi(); }
+        else needRebake = true;
+      } else needRebake = true;
+      if (needRebake) {
+        if (!ctx.rebake) throw new Error("다시 그리기를 쓸 수 없어요");
+        try { const rb = await ctx.rebake(sec, say); cost += rb?.costUsd || 0; }
+        catch (e) { const h = (H.stack[id] || []).pop(); if (h) { plan.sections[idx()] = JSON.parse(h.sec); if (h.img) try { fs.rmSync(path.join(hd, h.img), { force: true }); } catch {} } throw e; }
+        note = `${n}줄 고쳐 AI 로 이 장을 다시 그렸어요`; keepImageAi();
+      }
+    } else if (baked && action === "rebake") {
+      // 사용자가 원할 때만: 현재 문구·스타일(색·크기·폰트)을 반영해 AI 로 그 장만 자연스럽게 다시 그리기
+      for (const p of payload.layers || []) { const l = sec.bake.layers[p.i]; if (l && applyPatch(l, p)) l.edited = true; }
       if (!ctx.rebake) throw new Error("다시 그리기를 쓸 수 없어요");
-      try { const rb = await ctx.rebake(sec, say); cost += rb?.costUsd || 0; }
-      catch (e) { const h = (H.stack[id] || []).pop(); if (h) { plan.sections[idx()] = JSON.parse(h.sec); if (h.img) try { fs.rmSync(path.join(hd, h.img), { force: true }); } catch {} } throw e; }
-      note = `${n}줄 고쳐 이 장을 다시 그렸어요`; keepImageAi();
+      if (sec.bake.baseImage) sec.image = sec.bake.baseImage;
+      sec.layers = [];
+      try {
+        const rb = await ctx.rebake(sec, say); cost += rb?.costUsd || 0;
+        for (const l of sec.bake.layers) l.edited = false;
+      } catch (e) { const h = (H.stack[id] || []).pop(); if (h) { plan.sections[idx()] = JSON.parse(h.sec); if (h.img) try { fs.rmSync(path.join(hd, h.img), { force: true }); } catch {} } throw e; }
+      note = "AI 로 이 장을 자연스럽게 다시 그렸어요"; keepImageAi();
     } else
     if (action === "plain") { // 한글 빼고 그림만: 글을 모두 빼고, 글이 들어 있던 알약·원은 바탕으로 메운다(빈 장식이 남지 않게)
       const shapes = [];

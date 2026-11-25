@@ -433,7 +433,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     for (const sub of ["clean", "scene", "raw", "cutout", "localize"]) {
       const src = path.join(dir, sub), dst = path.join(stage, sub);
       if (!exists(src)) continue;
-      try { const st = fs.lstatSync(dst); if (st.isSymbolicLink()) continue; fs.rmSync(dst, { recursive: true, force: true }); } catch {}
+      try { const st = fs.lstatSync(dst); if (st.isSymbolicLink() && fs.readlinkSync(dst) === src) continue; fs.rmSync(dst, { recursive: true, force: true }); } catch {}
       try { fs.symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir"); } catch (e) { log("dim", `  📄 링크 실패 ${sub} → 복사 (${e?.message || e})`); fs.cpSync(src, dst, { recursive: true }); }
     }
     fs.rmSync(path.join(stage, "out"), { recursive: true, force: true });
@@ -539,14 +539,42 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       const prevAi = Object.fromEntries(Object.entries(L.rd.locQa?.sections || {}).map(([id, q]) => [id, q.ai || null]));
       const r = await le.locEdit({ dir, renderId, plan: L.plan, tl: readJson(path.join(dir, "localize.json")) || {}, ocr: readJson(path.join(dir, "ocr.json")) || {}, rawOf, cli: cli?.cliAvailable?.() ? cli : null, ai: !noAi,
         settings: { ...sceneSettingsNow(), detailLocQaModel: sett.detailLocQaModel, detailLocEditModel: sett.detailLocEditModel }, prevAi, issues: L.rd.locQa?.sections?.[sectionId]?.issues || [], action, sectionId, payload: payload || {}, log, progress,
-        rebake: async (sec, say) => { // 🖼 통째로 그린 장: 고친 문구표로 그 장만 다시 그린다(검수 포함). 통과하면 같은 파일을 바꿔 끼운다
-          const bk = await import("./bake.js"), auth = await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null); if (!auth) throw new Error("이미지 AI 연결이 없어 다시 그릴 수 없어요");
+        patchBake: async (sec) => { // ✏️ 방법 2(즉시 반영 · 0초): 수정된 줄의 자리만 바탕색으로 빠르게 지우고 HTML 글 레이어로 즉시 얹는다
+          const loc = await mod("localize", log);
+          if (!loc?.eraseBoxesFast) return { ok: false };
+          const baseRel = sec.bake.baseImage || sec.image;
+          sec.bake.baseImage = baseRel;
+          const baseFile = path.join(dir, baseRel);
+          if (!exists(baseFile)) return { ok: false };
+          const edited = (sec.bake.layers || []).filter((l) => l && l.edited && l.box && l.box.w > 1 && l.box.h > 1);
+          if (!edited.length) return { ok: false };
+          const editRel = `localize/${sec.id}-edit.png`;
+          const er = loc.eraseBoxesFast(baseFile, path.join(dir, editRel), edited.map((l) => l.box));
+          if (!er?.ok) return { ok: false };
+          sec.image = editRel;
+          if (er.w && er.h) { sec.iw = er.w; sec.ih = er.h; }
+          sec.layers = edited.filter((l) => !l.drop && String(l.ko || "").trim()).map((l) => ({
+            x: l.box.x, y: l.box.y, w: l.box.w, h: l.box.h,
+            zh: String(l.zh || ""), literal: String(l.literal || ""), ko_ai: String(l.ko_ai || ""), ko: String(l.ko || ""),
+            role: l.role || "body", rewrite_ok: false,
+            style: { ...(l.style || {}), userEdit: true },
+          }));
+          return { ok: true, count: edited.length };
+        },
+        rebake: async (sec, say) => { // 🖼 통째로 그린 장: 고친 문구·스타일 표로 그 장만 AI 가 다시 그린다(검수 포함)
+          const bk = await import("./bake.js"), bkc = await import("./bake-core.js"), loc = await mod("localize", log);
+          const auth = await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null); if (!auth) throw new Error("이미지 AI 연결이 없어 다시 그릴 수 없어요");
           const file = rawOf(sec.id); if (!file) throw new Error("원본 그림을 찾지 못했어요");
           const o = ((readJson(path.join(dir, "ocr.json")) || {}).images || []).find((x) => x.id === sec.id), om = await mod("ocr", log);
-          say?.("🖼 이 장을 다시 그리는 중 (30초 안팎)");
-          const r = await bk.bakeImage({ file, layers: sec.bake.layers, boxes: (o?.boxes || []).filter((b) => !b.latin), w: o?.w, h: o?.h, out: path.join(dir, sec.image), auth, ocr: om?.ocrImages ? bk.makeBakeOcr(om.ocrImages, { log }) : null, log, id: sec.id });
+          const outRel = sec.bake?.baseImage || `localize/${sec.id}-bake.png`;
+          say?.("🖼 AI 로 이 장을 자연스럽게 다시 그리는 중 (25초 안팎)");
+          const r = await bk.bakeImage({ file, layers: sec.bake.layers, boxes: (o?.boxes || []).filter((b) => !b.latin), w: o?.w, h: o?.h, out: path.join(dir, outRel), auth, ocr: om?.ocrImages ? bk.makeBakeOcr(om.ocrImages, { log }) : null, log, id: sec.id });
           if (!r.ok) throw new Error(`다시 그린 그림이 검수에서 떨어졌어요(${r.why}) — 문구를 조금 바꿔 다시 눌러 주세요`);
+          sec.image = outRel; sec.bake.baseImage = outRel; sec.layers = [];
           sec.baked = { tries: r.tries, ...(r.verdict || {}), edited: true }; if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; }
+          let nextL = bkc.matchBakeBoxes(sec.bake.layers.map((l) => ({ ...l, box: null })), { seenBoxes: r.seenBoxes || [], origBoxes: (o?.boxes || []).filter((b) => !b.latin), w0: o?.w, h0: o?.h, w1: sec.iw, h1: sec.ih });
+          if (loc?.sampleBakeStyles) nextL = loc.sampleBakeStyles(path.join(dir, outRel), nextL);
+          sec.bake.layers = nextL;
           return { costUsd: r.usd || 0 };
         },
         render: (plan) => renderLocInto(dir, plan, renderId) });
@@ -802,7 +830,7 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
   async function pipeline(job, { source, reuse, fresh = [] }) {
     // v4 2단계 흐름: job.phase = "prepare"(1단계: 수집·분석·기획 → "상품 정보 확인"에서 멈춤) | "generate"(2단계: 사람이 고친 info.json 으로 생성) | undefined(한 번에 끝까지)
     const { dir } = job; fs.mkdirSync(dir, { recursive: true });
-    const mods = { core: await mod("extract-core", log), extract: await mod("extract", log), ocr: await mod("ocr", log), image: await mod("image", log), copy: await mod("copy", log), planCore: await mod("plan-core", log), render: await mod("render", log), vision: await mod("vision", log), cutout: await mod("cutout", log), brief: await mod("brief", log), cli: await mod("cli", log), scene: await mod("scene", log), scenePrompt: await mod("scene-prompt", log), localize: await mod("localize", log), reference: await mod("reference", log), referenceCore: await mod("reference-core", log) };
+    const mods = { core: await mod("extract-core", log), extract: await mod("extract", log), ocr: await mod("ocr", log), image: await mod("image", log), copy: await mod("copy", log), planCore: await mod("plan-core", log), render: await mod("render", log), vision: await mod("vision", log), cutout: await mod("cutout", log), brief: await mod("brief", log), cli: await mod("cli", log), scene: await mod("scene", log), scenePrompt: await mod("scene-prompt", log), localize: await mod("localize", log), localizeCore: await mod("localize-core", log), reference: await mod("reference", log), referenceCore: await mod("reference-core", log) };
     job.costs = {};
     let relay = null; try { relay = await import("./relay.js"); relay.setRelayJob(job.jobId); relay.clearRelayNotice(); } catch {} // 서버 AI: 하루 상세페이지 수는 작업 ID 로 센다
     // 🚦 사전 점검: OCR·글 AI·이미지 AI 가 실제로 되는지 — 안 되면 만들기 전에 멈춘다(조용한 대체 금지, preflight.js)
@@ -1299,40 +1327,89 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         .then((r) => { scene = r; }).catch((e) => { log("warn", `△ 📄 섹션 장면 오류 (${String(e?.message || e).slice(0, 140)})`); how.scene = "failed"; });
     }
 
-    // 원본 한글화 앞부분(글자 지우기·레이어 번역)은 카피·장면과 상관없어 "둘 다" 모드면 카피·장면 생성과 동시에 미리 돌린다(렌더 단계에서 몇 분씩 기다리던 것)
+    // 판매 실적·신뢰 배지: info.json 의 켠 항목만(재렌더 때도 info.json 에서 다시 읽어 유지). A3 가 이미 넣었으면 문구만 맞추고, 없으면 히어로 바로 뒤에 넣는다
+    // A3 형식 claims(켠 것만, 끈 배지 묶음은 자동 생성 막음)
+    const a3Claims = () => { const cl = readJson(path.join(dir, "info.json"))?.claims; const raw = toA3Claims(cl); if (!Object.values(raw).some((v) => (Array.isArray(v) ? v.length : v))) return null; let c = raw; try { if (mods.copy?.normalizeClaims) c = mods.copy.normalizeClaims(raw); } catch {} if (!cl?.trust_badges?.on) c = { ...c, trust_badges: [] }; return c; };
+    const applyClaims = (plan) => {
+      const cl = readJson(path.join(dir, "info.json"))?.claims;
+      const want = claimSections(cl), a3 = a3Claims();
+      plan.sections = (plan.sections || []).filter((x) => !claimTypes.has(x.type) || want.some((w) => w.type === x.type)); // 끈 항목은 빼기
+      plan.sections.forEach((x) => { if (claimTypes.has(x.type)) x.claim = true; });
+      if (!plan.sections.some((x) => claimTypes.has(x.type)) && want.length) { // A3 가 넣지 않았으면: A3 위치 규칙(insertClaimSections) → 없으면 히어로 뒤
+        if (a3 && mods.planCore?.insertClaimSections) { plan.sections = mods.planCore.insertClaimSections(plan.sections, a3); plan.sections.forEach((x) => { if (claimTypes.has(x.type)) x.claim = true; }); }
+        else { const hi = plan.sections.findIndex((x) => x.type === "hero"); plan.sections.splice(hi >= 0 ? hi + 1 : 0, 0, ...want); }
+      }
+      if (want.length) log("dim", `  📄 판매 실적·신뢰 배지 ${want.length}개 반영: ${want.map((w) => w.label).join(", ")}`);
+    };
+
+    // 원본 한글화(비전 카피 + 통째 그리기 포함)는 카드 카피·장면과 독립적이므로 "둘 다" 모드면 카피·장면 생성과 동시에 바로 시작한다(5~6분 절감)
+    // 속도·품질 개선(2026-11-24): 통째 한글화(bake)가 켜져 있으면 앞단의 글자 지우기(AI 인페인팅 포함)·줄 단위 번역을 건너뛰고,
+    //   구글 비전 카피(그림 보고 바로 한국 브랜드 상세페이지 문구 작성) → 통째 그리기로 직행한다. 검수 탈락한 장만 그때 지우기(예전 방식)로 내린다.
+    const cutWord = (s, max = 26) => { s = String(s || "").trim(); if (s.length <= max) return s; const c = s.slice(0, max), sp = c.lastIndexOf(" "); return (sp >= 8 ? c.slice(0, sp) : c).replace(/[,·\s]+$/, ""); };
     const locPrepFn = async () => {
       const tl0 = Date.now();
-      emit(job, job.step, "🈚 원본 이미지 한글화 중 (글자 지우기 → 한글 레이어)", { bg: "localize" }, 0);
       const locDir = path.join(dir, "localize"); fs.mkdirSync(locDir, { recursive: true });
       const targets = images.filter((im) => im.kind !== "option" || true);
       const files = {}, layersById = {}, locAi = { used: 0, accepted: 0 };
+      const stNow = store.get("settings") || {};
+      const bakeWanted = !process.env.SEEDHACK_DETAIL_NO_AI && stNow.detailBake !== false;
+      let bakeMod = null, bakeAuthObj = null;
+      if (bakeWanted) {
+        try { bakeMod = await import("./bake.js"); bakeAuthObj = await bakeMod.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null); } catch {}
+      }
+      const fastBake = !!bakeAuthObj && (bakeAuthObj.engine === "codex" || stNow.detailVisionCopy !== false);
       // A2 레이어 → 원래 OCR 기계번역(text_ko) 이어 붙이기(같은 글 상자 안에 든 것)
       const mtOf = (boxes, l) => boxes.filter((b) => b.text_ko && b.x >= l.x - 4 && b.y >= l.y - 4 && b.x + b.w <= l.x + l.w + 4 && b.y + b.h <= l.y + l.h + 4).map((b) => b.text_ko).join(" ");
       // A2 style{color,bgColor,pill,borderColor,fontWeight,fontSizePx,align} → localize 템플릿 style{color,weight,size,align,bg,border,radius}
       const tplStyle = (st) => st ? { color: st.color || undefined, weight: st.fontWeight || undefined, size: st.fontSizePx || undefined, align: st.align || undefined, ...(st.bgColor ? { bg: st.bgColor } : {}), ...(st.borderColor ? { border: `2px solid ${st.borderColor}` } : {}), ...(st.pill ? { radius: "pill" } : {}), ...(st.rotate ? { rotate: st.rotate } : {}) } : undefined;
-      let next = 0;
-      const one = async () => { for (;;) { const im = targets[next++]; if (!im) return;
-        const o = ocr.images.find((x) => x.id === im.id), boxes = (o?.boxes || []).filter((b) => !b.latin);
-        const out = path.join(locDir, `${im.id}.png`);
-        try {
-          const locFn = mods.localize?.localizeImage || mods.image?.localizeImage;
-          if (locFn && boxes.length) { const r = await locFn({ file: im.file, ocrBoxes: boxes, keepBoxes: (o?.boxes || []).filter((b) => b.latin), /* v13 남기는 영문·숫자는 넓혀 지우지 않음 */ boxes, out, w: im.w, h: im.h, imgKind: im.kind, ai: !process.env.SEEDHACK_DETAIL_NO_AI && !/^(gallery|main)$/.test(im.kind), /* 대표 사진은 hero 로 한 장만 쓰므로 AI 는 고른 뒤 그 장만(아래) */ settings: sceneSettingsNow(), log }); files[im.id] = r?.out || out; layersById[im.id] = r?.layers ? r.layers.map((l) => ({ ...l, mt: mtOf(boxes, l) })) : null; if (r?.ai?.used) { locAi.used += r.ai.billed || 0; locAi.tried = (locAi.tried || 0) + (r.ai.calls || 1); if (r.ai.accepted) locAi.accepted++; } /* v11: 장당 AI 최대 2회(다시 1회) */ }
-          else { const c = cleaned.find((x) => x.id === im.id); files[im.id] = path.join(dir, c?.full?.file || c?.out || ""); if (!c) files[im.id] = im.file; }
-        } catch (e) { log("dim", `  🈚 ${im.id} 지우기 실패 → 지운 전체본 (${e?.message || e})`); const c = cleaned.find((x) => x.id === im.id); files[im.id] = c ? path.join(dir, c.full?.file || c.out) : im.file; }
-        if (!layersById[im.id]) layersById[im.id] = boxes.map((b) => ({ zh: b.text, mt: b.text_ko || "", x: b.x, y: b.y, w: b.w, h: b.h, role: b.h >= 40 ? "title" : "body" }));
-      } };
-      await Promise.all(Array.from({ length: Math.min(Math.max(1, Number((store.get("settings") || {}).detailLocalizeConcurrency) || 8), targets.length || 1) }, one)); // 동시 8장(사진 위 글자 AI 지우기는 다지역 라우터가 나눠 받는다)
-      let tl = { images: targets.map((im) => ({ id: im.id, promo: false, layers: (layersById[im.id] || []).map((l) => ({ ...l, ko: l.mt || "", drop: !l.mt })) })), hero: {} };
-      if (mods.copy?.translateLayers) { try { const r = await mods.copy.translateLayers({ images: targets.map((im) => ({ id: im.id, kind: im.kind, w: im.w, h: im.h, layers: layersById[im.id] || [] })), brief: brief || null, attrs, log, ...(process.env.SEEDHACK_DETAIL_NO_AI ? { useCli: false } : {}) }); if (r?.images) { tl = r; if (r.how === "rules" && !process.env.SEEDHACK_DETAIL_NO_AI) job.aiFails.push("번역"); if (r.costUsd != null) { job.costs.localize = (job.costs.localize || 0) + r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; } } } catch (e) { log("warn", `△ 📄 한글화 번역 실패 → 기계번역 (${e?.message || e})`); } }
-      (tl.images || []).forEach((x) => (x.layers || []).forEach((l) => { if (l.style && !l.box) l.box = { style: tplStyle(l.style) }; }));
-      if (mods.localize?.eraseShapes) { let ns = 0; for (const x of tl.images || []) { const sh = (x.layers || []).filter((l) => l.drop && l.shape).map((l) => l.shape); if (sh.length && files[x.id] && !x.promo) { try { ns += mods.localize.eraseShapes(files[x.id], sh); } catch {} } } if (ns) log("dim", `  🈚 글을 뺀 알약·배지 ${ns}개는 도형째 지움(빈 장식 없음)`); } // v12
-      if (locAi.used) log("info", `🈚 사진 위 글자 AI 지우기 ${locAi.used}장 · 적용 ${locAi.accepted}장 (장당 약 $0.04)`);
-      if (locAi.used) { const c = locAi.used * 0.039; job.costs.localize = (job.costs.localize || 0) + c; job.costUsd = (job.costUsd || 0) + c; }
-      writeJson(path.join(dir, "localize.json"), { ...tl, ai: locAi, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, path.relative(dir, f)])) });
+      let tl;
+      if (fastBake) {
+        emit(job, job.step, "🈚 통째 한글화 준비 중 (앞단 지우기·줄 번역 건너뜀)", { bg: "localize" }, 0);
+        const PROMO_ZH_FAST = /证书|专利|认证|资质|工厂|厂房|车间|生产线|流水线|合作(伙伴|客户|品牌)|一件代发|招代理|诚招|微信号|联系客服|进店领券/;
+        for (const im of targets) {
+          const o = ocr.images.find((x) => x.id === im.id), boxes = (o?.boxes || []).filter((b) => !b.latin);
+          files[im.id] = exists(im.file) ? im.file : path.join(dir, cleaned.find((x) => x.id === im.id)?.full?.file || cleaned.find((x) => x.id === im.id)?.out || "");
+          layersById[im.id] = boxes.map((b) => ({ zh: b.text, mt: b.text_ko || "", x: b.x, y: b.y, w: b.w, h: b.h, role: b.h >= 40 ? "title" : "body" }));
+        }
+        const heroName = (mods.localizeCore?.heroNameFrom ? mods.localizeCore.heroNameFrom(brief?.product_name_ko || title_ko) : "") || cutWord(brief?.product_name_ko || title_ko || "", 18);
+        const heroSub = cutWord(String(brief?.key_appeal || "").split(/[.。]/)[0], 28);
+        const tlImages = targets.map((im) => {
+          const o = ocr.images.find((x) => x.id === im.id), ls = layersById[im.id] || [];
+          const hitN = ls.filter((l) => PROMO_ZH_FAST.test(String(l.zh || ""))).length;
+          const promoRule = ls.some((l) => ["title", "badge"].includes(l.role) && /证书|专利|认证|资质|工厂|厂房|车间|生产线|流水线|合作(伙伴|客户|品牌)/.test(String(l.zh || ""))) || (ls.length > 0 && hitN >= Math.max(1, Math.ceil(ls.length / 2)));
+          const cls = mods.localizeCore?.classifyLocalizeImage ? mods.localizeCore.classifyLocalizeImage(ls.map((l) => ({ zh: l.zh, role: l.role, h: l.h })), { imgH: im.h || o?.h || 1000, kind: im.kind || "detail" }) : null;
+          const plist = !cls && mods.localizeCore?.priceListOf ? mods.localizeCore.priceListOf((o?.boxes || []).map((b) => b.text)) : null;
+          const promo = !!(promoRule || cls || plist);
+          const why = cls?.reason || plist?.reason || (promoRule ? "인증·공장·홍보 문구" : "");
+          return { id: im.id, promo, promo_reason: why, ...(cls ? { promo_kind: cls.kind } : plist ? { promo_kind: plist.kind } : {}), layers: ls.map((l) => ({ ...l, ko: l.mt || l.zh || "", drop: false })) };
+        });
+        tl = { images: tlImages, hero: { label: "NEW ITEM", sub: heroSub, name: heroName } };
+      } else {
+        emit(job, job.step, "🈚 원본 이미지 한글화 중 (글자 지우기 → 한글 레이어)", { bg: "localize" }, 0);
+        let next = 0;
+        const one = async () => { for (;;) { const im = targets[next++]; if (!im) return;
+          const o = ocr.images.find((x) => x.id === im.id), boxes = (o?.boxes || []).filter((b) => !b.latin);
+          const out = path.join(locDir, `${im.id}.png`);
+          try {
+            const locFn = mods.localize?.localizeImage || mods.image?.localizeImage;
+            if (locFn && boxes.length) { const r = await locFn({ file: im.file, ocrBoxes: boxes, keepBoxes: (o?.boxes || []).filter((b) => b.latin), /* v13 남기는 영문·숫자는 넓혀 지우지 않음 */ boxes, out, w: im.w, h: im.h, imgKind: im.kind, ai: !process.env.SEEDHACK_DETAIL_NO_AI && !/^(gallery|main)$/.test(im.kind), /* 대표 사진은 hero 로 한 장만 쓰므로 AI 는 고른 뒤 그 장만(아래) */ settings: sceneSettingsNow(), log }); files[im.id] = r?.out || out; layersById[im.id] = r?.layers ? r.layers.map((l) => ({ ...l, mt: mtOf(boxes, l) })) : null; if (r?.ai?.used) { locAi.used += r.ai.billed || 0; locAi.tried = (locAi.tried || 0) + (r.ai.calls || 1); if (r.ai.accepted) locAi.accepted++; } /* v11: 장당 AI 최대 2회(다시 1회) */ }
+            else { const c = cleaned.find((x) => x.id === im.id); files[im.id] = path.join(dir, c?.full?.file || c?.out || ""); if (!c) files[im.id] = im.file; }
+          } catch (e) { log("dim", `  🈚 ${im.id} 지우기 실패 → 지운 전체본 (${e?.message || e})`); const c = cleaned.find((x) => x.id === im.id); files[im.id] = c ? path.join(dir, c.full?.file || c.out) : im.file; }
+          if (!layersById[im.id]) layersById[im.id] = boxes.map((b) => ({ zh: b.text, mt: b.text_ko || "", x: b.x, y: b.y, w: b.w, h: b.h, role: b.h >= 40 ? "title" : "body" }));
+        } };
+        await Promise.all(Array.from({ length: Math.min(Math.max(1, Number((store.get("settings") || {}).detailLocalizeConcurrency) || 8), targets.length || 1) }, one)); // 동시 8장(사진 위 글자 AI 지우기는 다지역 라우터가 나눠 받는다)
+        tl = { images: targets.map((im) => ({ id: im.id, promo: false, layers: (layersById[im.id] || []).map((l) => ({ ...l, ko: l.mt || "", drop: !l.mt })) })), hero: {} };
+        if (mods.copy?.translateLayers) { try { const r = await mods.copy.translateLayers({ images: targets.map((im) => ({ id: im.id, kind: im.kind, w: im.w, h: im.h, layers: layersById[im.id] || [] })), brief: brief || null, attrs, log, ...(process.env.SEEDHACK_DETAIL_NO_AI ? { useCli: false } : {}) }); if (r?.images) { tl = r; if (r.how === "rules" && !process.env.SEEDHACK_DETAIL_NO_AI) job.aiFails.push("번역"); if (r.costUsd != null) { job.costs.localize = (job.costs.localize || 0) + r.costUsd; job.costUsd = (job.costUsd || 0) + r.costUsd; } } } catch (e) { log("warn", `△ 📄 한글화 번역 실패 → 기계번역 (${e?.message || e})`); } }
+        (tl.images || []).forEach((x) => (x.layers || []).forEach((l) => { if (l.style && !l.box) l.box = { style: tplStyle(l.style) }; }));
+        if (mods.localize?.eraseShapes) { let ns = 0; for (const x of tl.images || []) { const sh = (x.layers || []).filter((l) => l.drop && l.shape).map((l) => l.shape); if (sh.length && files[x.id] && !x.promo) { try { ns += mods.localize.eraseShapes(files[x.id], sh); } catch {} } } if (ns) log("dim", `  🈚 글을 뺀 알약·배지 ${ns}개는 도형째 지움(빈 장식 없음)`); } // v12
+        if (locAi.used) log("info", `🈚 사진 위 글자 AI 지우기 ${locAi.used}장 · 적용 ${locAi.accepted}장 (장당 약 $0.04)`);
+        if (locAi.used) { const c = locAi.used * 0.039; job.costs.localize = (job.costs.localize || 0) + c; job.costUsd = (job.costUsd || 0) + c; }
+      }
+      writeJson(path.join(dir, "localize.json"), { ...tl, fastBake, ai: locAi, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, path.relative(dir, f)])) });
       const relFiles = Object.fromEntries(Object.entries(files).map(([k, f]) => [k, path.relative(dir, f).replace(/\\/g, "/")]));
-      return { tl0, targets, files, layersById, locAi, tl, relFiles };
+      return { tl0, targets, files, layersById, locAi, tl, relFiles, bakeMod, bakeAuthObj, fastBake };
     };
-    const locPrepP = job.mode === "both" && !job.regen && job.phase !== "prepare" ? locPrepFn().catch((e) => ({ error: e })) : null;
+    const locBothP = job.mode === "both" && !job.regen && job.phase !== "prepare" ? runLocalize({ copyObj: null }).catch((e) => ({ _err: e })) : null;
     // ⑥ 카피 — v2: brief 가 있으면 writeCopy 가 기획안 기반(PAS→AIDMA) 구조로 쓴다 · v5: 섹션 카드 카피(writeCopyV5)
     check(job);
     copyInput.brief = brief || null;
@@ -1384,34 +1461,21 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
     if (v5ScenePromise) { emit(job, "scene", "섹션 장면 마무리 기다리는 중", null, 0.1); await v5ScenePromise; }
     emit(job, "scene", scene?.items ? `✔ AI 장면 사진 ${scene.items.length}장 · 통과 ${scene.items.filter((x) => x.pass).length}장` : how.scene === "no-key" ? "이미지 생성 키를 넣으면 AI 장면 사진을 만듭니다 (📄 화면 설정 → 이미지 생성 키)" : `장면 사진 없음 (${how.scene || "skip"})`, scene?.items ? { made: scene.items.length, pass: scene.items.filter((x) => x.pass).length } : { noKey: how.scene === "no-key" }, 1);
 
-    // 판매 실적·신뢰 배지: info.json 의 켠 항목만(재렌더 때도 info.json 에서 다시 읽어 유지). A3 가 이미 넣었으면 문구만 맞추고, 없으면 히어로 바로 뒤에 넣는다
-    // A3 형식 claims(켠 것만, 끈 배지 묶음은 자동 생성 막음)
-    const a3Claims = () => { const cl = readJson(path.join(dir, "info.json"))?.claims; const raw = toA3Claims(cl); if (!Object.values(raw).some((v) => (Array.isArray(v) ? v.length : v))) return null; let c = raw; try { if (mods.copy?.normalizeClaims) c = mods.copy.normalizeClaims(raw); } catch {} if (!cl?.trust_badges?.on) c = { ...c, trust_badges: [] }; return c; };
-    const applyClaims = (plan) => {
-      const cl = readJson(path.join(dir, "info.json"))?.claims;
-      const want = claimSections(cl), a3 = a3Claims();
-      plan.sections = (plan.sections || []).filter((x) => !claimTypes.has(x.type) || want.some((w) => w.type === x.type)); // 끈 항목은 빼기
-      plan.sections.forEach((x) => { if (claimTypes.has(x.type)) x.claim = true; });
-      if (!plan.sections.some((x) => claimTypes.has(x.type)) && want.length) { // A3 가 넣지 않았으면: A3 위치 규칙(insertClaimSections) → 없으면 히어로 뒤
-        if (a3 && mods.planCore?.insertClaimSections) { plan.sections = mods.planCore.insertClaimSections(plan.sections, a3); plan.sections.forEach((x) => { if (claimTypes.has(x.type)) x.claim = true; }); }
-        else { const hi = plan.sections.findIndex((x) => x.type === "hero"); plan.sections.splice(hi >= 0 ? hi + 1 : 0, 0, ...want); }
-      }
-      if (want.length) log("dim", `  📄 판매 실적·신뢰 배지 ${want.length}개 반영: ${want.map((w) => w.label).join(", ")}`);
-    };
     // v6 원본 한글화: OCR 글 상자 → (A2 localizeImage 로 글자 지운 원본, 없으면 지운 전체본) → A3 translateLayers(한글 레이어) → A3 buildLocalizePlan → localize 템플릿
-    const runLocalize = async () => {
-      const pr = locPrepP ? await locPrepP : await locPrepFn(); if (pr?.error) throw pr.error;
-      const { tl0, targets, files, layersById, locAi, tl, relFiles } = pr;
+    async function runLocalize({ copyObj = null } = {}) {
+      const pr = await locPrepFn();
+      const { tl0, targets, files, layersById, locAi, tl, relFiles, bakeMod, bakeAuthObj, fastBake } = pr;
       let lplan = null;
-      if (mods.planCore?.buildLocalizePlan) { try { lplan = mods.planCore.buildLocalizePlan({ source: { ...src, images }, localized: tl, copy, brief, cleaned, files: relFiles, vision, jobId: job.jobId, options, claims: a3Claims() }); } catch (e) { log("warn", `△ 📄 한글화 구성 실패 (${e?.message || e})`); } }
+      if (mods.planCore?.buildLocalizePlan) { try { lplan = mods.planCore.buildLocalizePlan({ source: { ...src, images }, localized: tl, copy: copyObj, brief, cleaned, files: relFiles, vision, jobId: job.jobId, options, claims: a3Claims() }); } catch (e) { log("warn", `△ 📄 한글화 구성 실패 (${e?.message || e})`); } }
       if (!lplan) lplan = { meta: { jobId: job.jobId, templateId: "localize", width: WIDTH, version: 6 }, sections: targets.map((im) => ({ type: "image", id: im.id, image: relFiles[im.id], layers: ((tl.images || []).find((x) => x.id === im.id)?.layers || []).filter((l) => !l.drop && l.ko).map((l) => ({ x: l.x, y: l.y, w: l.w, h: l.h, role: l.role, ko: l.ko, style: l.box?.style })) })) };
       // 번역이 안 된(한자만 남은) 레이어 빼기 · 이미지 원래 크기(iw·ih) — localize.js finishLocalizePlan(재생 하네스와 같은 코드)
-      { // hero 로 고른 대표 사진에 JS 로 깨끗이 못 지운 글이 남았으면 그 장만 AI 로 다시(대표 사진 전부에 AI 를 쓰지 않는다 — v11 비용 절감)
+      { // hero 로 고른 대표 사진에 글이 남았으면 그 장만 지우기(대표 사진 전부에 AI 를 쓰지 않는다 — v11 비용 절감)
         const hs = lplan.sections.find((x) => x.type === "hero" && x.id), hid = hs?.id, him = hid && targets.find((im) => im.id === hid);
-        const left = (layersById[hid] || []).some((l) => l.erase && (l.erase.residue?.pass === false || !["solid", "gradient", "clone", "synth", "tiles"].includes(l.erase.method)));
+        const left = (fastBake && (layersById[hid] || []).length > 0) || (layersById[hid] || []).some((l) => l.erase && (l.erase.residue?.pass === false || !["solid", "gradient", "clone", "synth", "tiles"].includes(l.erase.method)));
         const locFn = mods.localize?.localizeImage;
         if (him && left && locFn && !process.env.SEEDHACK_DETAIL_NO_AI && hs.image === relFiles[hid]) {
-          try { const o = ocr.images.find((x) => x.id === hid), r = await locFn({ file: him.file, ocrBoxes: (o?.boxes || []).filter((b) => !b.latin), keepBoxes: (o?.boxes || []).filter((b) => b.latin), out: files[hid], ai: true, settings: sceneSettingsNow(), log }); if (r?.ai?.used) { const c = (r.ai.billed || 0) * 0.039; locAi.used += r.ai.billed || 0; job.costs.localize = (job.costs.localize || 0) + c; job.costUsd = (job.costUsd || 0) + c; } } catch (e) { log("dim", `  🈚 hero ${hid} AI 다시 지우기 실패 (${e?.message || e})`); }
+          const heroOut = fastBake ? path.join(dir, "localize", `${hid}.png`) : files[hid];
+          try { const o = ocr.images.find((x) => x.id === hid), r = await locFn({ file: him.file, ocrBoxes: (o?.boxes || []).filter((b) => !b.latin), keepBoxes: (o?.boxes || []).filter((b) => b.latin), out: heroOut, ai: true, settings: sceneSettingsNow(), log }); if (fastBake && exists(r?.out || heroOut)) { files[hid] = r?.out || heroOut; hs.image = path.relative(dir, files[hid]).replace(/\\/g, "/"); } if (r?.ai?.used) { const c = (r.ai.billed || 0) * 0.039; locAi.used += r.ai.billed || 0; job.costs.localize = (job.costs.localize || 0) + c; job.costUsd = (job.costUsd || 0) + c; } } catch (e) { log("dim", `  🈚 hero ${hid} AI 다시 지우기 실패 (${e?.message || e})`); }
         }
       }
       if (mods.localize?.finishLocalizePlan) mods.localize.finishLocalizePlan(lplan, dir, { log, ocr });
@@ -1419,35 +1483,105 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         const ls = (tl.images || []).flatMap((x) => x.layers || []).filter((l) => l.erase);
         const by = ls.reduce((m, l) => { const k = l.erase.method || "없음"; m[k] = (m[k] || 0) + 1; return m; }, {});
         job.localizeErase = { by, residueFail: ls.filter((l) => l.erase.residue && !l.erase.residue.pass).length, areas: ls.length };
-        log("dim", `  🈚 지우기 ${Object.entries(by).map(([k, v]) => `${k} ${v}`).join(" · ")} · 잔상 의심 ${job.localizeErase.residueFail}/${ls.length}`);
+        if (ls.length) log("dim", `  🈚 지우기 ${Object.entries(by).map(([k, v]) => `${k} ${v}`).join(" · ")} · 잔상 의심 ${job.localizeErase.residueFail}/${ls.length}`);
       }
-      // 🖼 통째 한글화(bake, 2026-11-23): 글이 든 장은 원본 + 우리 문구표를 이미지 AI 에 주어 한글로 다시 그린다 → 다시 읽어 검수 → 통과한 장은 그 그림을 그대로 쓰고(얹는 글 없음),
-      //   떨어진 장만 예전 방식(지운 그림 + 얹는 글) 그대로. 설정 detailBake=false 또는 SEEDHACK_BAKE=off 로 끈다. 분당 한도가 낮아 동시 2장.
+      // 🖼 통째 한글화(bake): 구글 비전 카피(그림 보고 한국 브랜드 상세페이지 톤으로 카피 생성) → 이미지 AI 그리기 → 검수 → 통과한 장은 그대로 쓰고,
+      //   떨어진 장만 그때 지우기(예전 방식)로 내린다. 설정 detailBake=false 또는 SEEDHACK_BAKE=off 로 끈다. 분당 한도가 낮아 동시 2장.
       if (!process.env.SEEDHACK_DETAIL_NO_AI && (store.get("settings") || {}).detailBake !== false) {
         try {
-          const bk = await import("./bake.js"), auth = await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null);
-          const secs = lplan.sections.filter((x) => x.type === "image" && x.id && (x.layers || []).length && targets.some((im) => im.id === x.id));
+          const bk = bakeMod || await import("./bake.js"), auth = bakeAuthObj || await bk.bakeAuth({ settings: sceneSettingsNow() }).catch(() => null);
+          let secs = lplan.sections.filter((x) => x.type === "image" && x.id && (x.layers || []).length && targets.some((im) => im.id === x.id));
           if (auth && secs.length) {
             const tb0 = Date.now(), vOcr = mods.ocr?.ocrImages ? bk.makeBakeOcr(mods.ocr.ocrImages, { provider: job.ocrUse || undefined, log }) : null;
             let nx = 0, okN = 0, done = 0, usd = 0; const failed = [];
-            // ✍ 장 단위 편집: 줄마다 옮긴 문구를 그림 한 장 단위로 묶어 다시 쓴다(문단 → 제목 + 3줄, 제목 다시 짓기). 설정 detailBakeEdit=false 로 끈다
             const lyOf = (id) => ((tl.images || []).find((x) => x.id === id)?.layers || []).filter((l) => String(l.zh || "").trim());
             let edited = new Map();
-            const gptCopy = auth.engine === "codex"; // ✍ GPT 명령줄: 문구까지 GPT 가 쓴다 → 우리 쪽 장 단위 다듬기는 건너뛴다
-            if (!gptCopy && mods.copy?.editForBake && (store.get("settings") || {}).detailBakeEdit !== false) {
+            const visionById = new Map();
+            const gptCopy = auth.engine === "codex"; // ✍ GPT 명령줄: 문구까지 GPT 가 쓴다
+            const useVisionCopy = !gptCopy && typeof bk.bakeVisionCopyBatch === "function" && (store.get("settings") || {}).detailVisionCopy !== false;
+            if (useVisionCopy) {
+              emit(job, job.step, `✍ 그림 보며 한국 상세페이지 문구 쓰는 중 · ${secs.length}장`, { bg: "localize", clk: "copy" }, 0);
+              const bannedFn = (t) => [
+                ...(mods.copy?.bannedIn ? mods.copy.bannedIn(t) : []),
+                ...(mods.copy?.policyKind && mods.copy.policyKind(t) ? ["정책 문구"] : []),
+              ];
+              const vc = await bk.bakeVisionCopyBatch({
+                items: secs.map((sec) => { const im = targets.find((x) => x.id === sec.id); return { id: sec.id, file: im.file, ocrLayers: lyOf(sec.id) }; }),
+                brief: brief || null, auth, concurrency: 5, log, banned: bannedFn, check: () => check(job),
+                onProgress: ({ done: d, total: tot }) => emit(job, job.step, `✍ 그림 보고 문구 작성 ${d}/${tot}`, { bg: "localize", clk: "copy" }, 0),
+              });
+              if (vc.costUsd) { job.costs.localize = (job.costs.localize || 0) + vc.costUsd; job.costUsd = (job.costUsd || 0) + vc.costUsd; }
+              const removedPromo = [];
+              for (const sec of [...secs]) {
+                const r = vc.byId.get(sec.id);
+                if (r) visionById.set(sec.id, r);
+                if (r?.ok && r.promo && sec.human !== "included") {
+                  removedPromo.push(sec.id);
+                  lplan.sections = lplan.sections.filter((x) => x !== sec);
+                  lplan.excluded = Array.isArray(lplan.excluded) ? lplan.excluded : [];
+                  lplan.excluded.push({ id: sec.id, why: `홍보·정책 이미지(${r.promo_reason || "비전 판정"})`, kind: "promo" });
+                }
+              }
+              if (removedPromo.length) secs = secs.filter((x) => !removedPromo.includes(x.id));
+              job.localizeVisionCopy = { total: vc.byId.size, ok: vc.okCount, promo: removedPromo.length, fails: vc.fails, ms: vc.ms, usd: +vc.costUsd.toFixed(4) };
+              log(vc.fails.length ? "warn" : "go", `${vc.fails.length ? "△" : "■"} ✍ 구글 비전 카피 · ${vc.okCount}/${vc.byId.size}장${removedPromo.length ? ` · 홍보·정책 제외 ${removedPromo.length}장` : ""}${vc.fails.length ? ` · 실패 ${vc.fails.slice(0, 3).join(", ")}` : ""} · ${(vc.ms / 1000).toFixed(0)}초 · 약 $${vc.costUsd.toFixed(3)}`);
+            } else if (!gptCopy && mods.copy?.editForBake && (store.get("settings") || {}).detailBakeEdit !== false) {
               emit(job, job.step, `✍ 장마다 문구를 다듬는 중 · ${secs.length}장`, { bg: "localize", clk: "copy" }, 0);
               const ed = await mods.copy.editForBake({ images: secs.map((sec) => { const im = targets.find((x) => x.id === sec.id); return { id: sec.id, w: im?.w, h: im?.h, layers: lyOf(sec.id) }; }), brief: brief || null, log }).catch((e) => { log("dim", `  ✍ 장 단위 편집 실패 → 줄 단위 문구 그대로 (${String(e?.message || e).slice(0, 80)})`); return null; });
               if (ed?.byId) edited = ed.byId; if (ed?.costUsd) { job.costs.localize = (job.costs.localize || 0) + ed.costUsd; job.costUsd = (job.costUsd || 0) + ed.costUsd; }
               job.localizeEdit = { images: edited.size, blocks: ed?.used || 0, rejected: (ed?.rejected || []).length };
             }
-            emit(job, job.step, `🖼 이미지 AI 로 한글화 그리는 중 · ${secs.length}장 (${gptCopy ? "GPT · 장당 1분 안팎" : "장당 30초 안팎"})`, { bg: "localize", clk: "bake" }, 0);
+            const lazyErase = async (sec, im, o) => {
+              if (!fastBake) return;
+              const locFn = mods.localize?.localizeImage || mods.image?.localizeImage;
+              const boxes = (o?.boxes || []).filter((b) => !b.latin);
+              const outE = path.join(dir, "localize", `${sec.id}.png`);
+              if (locFn && boxes.length) {
+                try {
+                  const er = await locFn({ file: im.file, ocrBoxes: boxes, keepBoxes: (o?.boxes || []).filter((b) => b.latin), boxes, out: outE, w: im.w, h: im.h, imgKind: im.kind, ai: true, settings: sceneSettingsNow(), log });
+                  if (exists(er?.out || outE)) sec.image = path.relative(dir, er?.out || outE).replace(/\\/g, "/");
+                } catch (e) { log("dim", `  🈚 ${sec.id} 대체 지우기 실패 (${String(e?.message || e).slice(0, 60)})`); }
+              }
+            };
+            const bakePacer = !gptCopy && typeof bk.createBakePacer === "function" ? bk.createBakePacer() : null;
+            emit(job, job.step, `🖼 이미지 AI 로 한글화 그리는 중 · ${secs.length}장 (${gptCopy ? "GPT · 장당 1분 안팎" : "장당 25초 안팎"})`, { bg: "localize", clk: "bake" }, 0);
             const worker = async () => { for (;;) { const sec = secs[nx++]; if (!sec) return; check(job);
-              const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id); let tlL = edited.get(sec.id) || lyOf(sec.id);
+              const im = targets.find((x) => x.id === sec.id), o = ocr.images.find((x) => x.id === sec.id);
+              const vcR = useVisionCopy ? visionById.get(sec.id) : null;
+              let tlL = vcR?.ok && vcR.layers?.length ? vcR.layers : (edited.get(sec.id) || lyOf(sec.id));
+              if (useVisionCopy && (!vcR || !vcR.ok || !vcR.layers?.length)) {
+                const why = `문구 생성 실패(${vcR?.error || "빈 결과"})`;
+                log("warn", `△ ✍ ${sec.id} ${why} → 예전 방식으로 내림`);
+                done++; failed.push(`${sec.id}(${why})`); sec.bakeFail = why;
+                await lazyErase(sec, im, o);
+                emit(job, job.step, `🖼 한글화 그리기 ${done}/${secs.length} · ${sec.id} 문구 실패`, { bg: "localize", clk: "bake" }, 0);
+                continue;
+              }
               const out = path.join(dir, "localize", `${sec.id}-bake.png`);
-              const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id, free: gptCopy, brief: brief || null }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
+              const r = await bk.bakeImage({ file: im.file, layers: tlL, boxes: (o?.boxes || []).filter((b) => !b.latin), w: im.w || o?.w, h: im.h || o?.h, out, auth, ocr: vOcr, log, id: sec.id, free: gptCopy, brief: brief || null, pacer: bakePacer }).catch((e) => ({ ok: false, why: String(e?.message || e).slice(0, 80), usd: 0 }));
               usd += r.usd || 0; done++; check(job); if (r.ok && r.layers?.length) tlL = r.layers; // GPT 가 쓴 문구표(고치기·다시 그리기에 쓴다)
-              if (r.ok) { okN++; sec.overlay = { image: sec.image, layers: sec.layers, iw: sec.iw, ih: sec.ih }; sec.image = path.relative(dir, out).split(path.sep).join("/"); sec.layers = []; sec.baked = { tries: r.tries, ...(r.verdict || {}) }; sec.bake = { layers: tlL.map((l) => ({ zh: String(l.zh || ""), ko: String(l.ko || ""), drop: !!l.drop || !String(l.ko || "").trim(), role: l.role || "", ...(l.block ? { block: l.block } : {}), ...(l.head ? { head: true } : {}) })) }; if (edited.has(sec.id)) sec.bakeCopy = tlL.filter((l) => l.block).map((l) => ({ idxs: l.block, ko: l.ko, head: !!l.head })); if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; } }
-              else { failed.push(`${sec.id}(${r.why})`); sec.bakeFail = r.why; }
+              if (r.ok) {
+                okN++; sec.overlay = { image: sec.image, layers: sec.layers, iw: sec.iw, ih: sec.ih };
+                const bakeRel = path.relative(dir, out).split(path.sep).join("/");
+                sec.image = bakeRel; sec.layers = []; sec.baked = { tries: r.tries, ...(r.verdict || {}) };
+                if (r.size) { sec.iw = r.size.width; sec.ih = r.size.height; }
+                const bkc = await import("./bake-core.js");
+                let bakeLayers = tlL.map((l) => ({
+                  zh: String(l.zh || ""),
+                  literal: String(l.literal || l.mt || ""),
+                  ko_ai: String(l.ko_ai || l.ko || ""),
+                  ko: String(l.ko || ""),
+                  drop: !!l.drop || !String(l.ko || "").trim(),
+                  role: l.role || "",
+                  ...(l.block ? { block: l.block } : {}),
+                  ...(l.head ? { head: true } : {}),
+                }));
+                bakeLayers = bkc.matchBakeBoxes(bakeLayers, { seenBoxes: r.seenBoxes || [], origBoxes: (o?.boxes || []).filter((b) => !b.latin), w0: im.w || o?.w, h0: im.h || o?.h, w1: sec.iw, h1: sec.ih });
+                if (mods.localize?.sampleBakeStyles) bakeLayers = mods.localize.sampleBakeStyles(out, bakeLayers);
+                sec.bake = { baseImage: bakeRel, layers: bakeLayers };
+                if (edited.has(sec.id)) sec.bakeCopy = tlL.filter((l) => l.block).map((l) => ({ idxs: l.block, ko: l.ko, head: !!l.head }));
+              }
+              else { failed.push(`${sec.id}(${r.why})`); sec.bakeFail = r.why; await lazyErase(sec, im, o); }
               emit(job, job.step, `🖼 한글화 그리기 ${done}/${secs.length}${r.ok ? "" : ` · ${sec.id} 검수 탈락 → 예전 방식`}`, { bg: "localize", clk: "bake" }, 0);
             } };
             await Promise.all(Array.from({ length: Math.min(2, secs.length) }, worker));
@@ -1460,8 +1594,8 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
       job.timings ||= {}; job.localizeMs = Date.now() - tl0;
       emit(job, job.step, `🈚 원본 한글화 구성 · 이미지 ${lplan.sections.filter((x) => x.image).length}장 · 제외 ${(lplan.excluded || []).length}장 · ${((Date.now() - tl0) / 1000).toFixed(0)}초`, { bg: "localize" }, 0);
       return lplan;
-    };
-    const localizePlan = job.mode === "localize" ? await runLocalize() : null;
+    }
+    const localizePlan = job.mode === "localize" ? await runLocalize({ copyObj: copy }) : null;
 
     // ⑦ 구성 + 긴 이미지 자르기 — makePlan(): qa 루프가 카피를 다시 쓰면 같은 절차로 다시 짠다
     check(job);
@@ -1616,15 +1750,25 @@ section 은 입력의 섹션 목록 id(s01, s02 …)로 적습니다. 결함이 
         throw Object.assign(new Error(`렌더 실패 · ${e?.message || e}`), { keepPrev: true });
       }
       out = moveRender(dir, stage, renderId, out);
+      if (tplId === "localize") try { fs.rmSync(qaPlanFile(dir, renderId), { force: true }); } catch {} // 새 한글화 렌더 → 예전 검수/편집 캐시가 남지 않게
       job.renderIssues = Array.isArray(out?.check?.issues) ? out.check.issues.slice(0, 30) : [];
       emit(job, "render", `✔ 이미지 ${out.slices.length}장 · 세로 합 ${out.slices.reduce((n, s) => n + (s.h || 0), 0).toLocaleString("ko-KR")}px · out/${renderId}${label}`, { done: out.slices.length, total: out.slices.length, renderId }, 1);
       return out;
     };
     let rendered = await renderNow();
-    // "둘 다": AI 장면 렌더 뒤에 원본 한글화 렌더를 하나 더(새 렌더 탭)
+    // "둘 다": AI 장면 렌더 뒤에 원본 한글화 렌더를 하나 더(새 렌더 탭) — 작업 자체는 카피·장면과 병렬(locBothP)로 이미 진행됨
     let extraRender = null;
     if (job.mode === "both" && !job.regen) {
-      try { const lp = await runLocalize(); applyClaims(lp); writeJson(path.join(dir, "plan-localize.json"), lp); const rid2 = allocRenderId(dir, "localize"); const r2 = await renderInto(lp, "localize", rid2, " (원본 한글화)"); extraRender = { id: rid2, rendered: r2, plan: lp }; }
+      try {
+        const lp = locBothP ? await locBothP : await runLocalize({ copyObj: copy });
+        if (lp?._err) throw lp._err;
+        if (copy && !lp.sections.some((x) => x.type === "notice")) {
+          const nItems = (Array.isArray(copy.notice) ? copy.notice : copy.notice?.items || []).map((t) => String(t || "").trim()).filter(Boolean);
+          if (nItems.length) { const si = lp.sections.findIndex((x) => x.type === "spec"); lp.sections.splice(si >= 0 ? si : lp.sections.length, 0, { type: "notice", title: String(copy.notice?.title || "").trim() || "구매 전 확인해 주세요", items: nItems }); }
+        }
+        if (copy?.name_ko && lp.product && !lp.product.name_ko) lp.product.name_ko = String(copy.name_ko).trim();
+        applyClaims(lp); writeJson(path.join(dir, "plan-localize.json"), lp); const rid2 = allocRenderId(dir, "localize"); const r2 = await renderInto(lp, "localize", rid2, " (원본 한글화)"); extraRender = { id: rid2, rendered: r2, plan: lp };
+      }
       catch (e) { if (e?.cancelled) throw e; log("warn", `△ 📄 원본 한글화 렌더 실패 (${e?.message || e})`); }
     }
     // 원본 한글화 앱 내 검수 — 결과를 먼저 보여 주고 뒤에서(afterDone) 검수·수정(loc-qa.js). 끄기: 설정 detailLocQa=false

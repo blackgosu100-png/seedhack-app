@@ -394,6 +394,60 @@ export function eraseShapes(file, shapes = []) {
   if (n) saveBitmap(bm, file);
   return n;
 }
+
+// ✏️ 통째 한글화 즉시 부분 수정용: 지정한 글자 상자들만 바탕색/보간으로 빠르게 지워 새 파일에 저장(0초·AI 0)
+export function eraseBoxesFast(srcFile, outFile, boxes = []) {
+  const valid = (boxes || []).filter((b) => b && Number.isFinite(b.x) && Number.isFinite(b.y) && b.w > 1 && b.h > 1);
+  if (!valid.length) return { ok: false, count: 0 };
+  const bm = loadBitmap(srcFile);
+  const W = bm.w, H = bm.h;
+  const areas = valid.map((b) => {
+    const pad = Math.max(4, Math.round(b.h * 0.16));
+    return safeEraseRect(bm, b, pad, ringMode(bm, expandRect(b, pad, W, H), 6).color);
+  });
+  areas.forEach((area, k) => {
+    const skip = (x, y) => areas.some((a, j) => j !== k && x >= a.x - 2 && x < a.x + a.w + 2 && y >= a.y - 2 && y < a.y + a.h + 2);
+    const d = decideFill(bm, area, { skip });
+    if (d.mode === "solid") fillSurface(bm, area, { color: d.color });
+    else if (d.mode === "gradient" && d.surface) fillSurface(bm, area, { surface: d.surface });
+    else fillPatch(bm, area, { mode: "interp", feather: 3 });
+  });
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  saveBitmap(bm, outFile);
+  return { ok: true, count: areas.length, w: W, h: H };
+}
+
+// 통째로 그린 이미지에서 각 글자 상자의 실제 색·크기·굵기·정렬을 읽어 초기 편집값으로 쓴다
+export function sampleBakeStyles(file, layers = []) {
+  try {
+    const bm = loadBitmap(file);
+    return (layers || []).map((l) => {
+      if (!l || l.drop || !l.box || !(l.box.w > 1) || !(l.box.h > 1)) return l;
+      const st = textStyle(bm, l.box, { imgW: bm.w });
+      const cur = l.style || {};
+      const txt = String(l.ko || "").trim();
+      const expLines = Math.max(1, txt.split(/\n/).filter((x) => x.trim()).length);
+      const chars = txt.replace(/\s+/g, "").length;
+      const wrapLines = chars > 0 ? Math.max(1, Math.round(Math.sqrt((chars * l.box.h * 0.62) / Math.max(1, l.box.w)))) : 1;
+      const nLines = Math.max(expLines, wrapLines);
+      const estSize = nLines > 1 ? Math.max(14, Math.round((l.box.h / nLines) * 0.74)) : (st.fontSizePx || Math.round(l.box.h * 0.76));
+      return {
+        ...l,
+        style: {
+          color: cur.color || st.color || "#222222",
+          size: cur.size || estSize,
+          weight: cur.weight || st.fontWeight || (l.role === "title" ? 700 : 400),
+          align: cur.align || st.align || (l.role === "title" ? "center" : "left"),
+          font: cur.font || (l.role === "title" ? "bold" : "gothic"),
+          ...(cur.userColor ? { userColor: true } : {}),
+          ...(cur.userEdit ? { userEdit: true } : {}),
+        },
+      };
+    });
+  } catch {
+    return layers;
+  }
+}
 // 렌더 전 plan 마무리(index.js · 재생 하네스 공용): 번역 안 된(한자만 남은) 레이어 빼기 · 이미지 원래 크기(iw·ih)
 // ocr 를 주면 그림에 그대로 남는 글(영문 장식 "Ultrasonic Wave" 등, OCR latin 상자)을 sec.keep 으로 — 템플릿이 한글 상자를 넓히거나 내릴 때 덮지 않는다
 export function finishLocalizePlan(lplan, dir, { log = noop, ocr = null, minPx = 14 } = {}) {

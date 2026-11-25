@@ -415,7 +415,7 @@
       const kids = B[type](s, base, count[type], plan);
       const flat = kids == null ? [] : [kids].flat(Infinity).filter(Boolean);
       if (!flat.length) continue; // 빈 섹션은 그리지 않는다
-      const secEl = h(`section.sec.${type}`, { "data-sec": type, "data-n": count[type] }, flat);
+      const secEl = h(`section.sec.${type}`, { "data-sec": type, "data-n": count[type], ...(s.id ? { "data-id": String(s.id) } : {}) }, flat);
       secEl._plan = s;
       root.append(secEl);
     }
@@ -459,7 +459,7 @@
       const r = el.getBoundingClientRect();
       // 섹션이 3000px 를 넘어 나눠야 할 때 사진·글 중간이 아니라 블록 경계에서 자르도록 후보 위치(문서 좌표)를 함께 준다
       const breaks = [...el.querySelectorAll(":scope > *, :scope > .stack > *")].map((c) => Math.round(c.getBoundingClientRect().top + window.scrollY)).filter((y) => y > r.top + window.scrollY + 1);
-      return { type: el.dataset.sec, n: Number(el.dataset.n || 1), y: Math.round(r.top + window.scrollY), h: Math.round(r.height), w: Math.round(r.width), breaks: [...new Set(breaks)].sort((a, b) => a - b) };
+      return { type: el.dataset.sec, id: el.dataset.id || null, n: Number(el.dataset.n || 1), y: Math.round(r.top + window.scrollY), h: Math.round(r.height), w: Math.round(r.width), breaks: [...new Set(breaks)].sort((a, b) => a - b) };
     });
   }
   // 피그마 레이어 값 목록: data-layer 가 붙은 글/이미지 → { "#hero.headline": "…", "#hero.image": "clean/g01.png" }

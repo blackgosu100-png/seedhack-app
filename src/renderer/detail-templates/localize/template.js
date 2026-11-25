@@ -19,6 +19,13 @@
   }
   const SKIP = new Set(["number", "dims", "price", "logo"]); // 원본 그대로 두는 숫자·도면 치수, 지워야 하는 가격·로고는 그리지 않는다
   const px = (v) => (v == null || v === "" ? null : Number(v));
+  const FONT_CSS = {
+    gothic: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+    bold: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+    serif: '"AppleMyungjo", "Batang", "Noto Serif KR", Georgia, serif',
+    round: '"NanumSquareRound", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+    mono: 'ui-monospace, "SF Mono", "Consolas", "Pretendard Variable", monospace',
+  };
 
   // 대비 보정: 원본 글자색이 바탕과 4.5:1 미만이면 색상(색조)은 두고 어둡게(바탕이 밝을 때) 또는 밝게(바탕이 어두울 때) 조금씩 옮긴다
   const { rgb, hx, lum, con, cellsIn, medianCell, pickInk, nextFix } = window.LocCore; // 순수 계산(대비·격자·겹침 판단)은 loc-core.js(노드 단위테스트)
@@ -46,12 +53,13 @@
     if (pill || st.bg) { st.align = "center"; box.classList.add("is-boxed"); } // v13 알약·배지·바탕 상자 안 글은 가운데 + 안쪽 여백(오른쪽 정렬로 테두리에 닿던 것 — 컵홀더 d05 "머그컵 6개")
     Object.assign(box.style, {
       left: Math.round(l.x * sc) + "px", top: Math.round(l.y * sc) + "px", width: Math.round(l.w * sc) + "px", minHeight: Math.round(l.h * sc) + "px",
-      fontSize: Math.round(fs) + "px", color: inkFor(st.color || "#222222", st.bg || st.under || st.fill, 1.5), fontWeight: String(st.weight || (role === "title" ? 700 : 400)),
+      fontSize: Math.round(fs) + "px", color: st.userColor ? (st.color || "#222222") : inkFor(st.color || "#222222", st.bg || st.under || st.fill, 1.5), fontWeight: String(st.weight || (st.font === "bold" ? 800 : role === "title" ? 700 : 400)),
       textAlign: st.align || (role === "caption" || role === "title" || pill || role === "badge" ? "center" : "left"),
       justifyContent: (st.align || (role === "caption" || role === "title" || pill || role === "badge" ? "center" : "left")) === "center" ? "center" : (st.align === "right" ? "flex-end" : "flex-start"),
       background: st.bg || st.fill || "transparent", border: st.border || "0", borderRadius: pill ? "999px" : st.radius === "50%" ? "50%" : st.radius != null ? Math.round(Number(st.radius) * sc) + "px" : "0",
-      letterSpacing: st.letter != null ? st.letter + "em" : "-0.02em", fontStyle: st.italic ? "italic" : "normal",
+      letterSpacing: st.letter != null ? st.letter + "em" : st.font === "bold" ? "-0.03em" : "-0.02em", fontStyle: st.italic ? "italic" : "normal",
     });
+    if (st.font && FONT_CSS[st.font]) box.style.fontFamily = FONT_CSS[st.font];
     if (st.under || st.bg || st.fill) box.dataset.bg = st.under || st.bg || st.fill;
     if (st.outline) box.style.textShadow = `0 0 2px ${st.outline}, 0 0 3px ${st.outline}, 0 1px 2px ${st.outline}`; // 원본이 테두리 글자면 같은 색 테두리
     if (st.vertical) { Object.assign(box.style, { writingMode: "vertical-rl", textOrientation: "upright", height: Math.round(l.h * sc) + "px", minHeight: "0px", justifyContent: "center", textAlign: "center", letterSpacing: "0.02em", lineHeight: "1.05" }); box.dataset.vertical = "1"; } // v13.2 세로쓰기 원문 → 한글도 세로로(위→아래, 글자 세움)
@@ -63,7 +71,8 @@
       box.style.setProperty("--em-color", emColorOf(st.accent || st.color || "#f0962e", st.bg || st.under || st.fill || "#ffffff"));
       U().emphasize(span, l.emph);
     }
-    if (role === "title") span.style.fontFamily = "var(--display)";
+    if (st.font && FONT_CSS[st.font]) span.style.fontFamily = FONT_CSS[st.font];
+    else if (role === "title") span.style.fontFamily = "var(--display)";
     box._fs = fs; box._l = l; box._sc = sc;
     return box;
   }
@@ -243,6 +252,7 @@
   }
   // 글자색: 최종 위치 밑 바탕 칸들로 다시 고른다(pickInk) — 바뀐 상자는 data-ink 에 기록
   function inkUnder(el, wrap, sc, large) {
+    if (el._l?.style?.userColor) return null; // 사용자가 직접 고른 색은 유지
     const g = wrap._grid; if (!g) return null;
     const r = rel(el.querySelector(".loc-text") || el, wrap), cells = cellsIn(g, r.l / sc, r.t / sc, r.r / sc, r.b / sc);
     if (!cells.length) return null;
@@ -258,7 +268,7 @@
 
   // 같은 역할 크기 맞춤: 도형 밖 글 중 역할이 같고 원래 크기가 ±25% 안인 줄끼리 → 가장 작은 크기·가장 흔한 굵기
   function roleUnify(els) {
-    const vis = els.filter((e) => !e._l.shape && e.style.display !== "none");
+    const vis = els.filter((e) => !e._l.shape && !e._l.style?.userEdit && e.style.display !== "none");
     const osz = (e) => Number(e._l.style?.size) || e._l.h * 0.78, used = new Set(), rot = (e) => Math.round(Number(e._l.style?.rotate) || 0);
     for (const a of vis) {
       if (used.has(a)) continue; // v13 기울어진 글(사선 판 층 라벨)도 같은 각도끼리 묶는다(4개 층 라벨이 두 크기로 갈리던 것 — 탄소강 풀아웃 d07)

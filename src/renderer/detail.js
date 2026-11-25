@@ -157,10 +157,11 @@
               <button type="button" class="le-big" data-le="drop" data-tip="🙈 이 장을 상세페이지에서 빼요 — 목록 위 ‘뺀 장’에서 다시 넣을 수 있어요"><b>🙈 이 장 빼기</b><small>다시 넣을 수 있어요</small></button>
             </div>
             <div class="le-ask"><input id="leAsk" type="text" maxlength="200" placeholder="이 장에 요청 — 예: 글자를 원 안에 넣어줘"><button id="leAskGo" class="sec" type="button" data-tip="🤖 AI 가 이 장의 글을 요청대로 고쳐요 (30초~1분)">보내기</button></div>
-            <details class="le-more" id="leMore"><summary>✏️ 글 직접 고치기 · 세부 조정</summary><div id="leLines"></div><button id="leSave" class="pri" type="button">✔ 저장하고 다시 그리기</button></details>
+            <details class="le-more" id="leMore"><summary>✏️ 글 직접 고치기 · 색·크기·폰트 · 원문 보기</summary><div id="leLines"></div><div class="le-savebar"><button id="leSave" class="pri" type="button">✔ 바로 적용</button><button id="leRebake" class="sec" type="button" hidden data-tip="복잡한 사진 위라 배경이 살짝 거슬릴 때만 AI 로 그 장을 자연스럽게 다시 그려요 (25초쯤)">✨ AI로 자연스럽게 다시 그리기</button></div></details>
             <div class="le-foot"><button id="leUndo" class="sec" type="button" data-tip="↶ 이 장을 바로 전 상태로 되돌려요">↶ 되돌리기</button><span id="leBusy"></span></div>
           </aside>
         </div>
+        <div class="le-pop" id="lePop" hidden></div>
         <div class="dt-export" id="drExport"><b>내보내기</b><select id="exW"><option value="780">780px</option><option value="860">860px</option></select><select id="exF"><option value="jpg">JPG</option><option value="png">PNG</option></select><select id="exM"><option value="single">한 장으로</option><option value="sections">섹션별</option></select><button id="exGo" class="sec" type="button">⬇ 폴더에 저장</button><small id="exMsg"></small></div>
       </div>
     </section>
@@ -576,10 +577,10 @@
     se.view = rd.templateId && rd.templateId !== "card" ? "render" : "card";
     if (se.view === "render") {
       const RN = { hero: "대표", image: "원본 이미지", notice: "구매 전 확인", spec: "제품 정보", faq: "자주 묻는 질문" }; let im = 0;
-      se.list = (rd.sections || []).map((x, i) => ({ id: `r${i}`, type: x.type, name: x.type === "image" ? `이미지 ${++im}` : RN[x.type] || x.type, texts: {}, fields: [], src: x.type === "image" ? "loc" : x.type === "hero" ? "orig" : "text" }));
+      se.list = (rd.sections || []).map((x, i) => ({ id: `r${i}`, secId: x.id || null, type: x.type, name: x.type === "image" ? `이미지 ${++im}` : RN[x.type] || x.type, texts: {}, fields: [], src: x.type === "image" ? "loc" : x.type === "hero" ? "orig" : "text" }));
       // 원본 한글화 앱 내 검수: 장별 결과(검수가 잰 장 위치 y)를 렌더 섹션 위치에 붙인다
       const qs = Object.entries(rd.locQa?.sections || {});
-      se.list.forEach((x, i) => { const s = rd.sections[i], end = rd.sections[i + 1]?.y ?? Infinity; const hit = qs.find(([, q]) => q.y != null && q.y >= s.y - 5 && q.y < end - 5); if (hit) x.qa = { id: hit[0], ...hit[1] }; });
+      se.list.forEach((x, i) => { const s = rd.sections[i], end = rd.sections[i + 1]?.y ?? Infinity; const hit = qs.find(([qid, q]) => (x.secId && qid === x.secId) || (q.y != null && q.y >= s.y - 5 && q.y < end - 5)); if (hit) x.qa = { id: hit[0], ...hit[1] }; });
       $("drSecs").hidden = !se.list.length; $("drSedit").hidden = true; se.cur = null;
     } else {
     const r = await api.invoke("detail:sections:get", { jobId }).catch(() => null);
@@ -592,7 +593,7 @@
     paintLocQa(); paintLocRemoved(rd);
     $("drSecList").innerHTML = se.list.map((x, i) => `<li data-i="${i}" class="${se.cur === x.id ? "on" : ""}${x.qa && !x.qa.pass ? " qa-warn" : ""}"${se.qaOnly && !(x.qa && !x.qa.pass) ? " hidden" : ""}><span class="thumbw">${shots[i] || (x.image ? `<img src="${esc(fileUrl(x.image))}" alt="">` : `<span class="ph">${esc(x.type)}</span>`)}</span><span><b>${i + 1}. ${esc(x.name || x.type)}</b><i class="src-tag ${srcOf(x).k}">${srcOf(x).t}</i>${x.qa && !x.qa.pass ? `<em class="qa-tag warn" data-tip="${esc(x.qa.issues.map((q) => q.why).join(" · "))}">⚠ 확인 필요</em><small class="qa-why">${esc(x.qa.why)}</small>` : x.qa?.edited && x.qa.pass && x.qa.fixed ? `<em class="qa-tag ok" data-tip="⚠ 였던 장을 고쳐 다시 검수하니 문제가 없어요">✔ 고침 완료</em>` : x.qa?.fixed ? `<em class="qa-tag ok" data-tip="뒤 검수가 자동으로 고친 장">🔧 고침</em>` : ""}<small>${esc((x.texts.title || x.texts.name || x.texts.sub || "").slice(0, 16))}</small>${x.image ? `<span class="dt-logo${x.logo ? " on" : ""}" role="button" tabindex="0" data-logo="${i}" data-tip="사진에 다른 브랜드 로고가 있으면 켜세요 — 주요 섹션에서 뺍니다">${x.logo ? "로고 있음" : "로고?"}</span>` : ""}</span></li>`).join("");
     paintSrc();
-    if (se.view === "render" && le.id) { const i = se.list.findIndex((x) => x.qa?.id === le.id); if (i >= 0) { le.i = i; root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", +l.dataset.i === i)); loadLocEdit(); } else closeLocEdit(); }
+    if (se.view === "render" && le.id) { const i = se.list.findIndex((x) => (x.qa?.id || x.secId) === le.id); if (i >= 0) { le.i = i; root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", +l.dataset.i === i)); loadLocEdit(); } else closeLocEdit(); }
     else if (se.view !== "render") closeLocEdit();
   }
   // 사진 출처: 장면 생성(scene/) = AI 생성, 원본 사진(clean·raw) = 원본, 원본 한글화(localize/) = 원본 한글화, 사진 없음 = 글만
@@ -630,7 +631,7 @@
     return out;
   }
   $("drSecList").addEventListener("click", async (e) => { const lg = e.target.closest("[data-logo]"); if (!lg) return; e.stopPropagation(); const x = se.list[+lg.dataset.logo]; if (!x?.rel && !x?.image) return; const on = !x.logo; lg.classList.toggle("on", on); lg.textContent = on ? "로고 있음" : "로고?"; const r = await api.invoke("detail:logo:set", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, file: x.rel || x.image, on }); if (r?.error) flash(r.error); else toast(on ? "로고 있음 — 이 사진을 빼고 다시 구성합니다" : "로고 표시 해제 — 다시 구성합니다"); }, true);
-  $("drSecList").addEventListener("click", (e) => { if (e.target.closest("[data-logo]")) return; const li = e.target.closest("[data-i]"); if (!li) return; const x = se.list[+li.dataset.i]; se.cur = x.id; if (se.view === "render") { root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", l === li)); goSec(+li.dataset.i); if (x.qa?.id) openLocEdit(+li.dataset.i); return; } openSedit(x); goSec(+li.dataset.i); loadSections(st.lastResult.jobId); });
+  $("drSecList").addEventListener("click", (e) => { if (e.target.closest("[data-logo]")) return; const li = e.target.closest("[data-i]"); if (!li) return; const x = se.list[+li.dataset.i]; se.cur = x.id; if (se.view === "render") { root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", l === li)); goSec(+li.dataset.i); if (x.qa?.id || (x.type === "image" && x.secId)) openLocEdit(+li.dataset.i); return; } openSedit(x); goSec(+li.dataset.i); loadSections(st.lastResult.jobId); });
   // 목록에서 고른 섹션으로 미리보기 이동(맨 위 고정 줄 아래에 오게) + 잠깐 테두리 표시
   function goSec(i) {
     const p = se.pos?.[i]; const f = p && root.querySelectorAll("#drSlices figure")[p.n]; const im = f?.querySelector("img"); if (!im) return;
@@ -696,72 +697,246 @@
   $("drExpGo").onclick = () => $("drExport").scrollIntoView({ behavior: reduce() ? "auto" : "smooth", block: "end" });
   $("drSum").onclick = () => { const b = $("drSumBody"); b.hidden = !b.hidden; $("drSum").setAttribute("aria-expanded", String(!b.hidden)); const em = $("drSum").querySelector("em"); if (em) em.textContent = b.hidden ? "자세히 ▾" : "접기 ▴"; if (!b.hidden && $("drQaList")) $("drQaList").hidden = false; };
 
-  // ---------- 원본 한글화 장별 고치기(오른쪽 칸) ----------
-  // 단추 4개(다시 자동 고치기 · 줄·크기 맞추기 · 한글 빼고 그림만 · 이 장 빼기) + 이 장에 요청 + 접힌 "글 직접 고치기"(줄마다 문구·크기·굵게·정렬·빼기) + ↶ 되돌리기
-  const le = { id: null, i: null, view: null, edits: {}, busy: null, tick: 0 };
+  // ---------- 원본 한글화 장별 고치기(오른쪽 칸 + 미리보기 더블클릭 워드/노션 스타일 편집창) ----------
+  const LE_FONTS = [["gothic", "기본 고딕"], ["bold", "굵은 타이틀"], ["serif", "명조"], ["round", "둥근 고딕"], ["mono", "숫자·스펙"]];
+  const LE_FONT_CSS = { gothic: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', bold: '"Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', serif: '"AppleMyungjo", "Batang", "Noto Serif KR", Georgia, serif', round: '"NanumSquareRound", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', mono: 'ui-monospace, "SF Mono", "Consolas", monospace' };
+  const LE_SWATCH = [["#111111", "검정"], ["#ffffff", "흰색"], ["#b91c1c", "빨강"], ["#ea580c", "주황"], ["#475569", "회색"]];
+  const le = { id: null, i: null, view: null, edits: {}, busy: null, tick: 0, popI: null };
   const nzt = (t) => String(t || "").replace(/[\s\u200b\u00ad]+/g, "");
   const curRd = () => (st.lastResult?.renders || []).find((x) => x.id === st.lastResult?.current) || {};
-  function closeLocEdit() { le.id = null; le.view = null; $("drLoced").hidden = true; root.querySelectorAll("#drSlices .le-mark").forEach((e) => e.remove()); }
-  function openLocEdit(i) { const x = se.list[i]; if (!x?.qa?.id) return; if (le.id !== x.qa.id) { le.edits = {}; $("leMore").open = false; $("leAsk").value = ""; } le.id = x.qa.id; le.i = i; $("drSedit").hidden = true; $("drLoced").hidden = false; loadLocEdit(); }
-  async function loadLocEdit() {
+  function closeInlinePop() { le.popI = null; const p = $("lePop"); if (p) { p.hidden = true; p.innerHTML = ""; } }
+  function closeLocEdit() { closeInlinePop(); le.id = null; le.view = null; $("drLoced").hidden = true; root.querySelectorAll("#drSlices .le-mark").forEach((e) => e.remove()); }
+  function openLocEdit(i, { autoPopBox = null } = {}) {
+    const x = se.list[i]; const sid = x?.qa?.id || (x?.type === "image" ? x.secId : null);
+    if (!sid) return;
+    if (le.id !== sid) { closeInlinePop(); le.edits = {}; $("leMore").open = false; $("leAsk").value = ""; }
+    le.id = sid; le.i = i; $("drSedit").hidden = true; $("drLoced").hidden = false;
+    return loadLocEdit(autoPopBox);
+  }
+  async function loadLocEdit(autoPopBox = null) {
     const id = le.id; if (!id) return;
     const r = await api.invoke("detail:loc:section", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, sectionId: id }).catch((e) => ({ error: String(e) }));
     if (le.id !== id) return;
     if (r?.error) { flash(r.error); closeLocEdit(); return; }
     le.view = r; paintLocEdit(); paintLocMarks();
+    if (autoPopBox && r.layers?.length) {
+      const hit = r.layers.find((l) => l.box && autoPopBox.x >= l.box.x - 16 && autoPopBox.x <= l.box.x + l.box.w + 16 && autoPopBox.y >= l.box.y - 16 && autoPopBox.y <= l.box.y + l.box.h + 16) || r.layers[0];
+      if (hit) openInlinePop(hit.i, autoPopBox.clientX, autoPopBox.clientY);
+    }
   }
   // 문제마다 "이렇게 풀어요" 한 줄(수강생이 어떤 단추를 누를지 바로 알게)
   const HINT = { overlap: "→ 📐 줄·크기 맞추기, 또는 글 직접 고치기에서 크기 −", overflow: "→ 글 직접 고치기에서 크기 − 나 문구 줄이기", roleDev: "→ 📐 줄·크기 맞추기", colDev: "→ 📐 줄·크기 맞추기", layout: "→ 📐 줄·크기 맞추기", contrast: "→ 글 직접 고치기에서 굵게, 또는 요청 \"글자를 잘 보이게\"", residue: "→ 🔧 다시 자동 고치기로 다시 지워 보고, 그래도 남으면 🙈 빼기", chinese: "→ 🔧 다시 자동 고치기", literal: "→ 글 직접 고치기나 요청으로 문구 바꾸기", translation: "→ 글 직접 고치기나 요청으로 문구 바꾸기", emptyDeco: "→ 🖼 한글 빼고 그림만, 또는 🙈 빼기" };
   const AI_HINT = { align: "colDev", spacing: "layout", size: "roleDev", overflow: "overflow", residue: "residue", empty_deco: "emptyDeco", translation: "translation" };
   const issueTexts = (q) => (q?.issues || []).flatMap((x) => x.texts || []).map(nzt).filter(Boolean);
   const lineOfText = (t) => { const k = nzt(t); return (le.view?.layers || []).findIndex((l) => { const n = nzt(l.ko); return n && k && (n === k || n.startsWith(k) || k.startsWith(n)); }); };
+  const traceHtml = (l, open = false) => (!l.zh && !l.literal && !l.ko_ai) ? "" : `<details class="le-trace"${open ? " open" : ""}><summary>🔍 원문 · 직역 · 의역 보기</summary><dl>
+    <div><dt>원문</dt><dd>${esc(l.zh || "—")}</dd></div>
+    <div><dt>직역</dt><dd>${esc(l.literal || "기록 없음")}</dd></div>
+    <div><dt>의역</dt><dd>${esc(l.ko_ai || l.ko || "—")}${l.ko_ai && l.ko_ai !== (le.edits[l.i]?.ko ?? l.ko) ? ` <button type="button" class="le-rev" data-rev="${l.i}">의역 복원</button>` : ""}</dd></div>
+  </dl></details>`;
   function paintLocEdit() {
     const v = le.view, x = se.list[le.i] || {}, q = x.qa || v?.qa; if (!v) return;
     $("leName").textContent = `${x.name || v.id} 고치기`;
     const busy = !!le.busy;
-    $("leState").innerHTML = !q ? "" : q.pass ? `<p class="ok">✔ ${q.edited ? "고쳤어요 — 다시 검수해 보니 문제 없어요" : "검수에서 문제 없음"}</p>`
+    $("leState").innerHTML = !q ? (v.baked ? `<p class="ok">💡 미리보기 글자를 <b>더블클릭</b>하면 워드·노션처럼 색·크기·폰트·내용을 바로 고칠 수 있어요</p>` : "") : q.pass ? `<p class="ok">✔ ${q.edited ? "고쳤어요 — 다시 검수해 보니 문제 없어요" : "검수에서 문제 없음"} · 글자를 더블클릭해 바로 수정 가능</p>`
       : `<p class="warn">⚠ 이 장에서 확인할 것</p><ul>${(q.issues || []).map((i) => `<li>${esc(i.why)}<small>${esc(HINT[i.kind === "ai" ? AI_HINT[i.ai] || "layout" : i.kind] || "")}</small></li>`).join("")}</ul>`;
     root.querySelectorAll("#drLoced [data-le]").forEach((b) => { b.disabled = busy || ((v.type !== "image" || v.baked) && b.dataset.le !== "drop"); });
-    if (v.baked) $("leMore").open = true; // 통째로 그린 장: 할 수 있는 것은 문구 고치기 → 바로 보이게
-    $("leSave").textContent = v.baked ? "저장하고 이 장 다시 그리기 (30초쯤)" : $("leSave").dataset.t0 || ($("leSave").dataset.t0 = $("leSave").textContent);
+    if (v.baked) $("leMore").open = true; // 통째로 그린 장: 문구·스타일 바로 보이게
+    $("leSave").textContent = "✔ 바로 적용";
+    $("leRebake").hidden = !v.baked || (!Object.keys(le.edits).length && !v.hasPatched);
+    $("leRebake").disabled = busy;
     $("leAsk").disabled = $("leAskGo").disabled = busy || v.type !== "image" || !!v.baked; $("leSave").disabled = busy; $("leUndo").disabled = busy || !v.canUndo;
     $("leMore").hidden = v.type !== "image" || !v.layers.length;
-    $("leLines").innerHTML = v.layers.map((l) => { const e = { ...l, ...(le.edits[l.i] || {}) }; const bold = e.weight >= 700; const al = e.align || "";
+    $("leLines").innerHTML = v.layers.map((l) => { const e = { ...l, ...(le.edits[l.i] || {}) }; const bold = e.weight >= 700; const al = e.align || ""; const col = e.color || "#222222"; const fn = e.font || "gothic";
       return `<div class="le-line${e.drop ? " off" : ""}${issueTexts(q).some((t) => { const n = nzt(l.ko); return n.startsWith(t) || t.startsWith(n); }) ? " bad" : ""}" data-i="${l.i}">
-        <textarea rows="1" data-k="ko"${e.drop ? " disabled" : ""}>${esc(e.ko)}</textarea>
-        ${l.baked ? `<div class="le-ctl"><small class="le-shape">${l.head ? "첫 줄 = 굵은 제목 · " : ""}줄을 바꾸면 그림도 줄이 바뀌어요</small><button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 글 다시 살리기" : "이 글 지우기"}">${e.drop ? "↺" : "✕"}</button></div></div>` : `<div class="le-ctl"><button type="button" data-op="size" data-v="-2" data-tip="글자 작게">−</button><span class="sz" title="글자 크기">${Math.round(e.size)}</span><button type="button" data-op="size" data-v="2" data-tip="글자 크게">+</button>
-        <button type="button" data-op="bold" class="${bold ? "on" : ""}" data-tip="굵게 켜고 끄기"><b>굵게</b></button>
-        <span class="le-al">${[["left", "왼쪽"], ["center", "가운데"], ["right", "오른쪽"]].map(([k, t]) => `<button type="button" data-op="align" data-v="${k}" class="${al === k ? "on" : ""}" data-tip="${t} 맞춤">${t}</button>`).join("")}</span>
-        <button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 줄 다시 살리기" : "이 줄 빼기"}">${e.drop ? "↺" : "✕"}</button></div>
-        ${l.shape ? `<small class="le-shape">${l.shape} 안 글</small>` : ""}</div>`}`; }).join("") || `<p class="dt-empty">고칠 한글 줄이 없어요.</p>`;
+        <textarea rows="1" data-k="ko"${e.drop ? " disabled" : ""} style="font-family:${esc(LE_FONT_CSS[fn] || LE_FONT_CSS.gothic)};font-weight:${bold ? 700 : 400}">${esc(e.ko)}</textarea>
+        <div class="le-ctl">
+          <input type="color" class="le-col" data-op="color" value="${esc(col)}" data-tip="글자 색상">
+          <button type="button" data-op="size" data-v="-2" data-tip="글자 작게">−</button><span class="sz" title="글자 크기">${Math.round(e.size || 24)}</span><button type="button" data-op="size" data-v="2" data-tip="글자 크게">+</button>
+          <select class="le-font" data-op="font" data-tip="글꼴 고르기">${LE_FONTS.map(([k, lab]) => `<option value="${k}"${fn === k ? " selected" : ""}>${lab}</option>`).join("")}</select>
+          <button type="button" data-op="bold" class="${bold ? "on" : ""}" data-tip="굵게 켜고 끄기"><b>B</b></button>
+          <span class="le-al">${[["left", "좌"], ["center", "중"], ["right", "우"]].map(([k, t]) => `<button type="button" data-op="align" data-v="${k}" class="${al === k ? "on" : ""}" data-tip="${t} 맞춤">${t}</button>`).join("")}</span>
+          <button type="button" data-op="pop" data-tip="노션처럼 크게 펼쳐서 편집">⤢</button>
+          <button type="button" data-op="drop" class="le-x" data-tip="${e.drop ? "이 글 다시 살리기" : "이 글 지우기"}">${e.drop ? "↺" : "✕"}</button>
+        </div>
+        ${l.shape ? `<small class="le-shape">${l.shape} 안 글</small>` : ""}
+        ${traceHtml(l, false)}
+      </div>`; }).join("") || `<p class="dt-empty">고칠 한글 줄이 없어요.</p>`;
     $("leLines").querySelectorAll("textarea").forEach(fitTa);
     $("leSave").hidden = !Object.keys(le.edits).length;
     $("leBusy").textContent = busy ? `⏳ ${le.busy.msg || "고치는 중"} · ${Math.round((Date.now() - le.busy.t0) / 1000)}초` : le.last || "";
   }
-  // 미리보기 위 표시: 이 장의 글 상자(검수 측정) — 문제 글은 빨간 테두리, 누르면 그 줄 고치기로
+  // 워드·노션 스타일 플로팅 인라인 편집창(미리보기 글자 더블클릭 시 바로 뜬다)
+  function openInlinePop(layerI, clientX = null, clientY = null) {
+    const v = le.view; if (!v) return;
+    const l = v.layers.find((x) => x.i === layerI); if (!l) return;
+    le.popI = layerI;
+    const e = { ...l, ...(le.edits[layerI] || {}) };
+    const col = e.color || "#222222", fn = e.font || "gothic", bold = (e.weight || 400) >= 700, al = e.align || "left";
+    const pop = $("lePop");
+    pop.hidden = false;
+    pop.innerHTML = `<div class="le-pophd"><b>✏️ 텍스트 바로 편집</b><small>내용 · 색 · 크기 · 폰트</small><button type="button" class="le-popx" data-pop="close">✕</button></div>
+      <div class="le-popbar">
+        <input type="color" class="le-col" data-pop="color" value="${esc(col)}" data-tip="글자 색상">
+        <span class="le-sw">${LE_SWATCH.map(([c, t]) => `<button type="button" data-pop="swatch" data-v="${c}" style="background:${c}" title="${t}"></button>`).join("")}</span>
+        <button type="button" data-pop="size" data-v="-2" title="글자 작게">−</button><span class="sz" id="lePopSz">${Math.round(e.size || 24)}</span><button type="button" data-pop="size" data-v="2" title="글자 크게">+</button>
+        <select class="le-font" data-pop="font">${LE_FONTS.map(([k, lab]) => `<option value="${k}"${fn === k ? " selected" : ""}>${lab}</option>`).join("")}</select>
+        <button type="button" data-pop="bold" class="${bold ? "on" : ""}" title="굵게"><b>B</b></button>
+        <span class="le-al">${[["left", "좌"], ["center", "중"], ["right", "우"]].map(([k, t]) => `<button type="button" data-pop="align" data-v="${k}" class="${al === k ? "on" : ""}">${t}</button>`).join("")}</span>
+        <button type="button" data-pop="drop" class="le-x${e.drop ? " on" : ""}" title="${e.drop ? "글 살리기" : "글 지우기"}">${e.drop ? "↺" : "🗑"}</button>
+      </div>
+      <textarea id="lePopTa" rows="2" spellcheck="false" style="font-family:${esc(LE_FONT_CSS[fn] || LE_FONT_CSS.gothic)};color:${esc(col === "#ffffff" ? "#111111" : col)};font-weight:${bold ? 700 : 400};text-align:${esc(al)}">${esc(e.ko)}</textarea>
+      ${traceHtml(l, true)}
+      <div class="le-popft">
+        <button type="button" class="pri" data-pop="apply" data-tip="기다림 없이 바로 반영 (⌘/Ctrl+Enter)">✔ 바로 적용</button>
+        ${v.baked ? `<button type="button" class="sec" data-pop="rebake" data-tip="배경과 자연스럽게 어우러지게 AI 로 다시 그리기 (25초쯤)">✨ AI 다시 그리기</button>` : ""}
+        <button type="button" class="sec" data-pop="close">취소</button>
+      </div>`;
+    const ta = $("lePopTa"); fitTa(ta);
+    const pw = Math.min(410, window.innerWidth - 24), ph = pop.offsetHeight || 280;
+    const left = clientX != null ? Math.max(12, Math.min(window.innerWidth - pw - 12, clientX - pw / 2)) : Math.max(12, (window.innerWidth - pw) / 2);
+    const top = clientY != null ? Math.max(64, Math.min(window.innerHeight - ph - 16, clientY + 18)) : 120;
+    pop.style.left = `${Math.round(left)}px`; pop.style.top = `${Math.round(top)}px`;
+    ta.focus(); ta.select();
+  }
+  function syncPopPreview() {
+    if (le.popI == null || !le.view) return;
+    const l = le.view.layers.find((x) => x.i === le.popI); if (!l) return;
+    const e = { ...l, ...(le.edits[le.popI] || {}) };
+    const ta = $("lePopTa"); if (!ta) return;
+    const col = e.color || "#222222", fn = e.font || "gothic", bold = (e.weight || 400) >= 700;
+    ta.style.fontFamily = LE_FONT_CSS[fn] || LE_FONT_CSS.gothic;
+    ta.style.color = col === "#ffffff" ? "#111111" : col;
+    ta.style.fontWeight = bold ? "700" : "400";
+    ta.style.textAlign = e.align || "left";
+    const sz = $("lePopSz"); if (sz) sz.textContent = String(Math.round(e.size || 24));
+  }
+  $("lePop").addEventListener("input", (e) => {
+    if (le.popI == null) return;
+    const ed = (le.edits[le.popI] ||= {});
+    if (e.target.id === "lePopTa") { fitTa(e.target); ed.ko = e.target.value; $("leSave").hidden = false; return; }
+    if (e.target.dataset.pop === "color") { ed.color = e.target.value; syncPopPreview(); $("leSave").hidden = false; }
+  });
+  $("lePop").addEventListener("change", (e) => {
+    if (le.popI == null) return;
+    const ed = (le.edits[le.popI] ||= {});
+    if (e.target.dataset.pop === "font") { ed.font = e.target.value; syncPopPreview(); $("leSave").hidden = false; }
+    if (e.target.dataset.pop === "color") { ed.color = e.target.value; syncPopPreview(); $("leSave").hidden = false; }
+  });
+  $("lePop").addEventListener("click", (e) => {
+    const rev = e.target.closest("[data-rev]");
+    if (rev && le.popI != null) { const l = le.view?.layers.find((x) => x.i === le.popI); if (l?.ko_ai) { (le.edits[le.popI] ||= {}).ko = l.ko_ai; $("lePopTa").value = l.ko_ai; fitTa($("lePopTa")); $("leSave").hidden = false; } return; }
+    const b = e.target.closest("[data-pop]"); if (!b || le.popI == null) return;
+    const op = b.dataset.pop, l = le.view?.layers.find((x) => x.i === le.popI), ed = (le.edits[le.popI] ||= {}), cur = { ...l, ...ed };
+    if (op === "close") return closeInlinePop();
+    if (op === "swatch") { ed.color = b.dataset.v; const ci = $("lePop").querySelector('[data-pop="color"]'); if (ci) ci.value = b.dataset.v; syncPopPreview(); $("leSave").hidden = false; return; }
+    if (op === "size") { const stp = Math.max(1, Math.round((le.view?.iw || 780) / 780)); ed.size = Math.max(8, Math.round((cur.size || 24) + Number(b.dataset.v) * stp)); syncPopPreview(); $("leSave").hidden = false; return; }
+    if (op === "bold") { ed.weight = (cur.weight || 400) >= 700 ? 400 : 700; b.classList.toggle("on", ed.weight >= 700); syncPopPreview(); $("leSave").hidden = false; return; }
+    if (op === "align") { ed.align = b.dataset.v; $("lePop").querySelectorAll('[data-pop="align"]').forEach((x) => x.classList.toggle("on", x.dataset.v === ed.align)); syncPopPreview(); $("leSave").hidden = false; return; }
+    if (op === "drop") { ed.drop = !cur.drop; b.classList.toggle("on", ed.drop); b.textContent = ed.drop ? "↺" : "🗑"; $("leSave").hidden = false; return; }
+    if (op === "apply" || op === "rebake") {
+      const ta = $("lePopTa"); if (ta && ta.value !== l.ko) ed.ko = ta.value;
+      const layers = Object.entries(le.edits).map(([i, v]) => ({ i: +i, ...v }));
+      closeInlinePop();
+      if (op === "rebake") locAct("rebake", { layers });
+      else if (layers.length) locAct("text", { layers });
+    }
+  });
+  $("lePop").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); closeInlinePop(); }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); $("lePop").querySelector('[data-pop="apply"]')?.click(); }
+  });
+  // 미리보기 위 표시: 이 장의 글 상자 — 클릭하면 줄 이동, 더블클릭하면 워드/노션 스타일 즉시 편집창!
   function paintLocMarks() {
     root.querySelectorAll("#drSlices .le-mark").forEach((e) => e.remove());
-    const x = se.list[le.i], q = x?.qa, p = se.pos?.[le.i], rd = curRd(), s = rd.sections?.[le.i]; if (!le.id || !q?.box || !p || !s) return;
+    const x = se.list[le.i], q = x?.qa, p = se.pos?.[le.i], rd = curRd(), s = rd.sections?.[le.i], v = le.view;
+    if (!le.id || !p || !s || !v) return;
     const f = root.querySelectorAll("#drSlices figure")[p.n], im = f?.querySelector("img"); if (!im || !im.clientWidth) return;
-    const k = im.clientWidth / (rd.width || 780), top0 = (q.y ?? s.y) - (s.y - p.y), bad = issueTexts(q);
+    const rdW = rd.width || 780, k = im.clientWidth / rdW, top0 = ((q?.y ?? s.y) - (s.y - p.y)), bad = issueTexts(q);
+    const hasBoxes = (v.layers || []).some((l) => l.box && l.box.w > 1 && l.box.h > 1);
+    if (hasBoxes && v.iw) {
+      const scImg = im.clientWidth / v.iw;
+      for (const l of v.layers) {
+        if (!l.box || !(l.box.w > 1)) continue;
+        const yPx = top0 * k + l.box.y * scImg;
+        if (yPx < -4 || yPx > im.clientHeight + 4) continue;
+        const m = document.createElement("span");
+        const isBad = bad.some((t) => { const n = nzt(l.ko); return n && (n.startsWith(t) || t.startsWith(n)); });
+        m.className = `le-mark${isBad ? " bad" : ""}${l.edited ? " patched" : ""}`;
+        Object.assign(m.style, { left: `${Math.round(l.box.x * scImg) - 3}px`, top: `${Math.round(yPx) - 3}px`, width: `${Math.round(l.box.w * scImg) + 6}px`, height: `${Math.round(l.box.h * scImg) + 6}px` });
+        m.dataset.tip = isBad ? "⚠ 더블클릭해서 바로 고치기" : "더블클릭해서 색·크기·폰트·내용 바로 고치기";
+        m.dataset.li = String(l.i); m.dataset.t = l.ko;
+        f.appendChild(m);
+      }
+      return;
+    }
+    if (!q?.box) return;
     for (const u of q.box.units || []) {
       const y = top0 + u.y; if (y < 0 || y > p.sh) continue;
       const m = document.createElement("span"); const isBad = bad.some((t) => { const n = nzt(u.t); return n.startsWith(t) || t.startsWith(n); });
       m.className = `le-mark${isBad ? " bad" : ""}`; Object.assign(m.style, { left: `${Math.round(u.x * k) - 3}px`, top: `${Math.round(y * k) - 3}px`, width: `${Math.round(u.w * k) + 6}px`, height: `${Math.round(u.h * k) + 6}px` });
-      m.dataset.tip = isBad ? "⚠ 문제 있는 글 — 누르면 이 줄 고치기" : "누르면 이 줄 고치기"; m.dataset.t = u.t;
+      m.dataset.tip = isBad ? "⚠ 더블클릭해서 바로 고치기" : "더블클릭해서 바로 고치기"; m.dataset.t = u.t;
       f.appendChild(m);
     }
   }
-  $("drSlices").addEventListener("click", (e) => { const m = e.target.closest(".le-mark"); if (!m) return; const i = lineOfText(m.dataset.t); $("leMore").open = true; const row = i >= 0 ? $("leLines").querySelector(`[data-i="${le.view.layers[i].i}"]`) : null; if (row) { row.scrollIntoView({ block: "center", behavior: reduce() ? "auto" : "smooth" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1200); row.querySelector("textarea")?.focus(); } });
+  $("drSlices").addEventListener("click", (e) => {
+    const m = e.target.closest(".le-mark"); if (!m) return;
+    const li = m.dataset.li != null ? +m.dataset.li : (() => { const idx = lineOfText(m.dataset.t); return idx >= 0 ? le.view.layers[idx].i : -1; })();
+    $("leMore").open = true;
+    const row = li >= 0 ? $("leLines").querySelector(`[data-i="${li}"]`) : null;
+    if (row) { row.scrollIntoView({ block: "center", behavior: reduce() ? "auto" : "smooth" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1200); row.querySelector("textarea")?.focus(); }
+  });
+  // 미리보기 글자 더블클릭 → 워드·노션 스타일 즉시 편집창 열기!
+  $("drSlices").addEventListener("dblclick", (e) => {
+    if (se.view !== "render") return;
+    const m = e.target.closest(".le-mark");
+    if (m && le.view) {
+      const li = m.dataset.li != null ? +m.dataset.li : (() => { const idx = lineOfText(m.dataset.t); return idx >= 0 ? le.view.layers[idx].i : -1; })();
+      if (li >= 0) { openInlinePop(li, e.clientX, e.clientY); return; }
+    }
+    // 아직 장을 안 열어 둔 상태에서 미리보기 이미지를 바로 더블클릭 → 해당 장을 열고 클릭한 위치의 글자 편집창을 바로 띄움
+    const fig = e.target.closest("figure"); const im = fig?.querySelector("img"); if (!fig || !im) return;
+    const figs = [...root.querySelectorAll("#drSlices figure")], n = figs.indexOf(fig); if (n < 0) return;
+    const rect = im.getBoundingClientRect(), ry = (e.clientY - rect.top) / Math.max(1, im.clientHeight);
+    let bestI = -1;
+    for (let i = 0; i < se.list.length; i++) {
+      const p = se.pos?.[i]; if (!p || p.n !== n) continue;
+      const yClick = ry * p.sh;
+      const nx = se.pos.find((q, k) => k > i && q && q.n === n);
+      const yEnd = nx ? nx.y : p.sh;
+      if (yClick >= p.y && yClick <= yEnd) { bestI = i; break; }
+    }
+    if (bestI >= 0 && se.list[bestI]?.type === "image") {
+      const p = se.pos[bestI], rd = curRd(), scW = (rd.width || 780) / Math.max(1, im.clientWidth);
+      const clickX = (e.clientX - rect.left) * scW, clickY = (ry * p.sh - p.y);
+      root.querySelectorAll("#drSecList li").forEach((l) => l.classList.toggle("on", +l.dataset.i === bestI));
+      openLocEdit(bestI, { autoPopBox: { x: clickX, y: clickY, clientX: e.clientX, clientY: e.clientY } });
+    }
+  });
   window.addEventListener("resize", () => { if (le.id) paintLocMarks(); });
   function paintLocRemoved(rd) { const rm = rd?.locQa?.removed || [], el = $("drLocRem"); el.hidden = !rm.length; el.innerHTML = rm.length ? `<span>🙈 뺀 장 ${rm.length}</span>${rm.map((r) => `<button type="button" class="sec" data-undo="${esc(r.id)}" data-tip="↶ 이 장을 다시 넣어요">${esc(r.name || r.id)} 다시 넣기</button>`).join("")}` : ""; }
   $("drLocRem").addEventListener("click", (e) => { const b = e.target.closest("[data-undo]"); if (b) locAct("undo", {}, b.dataset.undo); });
-  // 줄 고치기(모아 두었다가 저장)
-  $("leLines").addEventListener("input", (e) => { const t = e.target.closest("textarea"); if (!t) return; fitTa(t); const i = +t.closest("[data-i]").dataset.i; (le.edits[i] ||= {}).ko = t.value; $("leSave").hidden = false; });
+  // 줄 고치기(모아 두었다가 저장 — 내용·색상·크기·폰트·굵기·정렬)
+  $("leLines").addEventListener("input", (e) => {
+    const row = e.target.closest("[data-i]"); if (!row) return;
+    const i = +row.dataset.i, ed = (le.edits[i] ||= {});
+    if (e.target.matches("textarea")) { fitTa(e.target); ed.ko = e.target.value; $("leSave").hidden = false; if (le.view?.baked) $("leRebake").hidden = false; return; }
+    if (e.target.dataset.op === "color") { ed.color = e.target.value; $("leSave").hidden = false; if (le.view?.baked) $("leRebake").hidden = false; }
+  });
+  $("leLines").addEventListener("change", (e) => {
+    const row = e.target.closest("[data-i]"); if (!row) return;
+    const i = +row.dataset.i, ed = (le.edits[i] ||= {});
+    if (e.target.dataset.op === "font") { ed.font = e.target.value; paintLocEdit(); }
+    if (e.target.dataset.op === "color") { ed.color = e.target.value; $("leSave").hidden = false; if (le.view?.baked) $("leRebake").hidden = false; }
+  });
   $("leLines").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-op]"); if (!b) return; const i = +b.closest("[data-i]").dataset.i, l = le.view.layers.find((q) => q.i === i), ed = (le.edits[i] ||= {}), cur = { ...l, ...ed };
-    if (b.dataset.op === "size") ed.size = Math.max(8, Math.round(cur.size + Number(b.dataset.v)));
-    if (b.dataset.op === "bold") ed.weight = cur.weight >= 700 ? 400 : 700;
+    const rev = e.target.closest("[data-rev]");
+    if (rev) { const i = +rev.dataset.rev, l = le.view?.layers.find((q) => q.i === i); if (l?.ko_ai) { (le.edits[i] ||= {}).ko = l.ko_ai; paintLocEdit(); } return; }
+    const b = e.target.closest("button[data-op]"); if (!b) return;
+    const i = +b.closest("[data-i]").dataset.i, l = le.view.layers.find((q) => q.i === i), ed = (le.edits[i] ||= {}), cur = { ...l, ...ed };
+    if (b.dataset.op === "pop") return openInlinePop(i);
+    if (b.dataset.op === "size") { const stp = Math.max(1, Math.round((le.view?.iw || 780) / 780)); ed.size = Math.max(8, Math.round((cur.size || 24) + Number(b.dataset.v) * stp)); }
+    if (b.dataset.op === "bold") ed.weight = (cur.weight || 400) >= 700 ? 400 : 700;
     if (b.dataset.op === "align") ed.align = b.dataset.v;
     if (b.dataset.op === "drop") ed.drop = !cur.drop;
     paintLocEdit();
@@ -773,7 +948,7 @@
     const r = await api.invoke("detail:loc:edit", { jobId: st.lastResult.jobId, renderId: st.lastResult.current, sectionId, action, payload }).catch((e) => ({ error: String(e) }));
     clearInterval(le.tick); le.busy = null;
     if (r?.error) { le.last = `✕ ${r.error}`; flash(r.error); if (le.id) paintLocEdit(); return; }
-    if (action === "text") le.edits = {};
+    if (action === "text" || action === "rebake") le.edits = {};
     if (action === "drop") closeLocEdit();
     if (action === "undo" && sectionId !== le.id) le.id = sectionId; // 뺀 장 다시 넣기 → 그 장 칸 열기
     le.last = `${r.pass === false ? "⚠" : "✔"} ${r.note}${r.pass === false && r.why ? ` · 남은 것: ${r.why}` : ""} · ${Math.round((r.ms || 0) / 1000)}초${r.costUsd ? ` · $${Number(r.costUsd).toFixed(3)}` : ""}`;
@@ -784,6 +959,7 @@
   $("leAskGo").onclick = () => { const t = $("leAsk").value.trim(); if (!t) return flash("요청을 적어 주세요 — 예: 제목을 더 크게"); locAct("request", { text: t }); };
   $("leAsk").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) $("leAskGo").click(); });
   $("leSave").onclick = () => { const layers = Object.entries(le.edits).map(([i, e]) => ({ i: +i, ...e })); if (layers.length) locAct("text", { layers }); };
+  $("leRebake").onclick = () => { const layers = Object.entries(le.edits).map(([i, e]) => ({ i: +i, ...e })); locAct("rebake", { layers }); };
   $("leUndo").onclick = () => locAct("undo");
   $("leClose").onclick = () => closeLocEdit();
   api.on("detail:changed", (p) => { const q = p?.locEdit; if (!q || st.lastResult?.jobId !== q.jobId) return; if (q.status === "running" && le.busy) { le.busy.msg = String(q.msg || "").replace(/^\S+\s+/, ""); } });
