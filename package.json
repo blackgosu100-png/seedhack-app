@@ -1,7 +1,7 @@
 {
   "name": "coupang-signal-app",
   "productName": "씨드핵",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "SeedHack — Wing·쿠팡 실데이터 기반 소싱 데스크톱 프로그램",
   "type": "module",
   "main": "src/boot.js",
